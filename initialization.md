@@ -72,7 +72,7 @@ After initialization:
 - `MEMORY.md` contains compact strategy for the assigned project;
 - `docs/` contains detailed project knowledge;
 - `TOOLS.md` contains local operational references;
-- `INITIALIZATION.md` is deleted or archived after owner acceptance.
+- `INITIALIZATION.md` is deleted or archived by Junie after initialization is complete.
 
 ## Layering rule
 
