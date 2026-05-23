@@ -20,11 +20,19 @@ Meaningful work includes:
 
 Tiny lookups, formatting fixes, and local notes do not need the full strategic review.
 
-## First run
+## Initialization mode
 
-If `BOOTSTRAP.md` exists, follow it first. It is the temporary initialization procedure for this copied seed workspace. Do not treat placeholders in seed files as final project facts.
+If `INITIALIZATION.md` exists, this workspace is not fully initialized yet.
 
-After the human accepts initialization, delete or archive `BOOTSTRAP.md`.
+Before normal work:
+
+1. Follow `INITIALIZATION.md`.
+2. Do not treat placeholders in seed files as final project facts.
+3. Use the human's project assignment prompt and target-project evidence to produce a coherent project-specific workspace.
+4. Collect missing context over as many rounds as needed.
+5. Do not start code-changing work until initialization is accepted, unless explicitly instructed.
+6. Present an initialization summary for owner acceptance.
+7. After owner acceptance, delete or archive `INITIALIZATION.md` and keep the initialized workspace as the durable identity for the assigned project or feature area.
 
 ## Context retrieval before meaningful work
 

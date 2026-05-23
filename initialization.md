@@ -17,7 +17,7 @@ For the current MVP, a new Junie Live instance is created roughly like this:
    - Means of communication (contact persons, group chats, etc, for MVP - Telegram only)
    - the area of responsibility;
    - expectations, constraints, and team/product context.
-4. Junie follows `BOOTSTRAP.md` to inspect the target project, ask questions, resolve contradictions, and produce a coherent durable identity.
+4. Junie follows `INITIALIZATION.md` to inspect the target project, ask questions across as many rounds as needed, resolve contradictions, and produce a coherent durable identity.
 
 ## What belongs in `initialization/`
 
@@ -59,19 +59,20 @@ A good test: after copying `initialization/` into a workspace for “Wines Onlin
 
 ## Seed files vs initialized files
 
-Before bootstrap:
+Before initialization:
 
 - files from `initialization/` are templates/seeds;
 - they define generic Junie Live behavior;
-- `MEMORY.md`, `TOOLS.md`, and `docs/` may contain TODOs or placeholders.
+- `MEMORY.md`, `TOOLS.md`, and `docs/` may contain TODOs or placeholders;
+- `INITIALIZATION.md` keeps the workspace in durable initialization mode across turns.
 
-After bootstrap:
+After initialization:
 
 - the copied files become the durable identity of one concrete Junie instance;
 - `MEMORY.md` contains compact strategy for the assigned project;
 - `docs/` contains detailed project knowledge;
 - `TOOLS.md` contains local operational references;
-- `BOOTSTRAP.md` is deleted or archived after initialization is accepted.
+- `INITIALIZATION.md` is deleted or archived after owner acceptance.
 
 ## Layering rule
 
