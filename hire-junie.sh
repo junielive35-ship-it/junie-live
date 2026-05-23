@@ -14,11 +14,10 @@ Options:
   --telegram-token TOKEN      Telegram BotFather token for the Junie bot.
                               Can also be supplied as JUNIE_TELEGRAM_BOT_TOKEN.
   --admin-telegram-id ID      Telegram admin/user id allowed to DM the bot.
-                              Default: 400847234
   --agent-id ID               OpenClaw agent id. Default: junie-live
   --telegram-account ID       OpenClaw Telegram account id. Default: same as agent id
   --workspace DIR             Agent workspace dir. Default: ~/.openclaw/workspace-junie-live
-  --seed-dir DIR              Junie seed dir. Default: ~/code/junie-live/initialization
+  --seed-dir DIR              Junie seed dir. Default: `.`
   --model MODEL               OpenClaw model id. Default: openrouter/openai/gpt-5.5
   --no-reseed                 Do not delete/re-copy workspace if it already exists.
   --override                  Replace existing agent/workspace if present.
@@ -44,11 +43,10 @@ expand_path() {
 }
 
 TOKEN="${JUNIE_TELEGRAM_BOT_TOKEN:-}"
-ADMIN_TELEGRAM_ID="400847234"
 AGENT_ID="junie-live"
 TELEGRAM_ACCOUNT=""
 WORKSPACE="~/.openclaw/workspace-junie-live"
-SEED_DIR="~/code/junie-live/initialization"
+SEED_DIR="."
 MODEL="openrouter/openai/gpt-5.5"
 RESEED=1
 OVERRIDE=0
