@@ -33,7 +33,7 @@ The agent communicates with the team through Telegram. It can ask clarifying que
 
 OpenClaw acts as the orchestrator. It owns the long-term context: strategy, architecture, design choices, memory, team communication, planning, scheduling, and review.
 
-All coding tasks are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance.
+All coding tasks are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
 
 Treat coding subagents roughly like junior engineers. The orchestrator must:
 

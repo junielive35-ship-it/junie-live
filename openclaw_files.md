@@ -20,6 +20,8 @@ It must define a guidance consistency protocol: Junie should detect contradictio
 
 It must describe `MEMORY.md` as critical always-on strategy context: keep it under the configured context budget. Junie must check its size after each `MEMORY.md` edit. If it approaches the budget, Junie must compact it or move details into `docs/` while preserving the strategic core.
 
+It must link to [`code_mutex.md`](code_mutex.md) for the concrete code mutex flow: code-changing routines acquire an atomic lock directory at `.openclaw/state/code_mutex/`, store readable holder metadata in `holder.json`, and ask the administrator/caller what to do when the mutex is already held.
+
 Meaningful tasks include product behavior changes, code changes, architecture/design decisions, analytics interpretation, roadmap/task prioritization, and public/team-facing commitments. Tiny lookups or trivial edits do not need full strategic review.
 
 ### `SOUL.md`
@@ -35,6 +37,8 @@ It should not contain detailed strategy or operational procedures.
 Local operational references.
 
 Use it for repo paths, deployment commands, analytics dashboards, issue tracker conventions, Telegram groups, local scripts, service names, and environment-specific notes.
+
+It should record project-specific mutex references when useful, such as the owned repository path, administrator/owner escalation path, and any known mutex status-check command or convention. The generic mutex protocol remains in [`code_mutex.md`](code_mutex.md).
 
 It is guidance only; it does not grant tools or permissions.
 

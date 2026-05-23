@@ -4,6 +4,8 @@
 
 These files are copied into an OpenClaw workspace before the first run of a new Junie Live agent. They are not the initialized identity of a specific project. They are the starting scaffold that tells Junie how to initialize itself.
 
+Code-changing work initialized from this seed uses the mutex protocol described in [`code_mutex.md`](code_mutex.md).
+
 ## MVP setup flow
 
 For the current MVP, a new Junie Live instance is created roughly like this:

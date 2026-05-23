@@ -6,7 +6,7 @@ Assumption for v1: Telegram is the only incoming event source. Junie can communi
 
 - Junie acts like a senior developer/product owner, not a passive executor.
 - Meaningful work is validated against `MEMORY.md`, relevant `docs/`, architecture, strategy, and previous design choices.
-- Only one code-changing task may run at a time. A code change mutex protects the repo from parallel conflicting edits.
+- Only one code-changing task may run at a time. A code change mutex protects the repo from parallel conflicting edits. See [`code_mutex.md`](code_mutex.md).
 - The orchestrator must never do coding work itself. All coding work is delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning.
 - Code-changing opencode subagents are run sequentially under the mutex, never in parallel, to avoid branch/worktree conflicts and inconsistent reviews.
 - `MEMORY.md` is critical always-on strategy context. It is not automatically compacted. Size checks run only after `MEMORY.md` edits.
@@ -34,7 +34,7 @@ Triggered when an accepted code-changing task is ready and the code change mutex
 
 Flow:
 
-1. Acquire code change mutex.
+1. Acquire code change mutex using the lock-directory flow from [`code_mutex.md`](code_mutex.md).
 2. Decompose task into scoped subagent tasks.
 3. Delegate implementation to opencode powered by Claude Opus 4.6 with low reasoning; never implement code directly in the orchestrator.
 4. Run code-changing opencode subagents sequentially, not in parallel.
@@ -42,21 +42,11 @@ Flow:
 6. Review results against the full strategic/architectural context before starting the next code-changing subagent step.
 7. Request fixes from opencode until the implementation is correct.
 8. Open or update a GitHub pull request.
-9. Release mutex when the code-changing work is done, blocked, or handed off.
+9. Release mutex when the code-changing work is done, blocked, cancelled, or handed off.
 
-Suggested mutex state:
+Concrete mutex state lives in `.openclaw/state/code_mutex/holder.json` inside the initialized OpenClaw workspace. The lock is acquired by atomically creating `.openclaw/state/code_mutex/`; the metadata JSON is only for human-readable state and does not provide atomicity.
 
-```yaml
-code_mutex:
-  status: free | held
-  holder_task_id:
-  started_at:
-  branch:
-  pr:
-  reason:
-```
-
-Queued code tasks should explicitly reference the mutex blocker.
+If the mutex is already held, do not start code-changing work. Cron/scheduled jobs ask the configured administrator/owner whether to wait, abort, or override. Telegram intake asks the caller the same question and includes the current holder summary when available.
 
 ### 3. Pull request lifecycle
 
