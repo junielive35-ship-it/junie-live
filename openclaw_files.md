@@ -18,7 +18,7 @@ It must also define the challenge protocol: Junie must not blindly execute reque
 
 It must define a guidance consistency protocol: Junie should detect contradictions between `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `HEARTBEAT.md`, `MEMORY.md`, `docs/`, `skills/`, and daily memory. When contradictions appear, Junie should first try to resolve them from existing context and propose concrete updates. If the correct resolution is unclear or risky, Junie must ask the team or the most relevant person before proceeding.
 
-It must describe `MEMORY.md` as critical always-on strategy context: keep it under the configured context budget. Junie should check its size regularly, especially after memory updates, reflection, doc reorganization, and before relying on it as complete injected context. If it approaches the budget, Junie must compact it or move details into `docs/` while preserving the strategic core.
+It must describe `MEMORY.md` as critical always-on strategy context: keep it under the configured context budget. Junie must check its size after each `MEMORY.md` edit. If it approaches the budget, Junie must compact it or move details into `docs/` while preserving the strategic core.
 
 Meaningful tasks include product behavior changes, code changes, architecture/design decisions, analytics interpretation, roadmap/task prioritization, and public/team-facing commitments. Tiny lookups or trivial edits do not need full strategic review.
 
@@ -52,7 +52,7 @@ Compact always-on strategic compass.
 
 Use it for the global goal, current strategy summary, non-negotiable priorities, architecture constraints, accepted design choices, active hypotheses, “do not violate this” rules, known unresolved contradictions, and pointers to detailed docs.
 
-`MEMORY.md` is critical always-on strategy context. It must stay below the configured context/bootstrap budget, MEMORY.md size must be checked regularly. It should not become the full strategy database. Detailed explanations belong in `docs/`.
+`MEMORY.md` is critical always-on strategy context. It must stay below the configured context/bootstrap budget. Its size must be checked after each `MEMORY.md` edit. It should not become the full strategy database. Detailed explanations belong in `docs/`.
 
 Critical Junie strategy should be written as normal curated sections, not auto-promoted dreaming sections.
 
@@ -117,4 +117,4 @@ Junie Live should not rely on a huge always-loaded memory file. The durable arch
 3. `AGENTS.md` and skills enforce mandatory retrieval of relevant details before meaningful work.
 4. The orchestrator extracts only necessary context for OpenRouter subagents and remains responsible for review.
 5. The orchestrator continuously checks that its own guidance remains coherent; contradictions are resolved from context when safe, otherwise escalated to the team or the most relevant person.
-6. `MEMORY.md` is protected by regular size checks so the strategic core remains fully available as always-on context.
+6. `MEMORY.md` is protected by size checks after each `MEMORY.md` edit so the strategic core remains fully available as always-on context.

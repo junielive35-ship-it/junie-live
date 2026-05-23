@@ -14,13 +14,17 @@ This is not an agentic routine and should not interpret whether a behavior was g
 
 ## Scope for v2
 
-Track only:
+Track factual operational telemetry that helps later reflection and simplification, including:
 
 1. Skill usage
 2. MCP usage
 3. Documentation reads
+4. Tooling or external-service usage at the capability level
+5. Task-runner failures, retries, and recovery attempts
+6. Routine outputs and health signals
+7. Other coarse usefulness signals that can be collected without storing sensitive content
 
-Do not log broad tool usage by default. Do not make this subsystem responsible for detecting repeated inefficiencies; task-completion reflection already handles that analysis.
+Do not log broad raw tool calls by default. Prefer capability-level summaries over full commands, prompts, raw arguments, or file contents. Do not make this subsystem responsible for detecting repeated inefficiencies; task-completion reflection already handles that analysis.
 
 ## Actors
 
@@ -80,8 +84,8 @@ Append-only JSONL is enough for the first v2 implementation.
     "parent_id": "..."
   },
   "source": "openclaw_hook | session_log | acpx_record | opencode_log | mcp_proxy",
-  "kind": "skill_used | mcp_call | docs_read",
-  "name": "capability name",
+  "kind": "skill_used | mcp_call | docs_read | tooling_used | failure | retry | routine_output | health_signal | usefulness_signal",
+  "name": "capability, routine, signal, or event name",
   "target": "file path, docs URL, MCP server/tool, or skill id",
   "status": "ok | error | unknown"
 }
@@ -99,6 +103,9 @@ analytics/
   capability-aggregates/by-skill.json
   capability-aggregates/by-mcp.json
   capability-aggregates/by-doc.json
+  capability-aggregates/by-tooling.json
+  capability-aggregates/by-routine.json
+  capability-aggregates/by-failure.json
 ```
 
 Raw events are append-only. Aggregates are derived and can be regenerated.
@@ -107,8 +114,8 @@ Raw events are append-only. Aggregates are derived and can be regenerated.
 
 Default to metadata only:
 
-- record skill ids, MCP server/tool names, docs paths or URLs;
-- avoid raw prompts, raw tool arguments, raw file contents, and full command lines;
+- record skill ids, MCP server/tool names, docs paths or URLs, routine ids, task ids, coarse failure categories, retry counts, and capability names;
+- avoid raw prompts, raw tool arguments, raw file contents, full command lines, secrets, message bodies, and personally sensitive payloads;
 - keep everything local unless explicitly configured otherwise.
 
 ## Consumers
