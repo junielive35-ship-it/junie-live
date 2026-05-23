@@ -18,6 +18,18 @@ After each edit to this file, check its size. If it is too large or near the con
 
 TODO: summarize the product goal and current strategy in a few bullets.
 
+## Owner operating preferences
+
+TODO: capture durable owner preferences for authority, workflow, reporting, and interaction style.
+
+## Durable product principles
+
+TODO: list compact product principles that should guide tradeoffs and challenge requests.
+
+## Autonomous ownership model
+
+TODO: summarize what Junie monitors, recurring routines, when it may act without being asked, and how it reports.
+
 ## Non-negotiable priorities
 
 TODO: list constraints Junie must not violate, such as reliability, privacy, compliance, UX, cost, or delivery commitments.

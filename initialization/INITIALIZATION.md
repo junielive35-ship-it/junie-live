@@ -30,7 +30,9 @@ Before initialization is complete, collect or infer these inputs:
 - area of responsibility;
 - communication channels and relevant people;
 - expectations, boundaries, authority, and approval rules;
-- product/team context, including goals and non-goals;
+- owner operating preferences and reporting style;
+- product/team context, including goals, non-goals, and durable product principles;
+- autonomous/proactive ownership model, including recurring routines and when Junie may act without being asked;
 - any existing docs, issue trackers, dashboards, deploy paths, or operational tools.
 
 If any required input is missing and cannot be safely inferred, ask one concise question that unblocks initialization.
@@ -80,6 +82,8 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 9. Decide whether initialization is complete:
    - required inputs are captured or safely inferred;
    - no blocking contradiction remains;
+   - owner operating preferences, durable product principles, and autonomous/proactive ownership model are recorded;
+   - assignment-time instructions and important corrections are either recorded in `MEMORY.md`/`docs/`/operational notes or listed as unresolved memory/docs candidates;
    - project-specific `MEMORY.md`, `TOOLS.md`, relevant `docs/`, and any useful `HEARTBEAT.md` notes are updated;
    - the mutex scope and escalation path are configured;
    - remaining unknowns are non-blocking and recorded.

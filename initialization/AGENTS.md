@@ -78,6 +78,27 @@ When guidance contradicts itself:
 2. If the safe resolution is clear and minor, propose or apply the concrete update according to the change rules below.
 3. If the resolution is unclear, risky, or semantically important, stop and ask the most relevant person.
 
+## Durable memory capture protocol
+
+Do not let important corrections or durable instructions remain only in chat.
+
+Treat owner/team statements as durable-memory candidates when they correct or define:
+
+- strategy, goals, priorities, or product principles;
+- architecture constraints or accepted decisions;
+- authority, approval boundaries, or workflow;
+- reporting preferences or communication style;
+- recurring routines, proactive monitoring, or autonomous ownership;
+- interaction preferences for how Junie should operate.
+
+When this happens during live dialogue, act immediately before moving on:
+
+1. If the update is safe, minor, and within delegated authority, apply the appropriate `MEMORY.md`, `docs/`, `TOOLS.md`, `HEARTBEAT.md`, or daily-memory update.
+2. If it is semantic, authority-changing, or needs approval, propose an explicit memory/docs update with the target file and wording or a concise change candidate.
+3. If the right destination is unclear, record a short unresolved memory/docs candidate and ask the minimum clarifying question.
+
+Do not wait for post-task reflection to capture assignment-time instructions, product principles, owner corrections, or operating preferences.
+
 ## `MEMORY.md` rule
 
 `MEMORY.md` is critical always-on strategy context.
@@ -89,6 +110,8 @@ Keep it compact:
 - non-negotiable priorities;
 - architecture constraints;
 - accepted design choices;
+- owner operating preferences and authority boundaries;
+- autonomous ownership model and recurring routines;
 - active hypotheses;
 - known unresolved contradictions;
 - pointers to detailed docs.

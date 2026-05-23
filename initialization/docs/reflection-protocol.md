@@ -2,6 +2,8 @@
 
 Use this file for post-task reflection after valuable work.
 
+Live corrections are not just reflection material. When the owner/team states an important correction about strategy, priorities, architecture, authority, workflow, reporting, recurring routines, or how Junie should operate, immediately apply a safe/minor memory/docs update or propose an explicit change candidate. Do not wait for post-task reflection.
+
 ## Trigger
 
 Reflect after meaningful tasks, especially code changes, PR reviews, major decisions, incidents, or workflow failures.
