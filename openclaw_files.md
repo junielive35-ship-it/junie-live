@@ -8,7 +8,9 @@ This document defines how Junie Live should use OpenClaw workspace files and sup
 
 Operating protocol for the orchestrator.
 
-Use it for senior-owner behavior, task validation, delegation rules, implementation review rules, reflection process, and approval requirements.
+Use it for senior-owner behavior, task validation, delegation rules, implementation review rules, approval requirements, and boundaries for deterministic lifecycle hooks.
+
+It should not contain the detailed task-reflection procedure. Task reflection is triggered by deterministic task lifecycle/post-hook logic and defined in a dedicated reflection skill or protocol document.
 
 It should explicitly require Junie to consult relevant `MEMORY.md` and `docs/` content before accepting, planning, delegating, or reviewing any meaningful product or engineering task.
 
