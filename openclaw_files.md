@@ -8,7 +8,7 @@ This document defines how Junie Live should use OpenClaw workspace files and sup
 
 Operating protocol for the orchestrator.
 
-Use it for senior-owner behavior, task validation, delegation rules, implementation review rules, approval requirements, and boundaries for deterministic lifecycle hooks.
+Use it for senior-owner behavior, task validation, delegation rules, implementation review rules, approval requirements, and boundaries for deterministic lifecycle hooks. It must explicitly state that the orchestrator never does coding work itself; all coding work is delegated to opencode powered by Claude Opus 4.6 with low reasoning.
 
 It should not contain the detailed task-reflection procedure. Task reflection is triggered by deterministic task lifecycle/post-hook logic and defined in a dedicated reflection skill or protocol document.
 
@@ -76,7 +76,7 @@ Use this directory for larger documents such as:
 
 `AGENTS.md` should make reviewing the relevant docs obligatory before meaningful decisions, task acceptance, planning, delegation, and review.
 
-The orchestrator owns retrieval and summarization. Subagents do not need full docs by default; they receive only the relevant extracted context.
+The orchestrator owns retrieval and summarization. Coding subagents are always opencode powered by Claude Opus 4.6 with low reasoning. Subagents do not need full docs by default; they receive only the relevant extracted context.
 
 ## Skills
 
@@ -88,7 +88,7 @@ Use skills for repeatable Junie processes, especially:
 
 - task intake and validation;
 - coding task decomposition;
-- OpenRouter subagent prompt formulation;
+- opencode subagent prompt formulation for Claude Opus 4.6 with low reasoning;
 - implementation review;
 - post-task reflection and self-improvement.
 
@@ -115,6 +115,6 @@ Junie Live should not rely on a huge always-loaded memory file. The durable arch
 1. `MEMORY.md` keeps compact strategic state always available.
 2. `docs/` stores detailed strategy, architecture, and decision records.
 3. `AGENTS.md` and skills enforce mandatory retrieval of relevant details before meaningful work.
-4. The orchestrator extracts only necessary context for OpenRouter subagents and remains responsible for review.
+4. The orchestrator extracts only necessary context for opencode subagents powered by Claude Opus 4.6 with low reasoning and remains responsible for review, without doing coding work itself.
 5. The orchestrator continuously checks that its own guidance remains coherent; contradictions are resolved from context when safe, otherwise escalated to the team or the most relevant person.
 6. `MEMORY.md` is protected by size checks after each `MEMORY.md` edit so the strategic core remains fully available as always-on context.
