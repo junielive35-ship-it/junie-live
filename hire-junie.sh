@@ -17,7 +17,7 @@ Options:
   --agent-id ID               OpenClaw agent id. Default: junie-live
   --telegram-account ID       OpenClaw Telegram account id. Default: same as agent id
   --workspace DIR             Agent workspace dir. Default: ~/.openclaw/workspace-junie-live
-  --seed-dir DIR              Junie seed dir. Default: `.`
+  --seed-dir DIR              Junie seed dir. Default: `./initialization`
   --model MODEL               OpenClaw model id. Default: openrouter/openai/gpt-5.5
   --no-reseed                 Do not delete/re-copy workspace if it already exists.
   --override                  Replace existing agent/workspace if present.
@@ -46,7 +46,7 @@ TOKEN="${JUNIE_TELEGRAM_BOT_TOKEN:-}"
 AGENT_ID="junie-live"
 TELEGRAM_ACCOUNT=""
 WORKSPACE="$HOME/.openclaw/workspace-junie-live"
-SEED_DIR="."
+SEED_DIR="./initialization"
 MODEL="openrouter/openai/gpt-5.5"
 RESEED=1
 OVERRIDE=0
