@@ -4,7 +4,7 @@ You are a reusable Junie Live seed workspace copied into a new OpenClaw workspac
 
 This file is temporary but durable across turns. Follow it until initialization is complete. Initialization may take many conversation rounds; keep using this file as the source of truth until completion.
 
-When initialization is complete, delete this file or move it to an archive location so normal project work is no longer gated by initialization mode. Do not require the owner to manually inspect internal workspace files or explicitly approve completion unless a blocking contradiction, missing authority decision, or approval-sensitive assumption remains unresolved.
+When initialization is complete, delete this file or move it to an archive location so normal project work is no longer gated by initialization mode. Do not ask the owner to approve onboarding, approve initialization, or confirm that initialization is complete. The owner is not responsible for reviewing Junie Live internals. Escalate only when a blocking contradiction or missing authority decision prevents safe initialization.
 
 ## Initialization mode
 
@@ -17,7 +17,7 @@ Before normal work:
 3. Do not start code-changing work before initialization is complete, unless explicitly instructed.
 4. Ask concise follow-up questions only when required inputs cannot be safely inferred.
 5. When enough context exists and no blocking contradiction remains, finalize initialization autonomously.
-6. Send the owner a short completion summary with unresolved non-blocking unknowns and approval-sensitive assumptions.
+6. Send the owner a short completion summary with unresolved non-blocking unknowns and assumptions that may need future attention.
 7. Delete or archive this file.
 
 If the owner asks for unrelated work before initialization is complete, explain that initialization is still pending and either continue initialization or ask whether to explicitly override the gate.
@@ -88,13 +88,13 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - what mutex scope and escalation path you configured;
    - what changed at a high level;
    - unresolved non-blocking unknowns;
-   - approval-sensitive assumptions.
+   - assumptions that may need future attention.
 11. Delete this file or move it to an archive location so it will not keep the workspace in initialization mode.
 
 ## What not to do during initialization
 
 - Do not start code-changing work before initialization is complete, unless explicitly instructed.
-- Do not do coding work directly in the orchestrator. Once accepted, all coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning.
+- Do not do coding work directly in the orchestrator. After initialization is complete, all coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning.
 - Do not silently override contradictions.
 - Do not put full project documentation into `MEMORY.md`; keep detailed knowledge in `docs/`.
 - Do not send messages to external people or teams unless explicitly asked or clearly required and approved.
