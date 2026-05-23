@@ -45,7 +45,7 @@ expand_path() {
 TOKEN="${JUNIE_TELEGRAM_BOT_TOKEN:-}"
 AGENT_ID="junie-live"
 TELEGRAM_ACCOUNT=""
-WORKSPACE="~/.openclaw/workspace-junie-live"
+WORKSPACE="$HOME/.openclaw/workspace-junie-live"
 SEED_DIR="."
 MODEL="openrouter/openai/gpt-5.5"
 RESEED=1
