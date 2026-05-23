@@ -90,7 +90,7 @@ Responsibilities:
 - identify generalizable process/tooling/context improvements;
 - avoid one-off “optimizations” that are unlikely to help future tasks;
 - record self-improvement history;
-- use tool/skill usage analytics as evidence;
+- use task artifacts and available execution evidence;
 - apply minor safe improvements;
 - propose major changes for approval.
 
@@ -175,7 +175,7 @@ Responsibilities:
 - reduce accumulated complexity;
 - identify unused or low-value docs, skills, routines, and utilities;
 - propose simplifying changes;
-- use telemetry from the usage analytics subsystem;
+- use available task history and file/routine evidence;
 - never edit `MEMORY.md` directly, only propose changes if needed.
 
 ### 12. Routine health check
@@ -191,31 +191,17 @@ Responsibilities:
 - detect dead execution loops;
 - surface stale held mutexes to the code mutex status check.
 
-Repeated tool/skill failures are not handled here; they belong to the usage analytics subsystem.
+Repeated tool/skill failure analysis is out of scope for the MVP unless it is visible in normal task artifacts.
 
-## Always-on subsystem
+## Deferred subsystem
 
-### Tool/skill usage analytics
+### Capability usage analytics — v2, out of MVP scope
 
-This is not an agentic routine. It is a telemetry subsystem that constantly records operational data.
+Capability usage analytics is intentionally left for the next version.
 
-It should track:
+In v2, this subsystem may collect factual operational telemetry such as skill usage, MCP/tooling usage, documentation reads, failures, retries, routine outputs, and other usefulness signals. That data can later support task-completion reflection, self-simplification, and future skill/tooling decisions.
 
-- tool usage;
-- skill usage;
-- failures and retries;
-- repeated inefficiencies;
-- docs read frequency;
-- routine outputs and usefulness signals;
-- context/token growth indicators where available.
-
-This data is consumed by:
-
-- task-completion reflection (self-improvement);
-- self-simplification;
-- future skill/tooling decisions.
-
-The subsystem should collect facts. Agentic routines interpret those facts and decide whether changes are useful.
+For the MVP, Junie should not depend on this analytics layer. Reflection and simplification should use ordinary task artifacts, PR/review history, logs explicitly produced by task runners, and direct inspection instead.
 
 ## Minor vs major changes
 

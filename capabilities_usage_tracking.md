@@ -1,12 +1,18 @@
 # Capabilities Usage Tracking
 
-## Purpose
+## Status
+
+Deferred to v2. Capability usage tracking is intentionally out of scope for the MVP.
+
+The MVP should not depend on this subsystem for task reflection, self-simplification, scheduling, review, or task acceptance. Until v2 exists, Junie should use ordinary task artifacts, PR/review history, explicit task-runner logs, and direct inspection as evidence.
+
+## Purpose for v2
 
 Track factual usage of Junie's operational capabilities so reflection and simplification can make better decisions later.
 
 This is not an agentic routine and should not interpret whether a behavior was good or inefficient. It only records what capabilities were used, by whom, and for which task.
 
-## Scope for v1
+## Scope for v2
 
 Track only:
 
@@ -50,7 +56,7 @@ Useful signals:
 
 ### Third-party coding subagents
 
-Use post-run extraction first. Avoid OpenClaw core changes for v1.
+Use post-run extraction first. Avoid OpenClaw core changes for the first v2 implementation.
 
 Each subagent type may need a small adapter because capability usage is not standardized:
 
@@ -61,7 +67,7 @@ Each subagent type may need a small adapter because capability usage is not stan
 
 ## Event schema
 
-Append-only JSONL is enough for v1.
+Append-only JSONL is enough for the first v2 implementation.
 
 ```json
 {
