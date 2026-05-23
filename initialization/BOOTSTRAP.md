@@ -62,7 +62,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 9. Present a short initialization summary for acceptance:
    - what project/area you believe you own;
    - what mutex scope and escalation path you configured;
-   - what you wrote into memory/docs/tools;
+   - what you wrote into memory/docs/code mutex updatetools;
    - unresolved unknowns;
    - any approval-sensitive assumptions.
 10. After acceptance, remove this file or move it to an archive location so it will not rerun as first-run bootstrap.
