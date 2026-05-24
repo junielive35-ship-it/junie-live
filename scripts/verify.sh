@@ -13,6 +13,7 @@ bash -n scripts/code-mutex-status.sh
 bash -n scripts/backlog.sh
 bash -n scripts/routine-health.sh
 bash -n scripts/backlog-hygiene.sh
+bash -n scripts/pr-status.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -356,5 +357,104 @@ BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --stale-queued-days 
 status=$?
 set -e
 grep -q '^stale_queued=1$' "$tmp/hygiene-stale-q.out" || fail "stale queued count should be 1"
+
+log "pr status smoke tests"
+pr_tmp="$tmp/pr_status"
+mkdir -p "$pr_tmp"
+
+# gh not available (default PATH has no gh) -> pr_check_available=false
+set +e
+./scripts/pr-status.sh --repo "$pr_tmp" >"$tmp/pr-nogh.out" 2>"$tmp/pr-nogh.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "no gh exit status was $status, expected 0"
+grep -q '^pr_check_available=false$' "$tmp/pr-nogh.out" || fail "no gh should report unavailable"
+
+# gh available, no open PRs
+cat > "$tmp/bin/gh" <<'GH_STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_STUB_LOG:?}"
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  exit 0
+fi
+exit 0
+GH_STUB
+chmod +x "$tmp/bin/gh"
+
+gh_log="$tmp/gh.log"
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-status.sh --repo "$pr_tmp" >"$tmp/pr-empty.out" 2>"$tmp/pr-empty.err"
+grep -q '^open_prs=0$' "$tmp/pr-empty.out" || fail "empty prs should report 0"
+grep -q '^details=No open PRs$' "$tmp/pr-empty.out" || fail "empty prs details wrong"
+
+# gh stub with healthy PR
+cat > "$tmp/bin/gh" <<'GH_STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_STUB_LOG:?}"
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  printf '42\tHealthy PR\tmain\t2026-05-24T10:00:00Z\t2026-05-24T10:00:00Z\tMERGEABLE\tauthor\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "view" ]]; then
+  printf '{"statusCheckRollup":[{"conclusion":"SUCCESS","status":"COMPLETED"}]}\n'
+  exit 0
+fi
+exit 0
+GH_STUB
+chmod +x "$tmp/bin/gh"
+
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-status.sh --repo "$pr_tmp" >"$tmp/pr-healthy.out" 2>"$tmp/pr-healthy.err"
+grep -q '^pr_check_available=true$' "$tmp/pr-healthy.out" || fail "healthy pr should be available"
+grep -q '^open_prs=1$' "$tmp/pr-healthy.out" || fail "healthy pr should report 1"
+grep -q '^pr_1_number=42$' "$tmp/pr-healthy.out" || fail "healthy pr number missing"
+grep -q '^pr_1_ci=success$' "$tmp/pr-healthy.out" || fail "healthy pr ci should be success"
+grep -q '^pr_1_stale=false$' "$tmp/pr-healthy.out" || fail "healthy pr should not be stale"
+
+# gh stub with failing CI -> exit 2
+cat > "$tmp/bin/gh" <<'GH_STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_STUB_LOG:?}"
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  printf '99\tFailing PR\tmain\t2026-05-24T10:00:00Z\t2026-05-24T10:00:00Z\tMERGEABLE\tauthor\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "view" ]]; then
+  printf '{"statusCheckRollup":[{"conclusion":"FAILURE","status":"COMPLETED"}]}\n'
+  exit 0
+fi
+exit 0
+GH_STUB
+chmod +x "$tmp/bin/gh"
+
+set +e
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-status.sh --repo "$pr_tmp" >"$tmp/pr-failing.out" 2>"$tmp/pr-failing.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "failing ci exit status was $status, expected 2"
+grep -q '^failing_ci=1$' "$tmp/pr-failing.out" || fail "failing ci count wrong"
+grep -q 'PR #99 CI failing' "$tmp/pr-failing.out" || fail "failing ci not in details"
+
+# gh stub with stale PR -> exit 1
+cat > "$tmp/bin/gh" <<'GH_STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_STUB_LOG:?}"
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  printf '77\tStale PR\tmain\t2000-01-01T00:00:00Z\t2000-01-01T00:00:00Z\tMERGEABLE\tauthor\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "view" ]]; then
+  printf '{"statusCheckRollup":[{"conclusion":"SUCCESS","status":"COMPLETED"}]}\n'
+  exit 0
+fi
+exit 0
+GH_STUB
+chmod +x "$tmp/bin/gh"
+
+set +e
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-status.sh --repo "$pr_tmp" --stale-hours 1 >"$tmp/pr-stale.out" 2>"$tmp/pr-stale.err"
+status=$?
+set -e
+[[ "$status" -eq 1 ]] || fail "stale pr exit status was $status, expected 1"
+grep -q '^stale_prs=1$' "$tmp/pr-stale.out" || fail "stale pr count wrong"
+grep -q 'PR #77 stale' "$tmp/pr-stale.out" || fail "stale pr not in details"
 
 log "all checks passed"
