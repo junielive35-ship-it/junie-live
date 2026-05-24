@@ -576,10 +576,11 @@ set -e
 grep -q '^action=release_completed_task$' "$tmp/relcomp-na.out" || fail "relcomp should detect completed task"
 grep -q 'is done' "$tmp/relcomp-na.out" || fail "relcomp reason should mention done"
 
-# release_completed_task via drive.sh
+# release_completed_task via drive.sh, then loop continues to generate_hypotheses
 relcomp_drive_tmp="$tmp/relcomp_drive"
 relcomp_drive_bl="$relcomp_drive_tmp/backlog"
 relcomp_drive_mutex="$relcomp_drive_tmp/mutex"
+relcomp_drive_hyp="$relcomp_drive_tmp/hyp_state"
 mkdir -p "$relcomp_drive_bl/items" "$relcomp_drive_mutex"
 
 BACKLOG_DIR="$relcomp_drive_bl" ./scripts/backlog.sh add --type task --title "Drive relcomp" --priority 80 >/dev/null
@@ -599,12 +600,12 @@ JSON
 sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "cancelled"/' "$relcomp_drive_bl/items/$relcomp_drive_id.json"
 
 set +e
-BACKLOG_DIR="$relcomp_drive_bl" MUTEX_DIR="$relcomp_drive_mutex" \
+BACKLOG_DIR="$relcomp_drive_bl" MUTEX_DIR="$relcomp_drive_mutex" HYPOTHESIS_STATE_DIR="$relcomp_drive_hyp" \
   ./scripts/drive.sh >"$tmp/relcomp-drive.out" 2>"$tmp/relcomp-drive.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive relcomp exit status was $status, expected 0"
-grep -q '^action=release_completed_task$' "$tmp/relcomp-drive.out" || fail "drive should detect completed task"
+grep -q '^action=generate_hypotheses$' "$tmp/relcomp-drive.out" || fail "drive should loop to generate_hypotheses after release"
 [[ ! -d "$relcomp_drive_mutex" ]] || fail "drive should release mutex for completed task"
 s=$(grep '"status"' "$relcomp_drive_bl/items/$relcomp_drive_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "cancelled" ]] || fail "drive should preserve terminal status ($s)"
@@ -1269,7 +1270,7 @@ grep -q '^action=start_backlog_item$' "$tmp/drive-start.out" || fail "start_back
 [[ -d "$drive_tmp/mutex_start" ]] || fail "mutex was not acquired"
 [[ -f "$drive_tmp/mutex_start/holder.json" ]] || fail "holder.json not written"
 
-# Stale mutex -> calls mutex-release-stale.sh, mutex removed
+# Stale mutex -> mutex-release-stale.sh, then loop continues to acquire task
 drive_stale_mutex="$drive_tmp/mutex_stale"
 mkdir -p "$drive_stale_mutex"
 cat > "$drive_stale_mutex/holder.json" <<'JSON'
@@ -1281,21 +1282,23 @@ BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_stale_mutex" \
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "stale mutex drive exit status was $status, expected 0"
-grep -q '^action=release_stale_mutex$' "$tmp/drive-stale.out" || fail "release_stale_mutex action not found"
-[[ ! -d "$drive_stale_mutex" ]] || fail "stale mutex dir should be removed"
+grep -q '^action=start_backlog_item$' "$tmp/drive-stale.out" || fail "stale mutex drive should loop to start_backlog_item"
+[[ -d "$drive_stale_mutex" ]] || fail "stale mutex drive should acquire mutex after cleanup"
 
-# Broken mutex -> calls mutex-release-stale.sh (fix_mutex action), mutex removed
+# Broken mutex -> mutex-release-stale.sh, then loop continues to acquire task
+drive_broken_bl="$drive_tmp/bl_broken"
 drive_broken_mutex="$drive_tmp/mutex_broken"
-mkdir -p "$drive_broken_mutex"
+mkdir -p "$drive_broken_bl/items" "$drive_broken_mutex"
+BACKLOG_DIR="$drive_broken_bl" ./scripts/backlog.sh add --type task --title "Broken mutex recover" --priority 80 >/dev/null
 printf 'not json\n' > "$drive_broken_mutex/holder.json"
 set +e
-BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_broken_mutex" \
+BACKLOG_DIR="$drive_broken_bl" MUTEX_DIR="$drive_broken_mutex" \
   ./scripts/drive.sh >"$tmp/drive-broken.out" 2>"$tmp/drive-broken.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "broken mutex drive exit status was $status, expected 0"
-grep -q '^action=fix_mutex$' "$tmp/drive-broken.out" || fail "fix_mutex action not found"
-[[ ! -d "$drive_broken_mutex" ]] || fail "broken mutex dir should be removed"
+grep -q '^action=start_backlog_item$' "$tmp/drive-broken.out" || fail "broken mutex drive should loop to start_backlog_item"
+[[ -d "$drive_broken_mutex" ]] || fail "broken mutex drive should acquire mutex after cleanup"
 
 # Stale in_progress item + free mutex -> backlog hygiene auto-resets to queued,
 # then start_backlog_item re-acquires with mutex
