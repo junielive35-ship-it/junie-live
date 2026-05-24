@@ -7,6 +7,12 @@ cd "$ROOT"
 log() { printf '==> %s\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+log "preflight clean working tree"
+if git status --porcelain --untracked-files=all | grep -q .; then
+  git status --short --branch --untracked-files=all >&2
+  fail "working tree is not clean before verify; commit, stash, or remove changes first"
+fi
+
 log "bash syntax"
 bash -n hire-junie.sh
 bash -n scripts/code-mutex-status.sh
