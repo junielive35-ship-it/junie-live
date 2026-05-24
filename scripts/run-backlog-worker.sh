@@ -7,6 +7,7 @@ backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
 state_dir="${AUTONOMOUS_WORKER_STATE_DIR:-${HOME:-$ROOT}/.openclaw/workspace-junie-live/.openclaw/state/autonomous-worker}"
 worker_cmd_template="${AUTONOMOUS_WORKER_CMD:-}"
 timeout_seconds="${AUTONOMOUS_WORKER_TIMEOUT_SECONDS:-0}"
+opencode_bin="${AUTONOMOUS_OPENCODE_BIN:-}"
 opencode_model="${AUTONOMOUS_OPENCODE_MODEL:-anthropic/claude-opus-4-6}"
 opencode_variant="${AUTONOMOUS_OPENCODE_VARIANT:-low}"
 opencode_agent="${AUTONOMOUS_OPENCODE_AGENT:-build}"
@@ -58,15 +59,27 @@ Constraints:
 - If blocked, leave a clear blocker in output and do not claim success.
 PROMPT
 
+use_default_opencode=false
 if [[ -z "$worker_cmd_template" ]]; then
-  if command -v opencode >/dev/null 2>&1; then
-    worker_cmd_template='opencode run --model "$AUTONOMOUS_OPENCODE_MODEL" --variant "$AUTONOMOUS_OPENCODE_VARIANT" --agent "$AUTONOMOUS_OPENCODE_AGENT" "$(cat "$AUTONOMOUS_PROMPT_FILE")"'
+  if [[ -n "$opencode_bin" ]]; then
+    :
+  elif command -v opencode >/dev/null 2>&1; then
+    opencode_bin="$(command -v opencode)"
+  elif [[ -x "${HOME:-}/.opencode/bin/opencode" ]]; then
+    opencode_bin="${HOME}/.opencode/bin/opencode"
   else
     printf 'worker_status=blocked\n'
-    printf 'reason=opencode not found and AUTONOMOUS_WORKER_CMD/--worker-cmd-template not set\n'
+    printf 'reason=opencode not found and AUTONOMOUS_OPENCODE_BIN/AUTONOMOUS_WORKER_CMD/--worker-cmd-template not set\n'
     printf 'prompt_file=%s\nlog_file=%s\n' "$prompt_file" "$log_file"
     exit 2
   fi
+  [[ -x "$opencode_bin" || "$opencode_bin" != */* ]] || {
+    printf 'worker_status=blocked\n'
+    printf 'reason=opencode binary is not executable: %s\n' "$opencode_bin"
+    printf 'prompt_file=%s\nlog_file=%s\n' "$prompt_file" "$log_file"
+    exit 2
+  }
+  use_default_opencode=true
 fi
 
 export AUTONOMOUS_ITEM_ID="$item_id"
@@ -77,6 +90,7 @@ export AUTONOMOUS_REPO="$repo"
 export AUTONOMOUS_BACKLOG_DIR="$backlog_dir"
 export AUTONOMOUS_PROMPT_FILE="$prompt_file"
 export AUTONOMOUS_WORKER_LOG="$log_file"
+export AUTONOMOUS_OPENCODE_BIN="$opencode_bin"
 export AUTONOMOUS_OPENCODE_MODEL="$opencode_model"
 export AUTONOMOUS_OPENCODE_VARIANT="$opencode_variant"
 export AUTONOMOUS_OPENCODE_AGENT="$opencode_agent"
@@ -84,10 +98,18 @@ export AUTONOMOUS_OPENCODE_AGENT="$opencode_agent"
 printf 'worker_status=running\nitem_id=%s\nprompt_file=%s\nlog_file=%s\n' "$item_id" "$prompt_file" "$log_file"
 
 set +e
-if [[ "${timeout_seconds:-0}" -gt 0 ]]; then
-  (cd "$repo" && timeout --foreground --kill-after=5s "$timeout_seconds" bash -c "$worker_cmd_template") >>"$log_file" 2>&1
+if [[ "$use_default_opencode" == true ]]; then
+  if [[ "${timeout_seconds:-0}" -gt 0 ]]; then
+    (cd "$repo" && timeout --foreground --kill-after=5s "$timeout_seconds" "$opencode_bin" run --model "$AUTONOMOUS_OPENCODE_MODEL" --variant "$AUTONOMOUS_OPENCODE_VARIANT" --agent "$AUTONOMOUS_OPENCODE_AGENT" "$(cat "$AUTONOMOUS_PROMPT_FILE")") >>"$log_file" 2>&1
+  else
+    (cd "$repo" && "$opencode_bin" run --model "$AUTONOMOUS_OPENCODE_MODEL" --variant "$AUTONOMOUS_OPENCODE_VARIANT" --agent "$AUTONOMOUS_OPENCODE_AGENT" "$(cat "$AUTONOMOUS_PROMPT_FILE")") >>"$log_file" 2>&1
+  fi
 else
-  (cd "$repo" && bash -c "$worker_cmd_template") >>"$log_file" 2>&1
+  if [[ "${timeout_seconds:-0}" -gt 0 ]]; then
+    (cd "$repo" && timeout --foreground --kill-after=5s "$timeout_seconds" bash -c "$worker_cmd_template") >>"$log_file" 2>&1
+  else
+    (cd "$repo" && bash -c "$worker_cmd_template") >>"$log_file" 2>&1
+  fi
 fi
 status=$?
 set -e
