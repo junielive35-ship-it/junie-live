@@ -4,7 +4,10 @@ Use this file to guide implementation review before accepting worker output or o
 
 ## Review checklist
 
-- Does the change solve the requested problem?
+- What is the requested user outcome in concrete, testable terms?
+- Does the change solve that requested outcome end to end, not merely add prerequisites, scaffolding, infrastructure, or docs?
+- Is there meaningful evidence for the user outcome itself, or only evidence for a partial/internal component?
+- If the outcome is only partial, blocked, or unverified, is the final status explicitly labeled that way with gaps and next steps?
 - Does it align with `MEMORY.md`, strategy, architecture, and accepted decisions?
 - Does it avoid unintended product behavior changes?
 - Are edge cases handled?
@@ -16,6 +19,28 @@ Use this file to guide implementation review before accepting worker output or o
 - Are accidental root workspace artifacts such as `AGENTS.md`, `USER.md`, `.openclaw/`, or runtime state files absent from the repo root unless intentionally tracked?
 - Did the change avoid masking workspace trash with `.gitignore`, `.git/info/exclude`, global excludes, or similar mechanisms?
 - If committed, does the commit subject describe the actual change instead of a generic iteration counter such as `Autonomous MVP loop iteration N`?
+
+## Outcome acceptance gate
+
+Before accepting worker output or telling the user the task is complete, write down:
+
+```text
+requested_outcome=<what the user expected to be able to do>
+delivered_behavior=<what now works>
+evidence=<tests/inspection/run proving the delivered behavior>
+gaps=<missing, untested, partial, or blocked parts; use none only if truly none>
+status=<done|partial|blocked>
+```
+
+If `gaps` is not `none`, the status is not `done`. Report the gap in the first user-facing completion update.
+
+Examples of unacceptable acceptance:
+
+- User asks for an autonomous work loop for N hours; implementation only adds a wrapper, cron, or one iteration without real worker delegation; final says “done”.
+- User asks for reliable out-of-box behavior; implementation only documents manual commands; final says “ready”.
+- Tests pass for helper scripts, but no test or inspection covers the end-to-end behavior the user asked for.
+
+Acceptable update in those cases: “Infrastructure is in place, but the requested autonomous loop is still partial because `<gap>`. Next step is `<step>`."
 
 ## PR checklist
 

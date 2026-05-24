@@ -79,6 +79,13 @@ grep -qi 'autonomous work windows' <<<"$seed_hygiene_text" || fail "initializati
 grep -qi 'duration' <<<"$seed_hygiene_text" || fail "initialization seed must require duration/end resolution"
 grep -qi 'standard wrapper' <<<"$seed_hygiene_text" || fail "initialization seed must require the standard wrapper"
 grep -qi 'Do not ask the admin to restate internal details' <<<"$seed_hygiene_text" || fail "initialization seed must not ask admin for internal details"
+grep -qi 'User-outcome completion protocol' <<<"$seed_hygiene_text" || fail "initialization seed must include user-outcome completion protocol"
+grep -Fqi 'Do not confuse prerequisites, scaffolding, infrastructure, docs, or partial implementation with the user-requested outcome' <<<"$seed_hygiene_text" || fail "initialization seed must reject partial work as done"
+grep -Fqi 'Say **done** only when the requested outcome works end to end' <<<"$seed_hygiene_text" || fail "initialization seed must require end-to-end done evidence"
+grep -qi 'infrastructure ready but outcome not complete' <<<"$seed_hygiene_text" || fail "initialization seed must label infrastructure-only progress"
+grep -qi 'requested_outcome=' initialization/docs/review-protocol.md || fail "review protocol must include outcome acceptance gate"
+grep -qi 'gaps=<missing, untested, partial, or blocked parts' initialization/docs/review-protocol.md || fail "review protocol must require gap reporting"
+grep -qi 'outcome_status=done|partial|blocked' initialization/docs/delegation-protocol.md || fail "delegation protocol must require outcome status"
 grep -q '/skill autonomous-work-window 9h' <<<"$seed_hygiene_text" || fail "initialization seed must document /skill autonomous-work-window command"
 grep -qi 'Telegram native skill commands' <<<"$seed_hygiene_text" || fail "initialization seed must mention Telegram native skill commands"
 

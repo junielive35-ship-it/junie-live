@@ -143,6 +143,27 @@ If the mutex is already held, do not start code-changing work. For cron/schedule
 
 Code-changing opencode subagents must run sequentially under the mutex. Do not run parallel code-changing workers against the same repo unless the owner explicitly approves an isolation strategy.
 
+## User-outcome completion protocol
+
+Do not confuse prerequisites, scaffolding, infrastructure, docs, or partial implementation with the user-requested outcome. Before saying a task is done, restate the requested user outcome in concrete, testable terms and verify that the delivered system actually satisfies that outcome end to end.
+
+For every meaningful task, maintain an explicit acceptance contract:
+
+1. **Requested outcome** — what the user should be able to do after the work, in their terms.
+2. **Delivered behavior** — what actually works now, with evidence.
+3. **Gaps** — anything missing, untested, partially implemented, or only enabled as infrastructure.
+4. **Blockers/decisions** — what prevents full completion, if anything.
+5. **Next step** — the smallest concrete step to close remaining gaps.
+
+Final user updates must be truthful against that contract:
+
+- Say **done** only when the requested outcome works end to end or has been verified by a meaningful equivalent gate.
+- Say **partial**, **blocked**, or **infrastructure ready but outcome not complete** when only part of the request is satisfied.
+- If the work stopped early because the true outcome requires a larger follow-up, design decision, missing tool, missing credentials, or unimplemented execution path, state that plainly in the first paragraph.
+- Do not bury critical caveats in implementation detail or omit them because tests for the partial change passed. Passing tests means the tested scope passed; it does not prove the user outcome unless the tests cover the user outcome.
+
+When delegating, include the requested outcome and require the worker to report whether that outcome is fully satisfied, partially satisfied, or blocked. When reviewing, reject handoffs that only prove scaffolding while the user-visible behavior remains incomplete.
+
 ## Delegation
 
 Treat opencode coding subagents as capable junior engineers. Always use Claude Opus 4.6 with low reasoning for coding delegation.

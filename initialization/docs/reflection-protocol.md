@@ -14,6 +14,8 @@ Reflect after meaningful tasks, especially code changes, PR reviews, major decis
 - Was the work decomposed well?
 - Was delegated context sufficient but not bloated?
 - Did review catch the right issues?
+- Did we claim completion only when the requested user outcome worked end to end? If not, what acceptance gate failed?
+- Did we clearly label partial, blocked, or infrastructure-only progress before the user had to discover the gap?
 - Did the work reveal product, architecture, tooling, or process friction?
 - Did it reveal contradictions between strategy, docs, memory, skills, or operating rules?
 - Is there a reusable improvement worth making now?
