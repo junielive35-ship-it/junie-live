@@ -929,6 +929,22 @@ set -e
 [[ "$status" -eq 2 ]] || fail "broken next-action exit status was $status, expected 2"
 grep -q '^action=fix_mutex$' "$tmp/na-broken.out" || fail "broken next-action action not fix_mutex"
 
+# Free mutex + in_progress item + no queued -> check_stale_in_progress
+na_stale_ip="$na_tmp/stale_ip"
+mkdir -p "$na_stale_ip/items"
+BACKLOG_DIR="$na_stale_ip" ./scripts/backlog.sh add --type task --title "Orphaned in_progress" --priority 30 >/dev/null
+stale_ip_id=$(BACKLOG_DIR="$na_stale_ip" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$stale_ip_id" ]] || fail "stale_ip add failed"
+sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "in_progress"/' "$na_stale_ip/items/$stale_ip_id.json"
+set +e
+BACKLOG_DIR="$na_stale_ip" ./scripts/next-action.sh >"$tmp/na-stale-ip.out" 2>"$tmp/na-stale-ip.err"
+status=$?
+set -e
+[[ "$status" -eq 1 ]] || fail "stale_ip next-action exit status was $status, expected 1"
+grep -q '^action=check_stale_in_progress$' "$tmp/na-stale-ip.out" || fail "stale_ip next-action action not check_stale_in_progress"
+grep -q 'backlog_in_progress=1' "$tmp/na-stale-ip.out" || fail "stale_ip should report 1 in_progress"
+grep -q 'backlog_next=none' "$tmp/na-stale-ip.out" || fail "stale_ip should report no queued items"
+
 log "hypothesis generate smoke tests"
 hg_tmp="$tmp/hypothesis_gen"
 hg_backlog="$hg_tmp/backlog"
