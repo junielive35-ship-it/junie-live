@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mutex_dir="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mutex-dir) mutex_dir="$2"; shift 2 ;;
+    *) printf 'Unknown: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+
+if [[ ! -d "$mutex_dir" ]]; then
+  printf 'touched=false\n'
+  printf 'reason=mutex not held\n'
+  exit 0
+fi
+
+holder_json="$mutex_dir/holder.json"
+if [[ ! -f "$holder_json" ]]; then
+  printf 'touched=false\n'
+  printf 'reason=holder.json missing\n'
+  exit 0
+fi
+
+ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+sed -i 's/"updated_at"[[:space:]]*:[[:space:]]*"[^"]*"/"updated_at": "'"$ts"'"/' "$holder_json"
+
+printf 'touched=true\n'
+printf 'updated_at=%s\n' "$ts"

@@ -19,6 +19,7 @@ bash -n scripts/next-action.sh
 bash -n scripts/task-acquire.sh
 bash -n scripts/task-release.sh
 bash -n scripts/mutex-release-stale.sh
+bash -n scripts/mutex-touch.sh
 bash -n scripts/drive.sh
 bash -n scripts/hypothesis-generate.sh
 bash -n scripts/pr-follow-up.sh
@@ -725,6 +726,50 @@ grep -q '^task_id=task-dry-test$' "$tmp/mrs-drystale.out" || fail "stale dry-run
 [[ -d "$mrs_mutex/drystale" ]] || fail "stale dry-run should not remove mutex"
 s=$(grep '"status"' "$mrs_backlog/items/task-stale-test.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "queued" ]] || fail "stale dry-run should not change status"
+
+log "mutex touch smoke tests"
+mt_tmp="$tmp/mutex_touch"
+mt_mutex="$mt_tmp/mutex"
+
+# Free mutex -> touched=false
+set +e
+MUTEX_DIR="$mt_tmp/nonexistent" ./scripts/mutex-touch.sh >"$tmp/mt-free.out" 2>"$tmp/mt-free.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "free mutex touch exit status was $status, expected 0"
+grep -q '^touched=false$' "$tmp/mt-free.out" || fail "free mutex touch not touched=false"
+grep -q 'mutex not held' "$tmp/mt-free.out" || fail "free mutex touch reason missing"
+
+# Held mutex -> touched=true, updated_at refreshed
+mkdir -p "$mt_mutex"
+cat > "$mt_mutex/holder.json" <<'JSON'
+{
+  "holder_id": "touch-test",
+  "reason": "mutex touch smoke test",
+  "started_at": "2000-01-01T00:00:00Z",
+  "updated_at": "2000-01-01T00:00:00Z"
+}
+JSON
+set +e
+MUTEX_DIR="$mt_mutex" ./scripts/mutex-touch.sh >"$tmp/mt-held.out" 2>"$tmp/mt-held.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "held mutex touch exit status was $status, expected 0"
+grep -q '^touched=true$' "$tmp/mt-held.out" || fail "held mutex touch not touched=true"
+touch_ts=$(grep '^updated_at=' "$tmp/mt-held.out" | sed 's/^updated_at=//')
+[[ -n "$touch_ts" ]] || fail "held mutex touch should output updated_at"
+# Verify updated_at was refreshed (not the original 2000 date)
+updated_in_file=$(grep -o '"updated_at"[[:space:]]*:[[:space:]]*"[^"]*"' "$mt_mutex/holder.json" | sed 's/.*"updated_at"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$updated_in_file" != "2000-01-01T00:00:00Z" ]] || fail "mutex touch should update timestamp"
+
+# Broken mutex (dir exists, no holder.json) -> touched=false
+mkdir -p "$mt_tmp/broken"
+set +e
+MUTEX_DIR="$mt_tmp/broken" ./scripts/mutex-touch.sh >"$tmp/mt-broken.out" 2>"$tmp/mt-broken.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "broken mutex touch exit status was $status, expected 0"
+grep -q '^touched=false$' "$tmp/mt-broken.out" || fail "broken mutex touch not touched=false"
 
 log "pr status smoke tests"
 pr_tmp="$tmp/pr_status"
