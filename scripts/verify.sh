@@ -16,6 +16,8 @@ bash -n scripts/backlog-hygiene.sh
 bash -n scripts/pr-status.sh
 bash -n scripts/report.sh
 bash -n scripts/next-action.sh
+bash -n scripts/task-acquire.sh
+bash -n scripts/task-release.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -359,6 +361,56 @@ BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --stale-queued-days 
 status=$?
 set -e
 grep -q '^stale_queued=1$' "$tmp/hygiene-stale-q.out" || fail "stale queued count should be 1"
+
+log "task acquire/release smoke tests"
+ta_tmp="$tmp/task_acquire"
+ta_backlog="$ta_tmp/backlog"
+ta_mutex="$ta_tmp/mutex"
+ta_mutex_held="$ta_tmp/mutex_held"
+mkdir -p "$ta_backlog/items"
+
+# Empty backlog + free mutex -> backlog=empty, mutex released
+BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex" ./scripts/task-acquire.sh >"$tmp/ta-empty.out" 2>"$tmp/ta-empty.err"
+grep -q '^backlog=empty$' "$tmp/ta-empty.out" || fail "task-acquire empty backlog should output backlog=empty"
+[[ ! -d "$ta_mutex" ]] || fail "task-acquire empty backlog should release mutex"
+
+# Held mutex -> mutex=HELD, exit 2
+mkdir -p "$ta_mutex_held"
+cat > "$ta_mutex_held/holder.json" <<'JSON'
+{"holder_id":"test","task_id":"test","reason":"holder test"}
+JSON
+set +e
+BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex_held" ./scripts/task-acquire.sh >"$tmp/ta-held.out" 2>"$tmp/ta-held.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "task-acquire held mutex exit status was $status, expected 2"
+grep -q '^mutex=HELD$' "$tmp/ta-held.out" || fail "task-acquire held mutex output wrong"
+
+# Free mutex + queued item -> acquires, creates mutex dir and holder.json
+BACKLOG_DIR="$ta_backlog" ./scripts/backlog.sh add --type task --title "Task acquire test" --priority 70 >/dev/null
+BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex" ./scripts/task-acquire.sh >"$tmp/ta-acquired.out" 2>"$tmp/ta-acquired.err"
+grep -q '^status=in_progress$' "$tmp/ta-acquired.out" || fail "task-acquire should set status in_progress"
+grep -q '^mutex=ACQUIRED$' "$tmp/ta-acquired.out" || fail "task-acquire should report mutex ACQUIRED"
+task_id=$(grep '^id=' "$tmp/ta-acquired.out" | sed 's/^id=//')
+[[ -n "$task_id" ]] || fail "task-acquire should output item id"
+[[ -d "$ta_mutex" ]] || fail "task-acquire should create mutex dir"
+[[ -f "$ta_mutex/holder.json" ]] || fail "task-acquire should write holder.json"
+s=$(grep '"status"' "$ta_backlog/items/$task_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "in_progress" ]] || fail "task-acquire status should be in_progress, got $s"
+
+# task-release with default status (done)
+BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex" ./scripts/task-release.sh >"$tmp/ta-release.out" 2>"$tmp/ta-release.err"
+grep -q '^released=true$' "$tmp/ta-release.out" || fail "task-release should report released=true"
+grep -q "^task_id=$task_id$" "$tmp/ta-release.out" || fail "task-release should report correct task_id"
+grep -q '^new_status=done$' "$tmp/ta-release.out" || fail "task-release should report new_status=done"
+[[ ! -d "$ta_mutex" ]] || fail "task-release should remove mutex dir"
+s=$(grep '"status"' "$ta_backlog/items/$task_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "done" ]] || fail "task-release status should be done, got $s"
+
+# task-release with already free mutex -> released=false
+BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex" ./scripts/task-release.sh >"$tmp/ta-free-release.out" 2>"$tmp/ta-free-release.err"
+grep -q '^released=false$' "$tmp/ta-free-release.out" || fail "task-release free mutex should report released=false"
+grep -q 'mutex already free' "$tmp/ta-free-release.out" || fail "task-release free mutex should explain"
 
 log "pr status smoke tests"
 pr_tmp="$tmp/pr_status"
