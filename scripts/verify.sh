@@ -10,6 +10,7 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log "bash syntax"
 bash -n hire-junie.sh
 bash -n scripts/code-mutex-status.sh
+bash -n scripts/backlog.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -113,5 +114,35 @@ status=$?
 set -e
 [[ "$status" -eq 2 ]] || fail "broken mutex exit status was $status, expected 2"
 grep -q '^BROKEN code mutex$' "$tmp/mutex-broken.out" || fail "broken mutex status not reported"
+
+log "backlog smoke tests"
+backlog="$tmp/backlog"
+BACKLOG_DIR="$backlog" ./scripts/backlog.sh add --type task --title "Test task" >"$tmp/bl-add1.out"
+add1_id=$(cat "$tmp/bl-add1.out")
+[[ -n "$add1_id" ]] || fail "backlog add did not output an id"
+[[ -f "$backlog/items/$add1_id.json" ]] || fail "backlog item file not created"
+
+BACKLOG_DIR="$backlog" ./scripts/backlog.sh add --type hypothesis --title "High priority" --priority 90 >"$tmp/bl-add2.out"
+add2_id=$(cat "$tmp/bl-add2.out")
+[[ -n "$add2_id" ]] || fail "backlog second add did not output an id"
+
+BACKLOG_DIR="$backlog" ./scripts/backlog.sh list >"$tmp/bl-list.out"
+grep -q 'task.*Test task' "$tmp/bl-list.out" || fail "backlog list missing task"
+grep -q 'hypothesis.*High priority' "$tmp/bl-list.out" || fail "backlog list missing hypothesis"
+
+BACKLOG_DIR="$backlog" ./scripts/backlog.sh next >"$tmp/bl-next.out"
+grep -q "id=$add2_id" "$tmp/bl-next.out" || fail "backlog next did not pick highest priority"
+grep -q "priority=90" "$tmp/bl-next.out" || fail "backlog next did not report priority"
+
+BACKLOG_DIR="$backlog" ./scripts/backlog.sh update "$add2_id" --status done >/dev/null
+s=$(grep '"status"' "$backlog/items/$add2_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "done" ]] || fail "backlog update did not change status to done"
+
+BACKLOG_DIR="$backlog" ./scripts/backlog.sh next >"$tmp/bl-next2.out"
+grep -q "id=$add1_id" "$tmp/bl-next2.out" || fail "backlog next should pick remaining queued item"
+
+BACKLOG_DIR="$backlog" ./scripts/backlog.sh archive >"$tmp/bl-archive.out"
+grep -q "Archived 1 items" "$tmp/bl-archive.out" || fail "backlog archive should move done item"
+[[ -f "$backlog/archive/$add2_id.json" ]] || fail "backlog archive did not move item file"
 
 log "all checks passed"
