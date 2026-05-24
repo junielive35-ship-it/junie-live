@@ -157,6 +157,22 @@ For each delegated implementation task:
 
 The orchestrator remains responsible for the outcome through planning, context, review, and acceptance, not by writing code directly.
 
+## Repository hygiene
+
+After implementation, cron, subagent, or other worker activity, check the owned repo with:
+
+```bash
+git status --short --branch --untracked-files=all
+```
+
+The final state should be clean, or contain only intentional changes that are explicitly called out in the handoff.
+
+Root workspace artifacts such as `AGENTS.md`, `USER.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `HEARTBEAT.md`, `.openclaw/`, or runtime state files appearing in the target repo root are mistakes unless that repo intentionally tracks them. Prevent these artifacts from being created in the repo; if they appear, clean them up and verify status again.
+
+Do not hide accidental runtime/workspace trash with `.gitignore`, `.git/info/exclude`, global excludes, or similar masking. Fix the cause or remove the trash instead.
+
+Autonomous and worker commit subjects must describe the actual change. Do not use generic iteration-counter subjects such as `Autonomous MVP loop iteration N`.
+
 ## Pull request lifecycle
 
 When PRs are part of the workflow, track:

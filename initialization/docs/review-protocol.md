@@ -12,6 +12,10 @@ Use this file to guide implementation review before accepting worker output or o
 - Are migrations, configs, deploy steps, or docs needed?
 - Is the diff smaller and simpler than plausible alternatives?
 - Are risks and follow-ups recorded?
+- Did the worker check `git status --short --branch --untracked-files=all`, with a clean final state or only intentional changes called out?
+- Are accidental root workspace artifacts such as `AGENTS.md`, `USER.md`, `.openclaw/`, or runtime state files absent from the repo root unless intentionally tracked?
+- Did the change avoid masking workspace trash with `.gitignore`, `.git/info/exclude`, global excludes, or similar mechanisms?
+- If committed, does the commit subject describe the actual change instead of a generic iteration counter such as `Autonomous MVP loop iteration N`?
 
 ## PR checklist
 
