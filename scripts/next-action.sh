@@ -88,6 +88,9 @@ elif [[ "$mutex" == "FREE" && -n "$backlog_next" && "$backlog_next" != "none" &&
 elif [[ "$mutex" == "FREE" && -n "$backlog_next" && "$backlog_next" != "none" && "${backlog_ip:-0}" -gt 0 ]]; then
   action="check_stale_in_progress"
   reason="Backlog has in_progress items but mutex is free; may be stale"
+elif [[ "$mutex" == "FREE" && "${backlog_ip:-0}" -gt 0 ]]; then
+  action="check_stale_in_progress"
+  reason="Backlog has in_progress items but mutex is free; may be stale"
 elif [[ "$mutex" == "HELD" ]]; then
   action="wait_for_mutex"
   reason="Code mutex is held; cannot start new code work"
