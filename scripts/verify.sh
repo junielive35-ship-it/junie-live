@@ -1779,9 +1779,14 @@ mkdir -p "$fix_tmp"
 AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 5s --workspace "$auto_tmp/workspace" --state-dir "$fix_tmp/default-window" --expected-branch junie/autonomous-mvp-loop --dry-run >"$fix_tmp/default-window.out"
 grep -q -- '--iteration-timeout 7200' "$fix_tmp/default-window.out" || fail "autonomous window default timeout must be 7200 seconds"
 grep -q -- '--fix-retries 7' "$fix_tmp/default-window.out" || fail "autonomous window default fix budget must be 7"
+grep -q -- '--continue-on-local-failure' "$fix_tmp/default-window.out" || fail "autonomous window wrapper must default to continue-on-local-failure"
+grep -q -- '--max-local-failures 3' "$fix_tmp/default-window.out" || fail "autonomous window default local failure budget must be 3"
 AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 5s --workspace "$auto_tmp/workspace" --state-dir "$fix_tmp/override-window" --expected-branch junie/autonomous-mvp-loop --fix-retries 3 --iteration-timeout 11 --dry-run >"$fix_tmp/override-window.out"
 grep -q -- '--iteration-timeout 11' "$fix_tmp/override-window.out" || fail "autonomous window timeout override missing from controller plan"
 grep -q -- '--fix-retries 3' "$fix_tmp/override-window.out" || fail "autonomous window fix budget override missing from controller plan"
+AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 5s --workspace "$auto_tmp/workspace" --state-dir "$fix_tmp/localfail-window" --expected-branch junie/autonomous-mvp-loop --max-local-failures 5 --dry-run >"$fix_tmp/localfail-window.out"
+grep -q -- '--max-local-failures 5' "$fix_tmp/localfail-window.out" || fail "autonomous window local failure budget override missing from controller plan"
+grep -q -- '--continue-on-local-failure' "$fix_tmp/localfail-window.out" || fail "autonomous window override plan must pass continue-on-local-failure"
 OVERNIGHT_WORKER_CMD='printf dry-worker' ./scripts/overnight-controller.sh --state-dir "$fix_tmp/controller-default" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 1 --dry-run >"$fix_tmp/controller-default.out" 2>"$fix_tmp/controller-default.err"
 grep -q '"fix_retries": 7' "$fix_tmp/controller-default/state.json" || fail "controller dry-run state must record default fix budget 7"
 OVERNIGHT_WORKER_CMD='printf dry-worker' ./scripts/overnight-controller.sh --state-dir "$fix_tmp/controller-override" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 1 --fix-retries 2 --dry-run >"$fix_tmp/controller-override.out" 2>"$fix_tmp/controller-override.err"
@@ -1859,6 +1864,39 @@ grep -R -q 'dirty tracked from failed fix' "$exhaust_state/cleanup" || fail "cle
 grep -R -q 'autonomous-failed-artifact.tmp' "$exhaust_state/cleanup" || fail "cleanup must preserve untracked artifact status/name"
 [[ ! -e "$ROOT/autonomous-failed-artifact.tmp" ]] || fail "cleanup did not remove root untracked failed artifact"
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail "cleanup did not restore tracked repo cleanliness"
+
+# Local failure continuation: first task fails and dirties repo, cleanup preserves evidence, second task succeeds.
+cont_backlog="$fix_tmp/continue-backlog"; cont_mutex="$fix_tmp/continue-mutex"; cont_state="$fix_tmp/continue-state"; mkdir -p "$cont_backlog/items"
+BACKLOG_DIR="$cont_backlog" ./scripts/backlog.sh add --type task --title "Fail then continue" --priority 99 >/dev/null
+BACKLOG_DIR="$cont_backlog" ./scripts/backlog.sh add --type task --title "Succeed after failure" --priority 80 >/dev/null
+cat >"$fix_tmp/continue-worker.sh" <<CONTWORKER
+#!/usr/bin/env bash
+set -euo pipefail
+n=\$((\$(cat "$fix_tmp/continue-count.txt" 2>/dev/null || printf 0) + 1)); printf '%s\n' "\$n" > "$fix_tmp/continue-count.txt"
+BACKLOG_DIR="$cont_backlog" MUTEX_DIR="$cont_mutex" "$ROOT/scripts/task-acquire.sh" >/dev/null
+if [[ "\$n" -eq 1 ]]; then printf 'dirty from local failure\n' >> "$ROOT/hire-junie.sh"; printf 'failed artifact\n' > "$ROOT/local-failure-artifact.tmp"; exit 9; fi
+BACKLOG_DIR="$cont_backlog" MUTEX_DIR="$cont_mutex" REFLECTIONS_DIR="$fix_tmp/continue-reflections" "$ROOT/scripts/task-release.sh" --status done >/dev/null
+CONTWORKER
+chmod +x "$fix_tmp/continue-worker.sh"
+set +e; BACKLOG_DIR="$cont_backlog" MUTEX_DIR="$cont_mutex" REFLECTIONS_DIR="$fix_tmp/continue-reflections" OVERNIGHT_WORKER_CMD="$fix_tmp/continue-worker.sh" ./scripts/overnight-controller.sh --state-dir "$cont_state" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 2 --iteration-timeout 5 --skip-verify --continue-on-local-failure --max-local-failures 3 >"$fix_tmp/continue.out" 2>"$fix_tmp/continue.err"; status=$?; set -e
+[[ "$status" -eq 0 ]] || fail "controller should continue after local failure and exit success; status=$status"
+grep -R -q 'task_blocked_continue' "$cont_state/logs" || fail "continue path must log task_blocked_continue"
+grep -R -q 'dirty from local failure' "$cont_state/cleanup" || fail "continue cleanup must preserve failed diff"
+[[ "$(grep -l '"status": "blocked"' "$cont_backlog"/archive/*.json "$cont_backlog"/items/*.json 2>/dev/null | wc -l | tr -d ' ')" -eq 1 ]] || fail "continue path must leave blocked task visible"
+[[ "$(grep -l '"status": "done"' "$cont_backlog"/archive/*.json "$cont_backlog"/items/*.json 2>/dev/null | wc -l | tr -d ' ')" -eq 1 ]] || fail "continue path must leave successful task done"
+[[ ! -e "$ROOT/local-failure-artifact.tmp" && ! -e "$ROOT/state" ]] || fail "continue cleanup left root artifacts"
+
+# Failure budget and cleanup failure stop with explicit phases.
+printf '#!/usr/bin/env bash\nprintf dirty >> "$ROOT/hire-junie.sh"; exit 8\n' >"$fix_tmp/fail-worker.sh"; chmod +x "$fix_tmp/fail-worker.sh"
+toomany_backlog="$fix_tmp/toomany-backlog"; toomany_mutex="$fix_tmp/toomany-mutex"; toomany_state="$fix_tmp/toomany-state"; mkdir -p "$toomany_backlog/items"
+BACKLOG_DIR="$toomany_backlog" ./scripts/backlog.sh add --type task --title one --priority 99 >/dev/null; BACKLOG_DIR="$toomany_backlog" ./scripts/backlog.sh add --type task --title two --priority 98 >/dev/null
+set +e; BACKLOG_DIR="$toomany_backlog" MUTEX_DIR="$toomany_mutex" REFLECTIONS_DIR="$fix_tmp/toomany-reflections" OVERNIGHT_WORKER_CMD="$fix_tmp/fail-worker.sh" ./scripts/overnight-controller.sh --state-dir "$toomany_state" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 2 --iteration-timeout 5 --skip-verify --continue-on-local-failure --max-local-failures 1 >"$fix_tmp/toomany.out" 2>"$fix_tmp/toomany.err"; status=$?; set -e
+[[ "$status" -ne 0 ]] || fail "controller should stop nonzero after too many local failures"; grep -q '"phase": "too_many_local_failures"' "$toomany_state/state.json" || fail "too many local failures state phase missing"
+cleanupfail_backlog="$fix_tmp/cleanupfail-backlog"; cleanupfail_state="$fix_tmp/cleanupfail-state"; mkdir -p "$cleanupfail_backlog/items"; BACKLOG_DIR="$cleanupfail_backlog" ./scripts/backlog.sh add --type task --title cf --priority 99 >/dev/null
+printf '#!/usr/bin/env bash\nexit 6\n' >"$fix_tmp/cleanupfail-cleanup.sh"; chmod +x "$fix_tmp/cleanupfail-cleanup.sh"
+set +e; BACKLOG_DIR="$cleanupfail_backlog" MUTEX_DIR="$fix_tmp/cleanupfail-mutex" REFLECTIONS_DIR="$fix_tmp/cleanupfail-reflections" OVERNIGHT_WORKER_CMD="$fix_tmp/fail-worker.sh" AUTONOMOUS_CLEANUP_CMD="$fix_tmp/cleanupfail-cleanup.sh" ./scripts/overnight-controller.sh --state-dir "$cleanupfail_state" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 2 --iteration-timeout 5 --skip-verify --continue-on-local-failure --max-local-failures 3 >"$fix_tmp/cleanupfail.out" 2>"$fix_tmp/cleanupfail.err"; status=$?; set -e
+[[ "$status" -ne 0 ]] || fail "controller should stop nonzero when cleanup command fails"; grep -q '"phase": "cleanup_failed"' "$cleanupfail_state/state.json" || fail "cleanup failure state phase missing"
+[[ -z "$(git status --porcelain --untracked-files=no)" && ! -e "$ROOT/state" ]] || fail "local failure tests left repo artifacts"
 
 # Cleanup standalone must preserve dirty tracked and untracked temp repo state outside the repo, then clean the repo.
 cleanup_repo="$fix_tmp/cleanup-repo"

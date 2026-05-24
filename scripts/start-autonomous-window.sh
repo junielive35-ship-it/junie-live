@@ -16,6 +16,8 @@ background=false
 allow_main_for_tests=false
 allow_dirty_for_tests="${AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS:-false}"
 skip_verify=false
+continue_on_local_failure=true
+max_local_failures="${AUTONOMOUS_MAX_LOCAL_FAILURES:-3}"
 worker_cmd="${OVERNIGHT_WORKER_CMD:-}"
 
 usage() {
@@ -37,6 +39,9 @@ Options:
   --background               Start controller in the background and return status quickly
   --dry-run                  Print planned command/state without starting long work
   --skip-verify              Pass through to controller (mainly tests)
+  --continue-on-local-failure Continue after safe local task failures (default)
+  --no-continue-on-local-failure Stop on first local task failure
+  --max-local-failures N      Stop after more than N local failures (default: 3)
   --allow-main-for-tests     Permit main branch only for isolated tests
 USAGE
 }
@@ -56,6 +61,9 @@ while [[ $# -gt 0 ]]; do
     --background) background=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     --skip-verify) skip_verify=true; shift ;;
+    --continue-on-local-failure) continue_on_local_failure=true; shift ;;
+    --no-continue-on-local-failure) continue_on_local_failure=false; shift ;;
+    --max-local-failures) max_local_failures="$2"; shift 2 ;;
     --allow-main-for-tests) allow_main_for_tests=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'Unknown: %s\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -142,9 +150,13 @@ cmd=("$repo/scripts/overnight-controller.sh"
   --max-iterations "$max_iterations"
   --iteration-timeout "$iteration_timeout"
   --fix-retries "$fix_retries"
+  --max-local-failures "$max_local_failures"
   --end-epoch "$end_epoch")
 if [[ -n "$worker_cmd" ]]; then
   cmd+=(--worker-cmd "$worker_cmd")
+fi
+if $continue_on_local_failure; then
+  cmd+=(--continue-on-local-failure)
 fi
 if $skip_verify; then
   cmd+=(--skip-verify)
@@ -160,6 +172,8 @@ cat >"$window_state" <<JSON
   "state_dir": "$(json_escape "$state_dir")",
   "branch": "$(json_escape "$branch")",
   "duration_seconds": $seconds,
+  "continue_on_local_failure": $continue_on_local_failure,
+  "max_local_failures": $max_local_failures,
   "end_epoch": $end_epoch,
   "controller_log": "$(json_escape "$log_file")",
   "preflight_status": "$(json_escape "$status_file")",

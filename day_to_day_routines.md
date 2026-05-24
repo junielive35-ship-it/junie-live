@@ -232,3 +232,7 @@ Require explicit approval:
 If unsure, treat the change as major or create a change candidate and ask.
 
 Autonomous windows retry verification failures up to 7 fixes, then block, release mutex, preserve diff/status, and clean failed workspace. Hard timeout default: 7200s.
+
+## Autonomous window local failures
+
+Use `scripts/start-autonomous-window.sh` for admin work windows. It continues after safe local task failures by default (`--continue-on-local-failure --max-local-failures 3`), blocking and cleaning the failed task before selecting the next one. Stop and inspect state/logs if the controller reports `cleanup_failed` or `too_many_local_failures`.

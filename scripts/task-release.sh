@@ -45,7 +45,7 @@ fi
 
 rm -rf "$mutex_dir"
 
-"$ROOT/scripts/reflect.sh" "${task_id:-}" "$new_status" 2>/dev/null || true
+REFLECTIONS_DIR="${REFLECTIONS_DIR:-$backlog_dir/../reflections}" "$ROOT/scripts/reflect.sh" "${task_id:-}" "$new_status" 2>/dev/null || true
 
 printf 'released=true\n'
 printf 'task_id=%s\n' "${task_id:-}"

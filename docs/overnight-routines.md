@@ -113,3 +113,7 @@ The morning report must include:
 - Defining exact cron times; schedules are project-dependent configuration.
 
 Autonomous verification failures retry through worker boundary up to AUTONOMOUS_FIX_RETRIES/--fix-retries (default 7). Exhaustion blocks the task, releases mutex, preserves status/diff, and cleans workspace. Hard timeout default is 7200s safety net.
+
+## Local failure continuation policy
+
+Admin-triggered autonomous windows default to `--continue-on-local-failure --max-local-failures 3` so one bad backlog task does not waste a long bounded work window. Local failures are worker nonzero exits, worker timeout exits `124`/`137`, and verification failure after the configured fix retry budget is exhausted. For each such failure the controller blocks/releases the current task, runs cleanup while preserving logs, git status, diffs, and untracked artifact names/content, then continues only if cleanup succeeds, the repo is clean, and the local failure budget has not been exceeded. Cleanup failure or remaining dirty state stops immediately with `cleanup_failed`; exceeding the budget stops with `too_many_local_failures`. Final state must keep blocked tasks visible and must not report a failed task as successful merely because the window reached its iteration/time bound afterward.
