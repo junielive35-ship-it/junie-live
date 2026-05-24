@@ -51,7 +51,10 @@ case "$action" in
   release_completed_task)
     BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
       "$ROOT/scripts/task-release.sh" ;;
-  investigate_critical|address_failing_ci|address_stale_prs|check_stale_in_progress)
+  check_stale_in_progress)
+    BACKLOG_DIR="$backlog_dir" "$ROOT/scripts/backlog-hygiene.sh" \
+      --stale-minutes "$stale_minutes" 2>/dev/null || true ;;
+  investigate_critical|address_failing_ci|address_stale_prs)
     BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" REPO="$repo" \
       "$ROOT/scripts/report.sh" \
       --stale-minutes "$stale_minutes" --stale-hours "$stale_hours" ;;
