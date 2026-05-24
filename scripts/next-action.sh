@@ -4,9 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
 mutex_dir="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}"
+hypothesis_state_dir="${HYPOTHESIS_STATE_DIR:-$ROOT/state/hypothesis}"
 repo="${REPO:-$ROOT}"
 stale_minutes=60
 stale_hours=24
+hypothesis_interval_hours=24
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -15,6 +17,7 @@ while [[ $# -gt 0 ]]; do
     --repo) repo="$2"; shift 2 ;;
     --stale-minutes) stale_minutes="$2"; shift 2 ;;
     --stale-hours) stale_hours="$2"; shift 2 ;;
+    --hypothesis-interval-hours) hypothesis_interval_hours="$2"; shift 2 ;;
     *) printf 'Unknown: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
@@ -67,8 +70,17 @@ elif [[ "$mutex" == "HELD" ]]; then
   action="wait_for_mutex"
   reason="Code mutex is held; cannot start new code work"
 elif [[ -z "$backlog_next" || "$backlog_next" == "none" ]]; then
-  action="idle"
-  reason="No pending backlog items and no issues requiring attention"
+  hyp_last=""
+  [[ -f "$hypothesis_state_dir/last_generated" ]] && hyp_last=$(cat "$hypothesis_state_dir/last_generated")
+  hyp_interval_seconds=$((hypothesis_interval_hours * 3600))
+  now_epoch=$(date +%s)
+  if [[ -z "$hyp_last" ]] || [[ $((now_epoch - hyp_last)) -ge $hyp_interval_seconds ]]; then
+    action="generate_hypotheses"
+    reason="No pending backlog items and hypothesis generation interval has elapsed"
+  else
+    action="idle"
+    reason="No pending backlog items and no issues requiring attention"
+  fi
 else
   action="idle"
   reason="No actionable items detected"
@@ -87,6 +99,6 @@ case "$action" in
     exit 2 ;;
   address_stale_prs|start_backlog_item|check_stale_in_progress)
     exit 1 ;;
-  wait_for_mutex|idle)
+  generate_hypotheses|wait_for_mutex|idle)
     exit 0 ;;
 esac
