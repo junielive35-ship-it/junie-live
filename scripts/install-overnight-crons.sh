@@ -170,7 +170,28 @@ remove_existing_jobs() {
   if $dry_run; then printf 'DRY-RUN:'; quote_args "$openclaw_bin" cron list --agent "$agent_id" --all --json; return 0; fi
   local list_json ids
   list_json="$($openclaw_bin cron list --agent "$agent_id" --all --json)" || { err "failed to list OpenClaw cron jobs for agent $agent_id"; exit 1; }
-  ids="$(LIST_JSON="$list_json" PREFIX="$cron_prefix" AGENT_ID="$agent_id" python3 -c 'import json,os,sys; data=json.loads(os.environ.get("LIST_JSON") or "[]"); data=data.get("jobs") if isinstance(data,dict) else data; prefix=os.environ["PREFIX"]; agent=os.environ["AGENT_ID"]; [print(str(j.get("id") or j.get("name"))) for j in (data or []) if isinstance(j,dict) and str(j.get("name") or "").startswith(prefix) and (not str(j.get("agent") or j.get("agentId") or j.get("agent_id") or "") or str(j.get("agent") or j.get("agentId") or j.get("agent_id"))==agent)]')" || { err "failed to parse OpenClaw cron list output"; exit 1; }
+  ids="$(LIST_JSON="$list_json" PREFIX="$cron_prefix" AGENT_ID="$agent_id" python3 - <<'PY_IDS'
+import json, os, sys
+raw = os.environ.get("LIST_JSON", "")
+if not raw.strip():
+    sys.exit(0)
+try:
+    data = json.loads(raw)
+except json.JSONDecodeError as exc:
+    print(f"failed to parse OpenClaw cron list JSON: {exc}", file=sys.stderr)
+    sys.exit(1)
+jobs = data.get("jobs") if isinstance(data, dict) else data
+prefix = os.environ["PREFIX"]
+agent = os.environ["AGENT_ID"]
+for job in jobs or []:
+    if not isinstance(job, dict):
+        continue
+    name = str(job.get("name") or "")
+    job_agent = str(job.get("agent") or job.get("agentId") or job.get("agent_id") or "")
+    if name.startswith(prefix) and (not job_agent or job_agent == agent):
+        print(str(job.get("id") or job.get("name")))
+PY_IDS
+  )" || { err "failed to parse OpenClaw cron list output"; exit 1; }
   if [[ -n "$ids" ]]; then
     while IFS= read -r id; do [[ -n "$id" ]] && run_openclaw cron rm "$id"; done <<<"$ids"
   fi

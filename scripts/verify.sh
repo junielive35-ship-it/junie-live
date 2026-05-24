@@ -378,6 +378,17 @@ STUB
 chmod +x "$tmp/bin/openclaw-install"
 OPENCLAW_STUB_LOG="$install_log" ./scripts/install-overnight-crons.sh --workspace "$cron_tmp/workspace2" --repo "$ROOT" --agent-id verify-junie --branch junie/autonomous-mvp-loop --openclaw-bin "$tmp/bin/openclaw-install" >"$tmp/cron-install.out"
 grep -q '^cron rm old-controller$' "$install_log" || fail "install mode must remove matching existing jobs before re-adding"
+cat > "$tmp/bin/openclaw-empty-list" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${OPENCLAW_STUB_LOG:?}"
+if [[ "$*" == "cron list --agent empty-junie --all --json" ]]; then
+  exit 0
+fi
+STUB
+chmod +x "$tmp/bin/openclaw-empty-list"
+OPENCLAW_STUB_LOG="$tmp/cron-empty-list.log" ./scripts/install-overnight-crons.sh --workspace "$cron_tmp/workspace-empty" --repo "$ROOT" --agent-id empty-junie --branch junie/autonomous-mvp-loop --openclaw-bin "$tmp/bin/openclaw-empty-list" >"$tmp/cron-empty-list.out"
+grep -q '^cron add --name Junie Live overnight watchdog (empty-junie) ' "$tmp/cron-empty-list.log" || fail "install mode must tolerate empty cron list output and still add watchdog"
 [[ "$(grep -c '^cron add --name Junie Live overnight controller (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one controller"
 [[ "$(grep -c '^cron add --name Junie Live overnight watchdog (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one watchdog"
 [[ "$(grep -c '^cron add --name Junie Live overnight morning-report (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one morning report definition"
