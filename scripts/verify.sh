@@ -140,6 +140,51 @@ sleep 1
 dry_after=$(find "$ROOT" -maxdepth 1 -mindepth 1 \( -name '.openclaw' -o -name 'state' \) -print | sort)
 [[ "$dry_after" == "$dry_before" ]] || fail "autonomous wrapper wrote repo root artifacts"
 
+log "default backlog worker opencode command"
+opencode_tmp="$auto_tmp/default-opencode-worker"
+mkdir -p "$opencode_tmp/bin" "$opencode_tmp/home" "$opencode_tmp/state" "$opencode_tmp/backlog"
+cat > "$opencode_tmp/bin/opencode" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+python3 - "$OPENCODE_ARGV_JSON" "$@" <<'PY'
+import json, sys
+path = sys.argv[1]
+argv = sys.argv[2:]
+with open(path, 'w') as f:
+    json.dump(argv, f)
+PY
+exit 0
+STUB
+chmod +x "$opencode_tmp/bin/opencode"
+PATH="$opencode_tmp/bin:$PATH" HOME="$opencode_tmp/home" OPENCODE_ARGV_JSON="$opencode_tmp/argv.json" \
+  ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state" \
+    --item-id test-opencode --item-type test --item-title 'Verify default opencode invocation' \
+    --item-description 'Prompt content must be delivered through a supported opencode run message.' >"$opencode_tmp/out.txt"
+grep -q '^worker_status=success$' "$opencode_tmp/out.txt" || fail "default opencode worker did not succeed with fake opencode"
+python3 - "$opencode_tmp/argv.json" <<'PY'
+import json, sys
+argv = json.load(open(sys.argv[1]))
+def fail(msg):
+    print(f"ERROR: {msg}", file=sys.stderr)
+    sys.exit(1)
+if '--prompt-file' in argv:
+    fail('default opencode argv must not use unsupported --prompt-file')
+if not argv or argv[0] != 'run':
+    fail(f'default opencode argv must start with run, got {argv!r}')
+for flag, expected in [('--model', 'anthropic/claude-opus-4-6'), ('--variant', 'low'), ('--agent', 'build')]:
+    if flag not in argv:
+        fail(f'missing {flag} in default opencode argv: {argv!r}')
+    value = argv[argv.index(flag) + 1] if argv.index(flag) + 1 < len(argv) else None
+    if value != expected:
+        fail(f'{flag} expected {expected!r}, got {value!r}')
+message = argv[-1]
+if message.startswith('-'):
+    fail('prompt content should be passed as a positional message, not a flag')
+for text in ['You are an autonomous code-changing worker', 'Verify default opencode invocation', 'Prompt content must be delivered']:
+    if text not in message:
+        fail(f'prompt message missing expected text: {text!r}')
+PY
+
 log "repo workspace artifact hygiene"
 workspace_artifacts=(AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw)
 for artifact in "${workspace_artifacts[@]}"; do

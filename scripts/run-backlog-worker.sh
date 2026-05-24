@@ -7,6 +7,9 @@ backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
 state_dir="${AUTONOMOUS_WORKER_STATE_DIR:-${HOME:-$ROOT}/.openclaw/workspace-junie-live/.openclaw/state/autonomous-worker}"
 worker_cmd_template="${AUTONOMOUS_WORKER_CMD:-}"
 timeout_seconds="${AUTONOMOUS_WORKER_TIMEOUT_SECONDS:-0}"
+opencode_model="${AUTONOMOUS_OPENCODE_MODEL:-anthropic/claude-opus-4-6}"
+opencode_variant="${AUTONOMOUS_OPENCODE_VARIANT:-low}"
+opencode_agent="${AUTONOMOUS_OPENCODE_AGENT:-build}"
 item_id=""
 item_title=""
 item_type=""
@@ -57,7 +60,7 @@ PROMPT
 
 if [[ -z "$worker_cmd_template" ]]; then
   if command -v opencode >/dev/null 2>&1; then
-    worker_cmd_template='opencode run --prompt-file "$AUTONOMOUS_PROMPT_FILE"'
+    worker_cmd_template='opencode run --model "$AUTONOMOUS_OPENCODE_MODEL" --variant "$AUTONOMOUS_OPENCODE_VARIANT" --agent "$AUTONOMOUS_OPENCODE_AGENT" "$(cat "$AUTONOMOUS_PROMPT_FILE")"'
   else
     printf 'worker_status=blocked\n'
     printf 'reason=opencode not found and AUTONOMOUS_WORKER_CMD/--worker-cmd-template not set\n'
@@ -74,6 +77,9 @@ export AUTONOMOUS_REPO="$repo"
 export AUTONOMOUS_BACKLOG_DIR="$backlog_dir"
 export AUTONOMOUS_PROMPT_FILE="$prompt_file"
 export AUTONOMOUS_WORKER_LOG="$log_file"
+export AUTONOMOUS_OPENCODE_MODEL="$opencode_model"
+export AUTONOMOUS_OPENCODE_VARIANT="$opencode_variant"
+export AUTONOMOUS_OPENCODE_AGENT="$opencode_agent"
 
 printf 'worker_status=running\nitem_id=%s\nprompt_file=%s\nlog_file=%s\n' "$item_id" "$prompt_file" "$log_file"
 
