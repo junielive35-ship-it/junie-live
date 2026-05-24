@@ -11,13 +11,16 @@ Code-changing work initialized from this seed uses the mutex protocol described 
 For the current MVP, a new Junie Live instance is created roughly like this:
 
 1. Copy files from `junie-live/initialization/` into `.openclaw/workspace`.
-2. Run OpenClaw.
-3. Give Junie:
+2. Generate workspace-local overnight cron artifacts for the new instance. `hire-junie.sh` does this automatically by calling `scripts/install-overnight-crons.sh`; the artifacts live under `.openclaw/cron/` in the initialized workspace, not in the repo root.
+3. Run OpenClaw.
+4. Give Junie:
    - the path to the target project;
    - Means of communication (contact persons, group chats, etc, for MVP - Telegram only)
    - the area of responsibility;
    - expectations, constraints, and team/product context.
-4. Junie follows `INITIALIZATION.md` to inspect the target project, ask questions across as many rounds as needed, resolve contradictions, and produce a coherent durable identity.
+5. Junie follows `INITIALIZATION.md` to inspect the target project, ask questions across as many rounds as needed, resolve contradictions, and produce a coherent durable identity.
+
+The generated overnight cron definitions include the controller, watchdog, and morning report jobs described in [`docs/overnight-routines.md`](docs/overnight-routines.md). They use explicit repo/workspace/state/log paths and non-interactive shell commands so an administrator can install or enable them without a terminal-dependent Telegram flow.
 
 ## What belongs in `initialization/`
 
