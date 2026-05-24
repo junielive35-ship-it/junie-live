@@ -268,6 +268,10 @@ For these requests:
 
 Keep `HEARTBEAT.md` short if using it for recurring checks.
 
+## Markdown table check protocol
+
+When editing Markdown tables, run an available table syntax check before accepting the change. If the project has a local Markdown/table checker, use it on changed Markdown files that contain edited tables. This check is required only when Markdown tables are added or edited; avoid unnecessary checks for unrelated Markdown-only changes.
+
 ## Reflection and self-improvement
 
 After each valuable task, reflect briefly and turn reusable lessons into concrete improvements.

@@ -34,6 +34,13 @@ bash -n scripts/overnight-watchdog.sh
 bash -n scripts/overnight-report.sh
 bash -n scripts/install-overnight-crons.sh
 bash -n scripts/start-autonomous-window.sh
+
+log "python syntax"
+python3 -m py_compile scripts/check-markdown-tables.py
+
+log "maintained markdown tables"
+scripts/check-markdown-tables.py implementation-status.md
+
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
