@@ -185,6 +185,40 @@ for text in ['You are an autonomous code-changing worker', 'Verify default openc
         fail(f'prompt message missing expected text: {text!r}')
 PY
 
+PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode" OPENCODE_ARGV_JSON="$opencode_tmp/argv-env.json" \
+  ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state-env" \
+    --item-id test-opencode-env --item-type test --item-title 'Verify env opencode invocation' \
+    --item-description 'AUTONOMOUS_OPENCODE_BIN must work when PATH lacks opencode.' >"$opencode_tmp/out-env.txt"
+grep -q '^worker_status=success$' "$opencode_tmp/out-env.txt" || fail "default opencode worker did not succeed with AUTONOMOUS_OPENCODE_BIN"
+python3 - "$opencode_tmp/argv-env.json" <<'PY'
+import json, sys
+argv = json.load(open(sys.argv[1]))
+if '--prompt-file' in argv or not argv or argv[0] != 'run':
+    print(f"ERROR: env opencode argv must use supported run shape without --prompt-file: {argv!r}", file=sys.stderr)
+    sys.exit(1)
+if 'AUTONOMOUS_OPENCODE_BIN must work when PATH lacks opencode.' not in argv[-1]:
+    print('ERROR: env opencode prompt content missing', file=sys.stderr)
+    sys.exit(1)
+PY
+
+mkdir -p "$opencode_tmp/home-fallback/.opencode/bin"
+cp "$opencode_tmp/bin/opencode" "$opencode_tmp/home-fallback/.opencode/bin/opencode"
+PATH="/usr/bin:/bin" HOME="$opencode_tmp/home-fallback" OPENCODE_ARGV_JSON="$opencode_tmp/argv-fallback.json" \
+  ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state-fallback" \
+    --item-id test-opencode-fallback --item-type test --item-title 'Verify fallback opencode invocation' \
+    --item-description 'HOME dot-opencode fallback must work when PATH lacks opencode.' >"$opencode_tmp/out-fallback.txt"
+grep -q '^worker_status=success$' "$opencode_tmp/out-fallback.txt" || fail "default opencode worker did not succeed with HOME .opencode fallback"
+python3 - "$opencode_tmp/argv-fallback.json" <<'PY'
+import json, sys
+argv = json.load(open(sys.argv[1]))
+if '--prompt-file' in argv or not argv or argv[0] != 'run':
+    print(f"ERROR: fallback opencode argv must use supported run shape without --prompt-file: {argv!r}", file=sys.stderr)
+    sys.exit(1)
+if 'HOME dot-opencode fallback must work when PATH lacks opencode.' not in argv[-1]:
+    print('ERROR: fallback opencode prompt content missing', file=sys.stderr)
+    sys.exit(1)
+PY
+
 log "repo workspace artifact hygiene"
 workspace_artifacts=(AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw)
 for artifact in "${workspace_artifacts[@]}"; do
