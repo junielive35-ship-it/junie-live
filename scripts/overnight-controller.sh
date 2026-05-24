@@ -131,7 +131,7 @@ while [[ "$iteration" -lt "$max_iterations" ]]; do
     worker_status=0
   else
     set +e
-    timeout --foreground --kill-after=5s "$iteration_timeout" bash -c "$worker_cmd" >>"$worker_log" 2>&1 &
+    AUTONOMOUS_SOLVER_RUN=true AUTONOMOUS_FORCE_HYPOTHESIS_WHEN_EMPTY=true timeout --foreground --kill-after=5s "$iteration_timeout" bash -c "$worker_cmd" >>"$worker_log" 2>&1 &
     worker_pid=$!
     write_state worker_running running "worker should finish or timeout" "$worker_pid" "$last_verify"
     wait "$worker_pid"
@@ -155,7 +155,7 @@ while [[ "$iteration" -lt "$max_iterations" ]]; do
     last_verify="failed"; attempt=0; fixed=false
     while [[ "$attempt" -lt "$fix_retries" ]]; do
       attempt=$((attempt+1)); write_state fix_running running "fix verification failure attempt $attempt/$fix_retries" "" "$last_verify"
-      set +e; AUTONOMOUS_FIX_ATTEMPT="$attempt" AUTONOMOUS_VERIFY_LOG="$verify_log" timeout --foreground --kill-after=5s "$iteration_timeout" bash -c "$worker_cmd" <"$verify_log" >>"$fix_log" 2>&1; fs=$?; set -e
+      set +e; AUTONOMOUS_SOLVER_RUN=true AUTONOMOUS_FORCE_HYPOTHESIS_WHEN_EMPTY=true AUTONOMOUS_FIX_ATTEMPT="$attempt" AUTONOMOUS_VERIFY_LOG="$verify_log" timeout --foreground --kill-after=5s "$iteration_timeout" bash -c "$worker_cmd" <"$verify_log" >>"$fix_log" 2>&1; fs=$?; set -e
       [[ "$fs" -eq 124 || "$fs" -eq 137 ]] && break
       run_verify "$verify_log" && { last_verify="passed_after_fix_$attempt"; fixed=true; break; }
       last_verify="failed_after_fix_$attempt"

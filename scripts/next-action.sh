@@ -101,7 +101,10 @@ elif [[ -z "$backlog_next" || "$backlog_next" == "none" ]]; then
   [[ -f "$hypothesis_state_dir/last_generated" ]] && hyp_last=$(cat "$hypothesis_state_dir/last_generated")
   hyp_interval_seconds=$((hypothesis_interval_hours * 3600))
   now_epoch=$(date +%s)
-  if [[ -z "$hyp_last" ]] || [[ $((now_epoch - hyp_last)) -ge $hyp_interval_seconds ]]; then
+  if [[ -n "${AUTONOMOUS_SOLVER_RUN:-}" || "${AUTONOMOUS_FORCE_HYPOTHESIS_WHEN_EMPTY:-}" == "true" ]]; then
+    action="generate_hypotheses"
+    reason="No pending backlog items during autonomous solver run; generate a small verifiable task"
+  elif [[ -z "$hyp_last" ]] || [[ $((now_epoch - hyp_last)) -ge $hyp_interval_seconds ]]; then
     action="generate_hypotheses"
     reason="No pending backlog items and hypothesis generation interval has elapsed"
   else
