@@ -203,6 +203,9 @@ set -e
 grep -q '^status=OK$' "$tmp/rh-ok.out" || fail "empty health status not OK"
 grep -q '^mutex_status=FREE$' "$tmp/rh-ok.out" || fail "empty health mutex not FREE"
 grep -q '^details=All nominal$' "$tmp/rh-ok.out" || fail "empty health details not nominal"
+grep -q '^backlog_queued_hypothesis=0$' "$tmp/rh-ok.out" || fail "empty health hyp count wrong"
+grep -q '^backlog_queued_task=0$' "$tmp/rh-ok.out" || fail "empty health task count wrong"
+grep -q '^backlog_queued_fix=0$' "$tmp/rh-ok.out" || fail "empty health fix count wrong"
 
 # Held mutex + items -> OK
 mkdir -p "$rh_mutex"
@@ -1027,6 +1030,9 @@ grep -q '^status=OK$' "$tmp/report-empty.out" || fail "empty report status not O
 grep -q '^mutex=FREE$' "$tmp/report-empty.out" || fail "empty report mutex not FREE"
 grep -q '^backlog_total=0$' "$tmp/report-empty.out" || fail "empty report backlog_total not 0"
 grep -q '^backlog_completed=0$' "$tmp/report-empty.out" || fail "empty report backlog_completed not 0"
+grep -q '^backlog_queued_hypothesis=0$' "$tmp/report-empty.out" || fail "empty report hyp count not 0"
+grep -q '^backlog_queued_task=0$' "$tmp/report-empty.out" || fail "empty report task count not 0"
+grep -q '^backlog_queued_fix=0$' "$tmp/report-empty.out" || fail "empty report fix count not 0"
 grep -q '^mutex_holder_id=$' "$tmp/report-empty.out" || fail "empty report mutex_holder_id should be empty"
 grep -q '^mutex_task_id=$' "$tmp/report-empty.out" || fail "empty report mutex_task_id should be empty"
 grep -q '^pr_check_available=false$' "$tmp/report-empty.out" || fail "empty report pr check not false"
