@@ -578,6 +578,7 @@ grep -q '^action=release_completed_task$' "$tmp/relcomp-na.out" || fail "relcomp
 grep -q 'is done' "$tmp/relcomp-na.out" || fail "relcomp reason should mention done"
 
 # release_completed_task via drive.sh, then loop continues to generate_hypotheses
+# and then acquires the generated hypothesis
 relcomp_drive_tmp="$tmp/relcomp_drive"
 relcomp_drive_bl="$relcomp_drive_tmp/backlog"
 relcomp_drive_mutex="$relcomp_drive_tmp/mutex"
@@ -606,8 +607,10 @@ BACKLOG_DIR="$relcomp_drive_bl" MUTEX_DIR="$relcomp_drive_mutex" HYPOTHESIS_STAT
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive relcomp exit status was $status, expected 0"
-grep -q '^action=generate_hypotheses$' "$tmp/relcomp-drive.out" || fail "drive should loop to generate_hypotheses after release"
-[[ ! -d "$relcomp_drive_mutex" ]] || fail "drive should release mutex for completed task"
+grep -q '^action=start_backlog_item$' "$tmp/relcomp-drive.out" || fail "drive should loop to start_backlog_item after release + hypotheses"
+# Mutex was re-acquired for the generated hypothesis
+[[ -d "$relcomp_drive_mutex" ]] || fail "drive should acquire mutex for the new hypothesis"
+[[ -f "$relcomp_drive_mutex/holder.json" ]] || fail "drive hyp holder.json missing"
 s=$(grep '"status"' "$relcomp_drive_bl/items/$relcomp_drive_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "cancelled" ]] || fail "drive should preserve terminal status ($s)"
 
@@ -1228,22 +1231,29 @@ set -e
 [[ "$status" -eq 0 ]] || fail "idle drive exit status was $status, expected 0"
 grep -q '^action=idle$' "$tmp/drive-idle.out" || fail "idle action not found"
 
-# Empty backlog + free mutex + no recent hypotheses -> generate_hypotheses
+# Empty backlog + free mutex + no recent hypotheses -> generate_hypotheses,
+# then loop continues to acquire the hypothesis as a backlog item
 rm -f "$drive_hyp_state/last_generated"
-items_before=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null | wc -l)
 set +e
 HYPOTHESIS_STATE_DIR="$drive_hyp_state" BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_tmp/mutex_free" \
   ./scripts/drive.sh >"$tmp/drive-hyp.out" 2>"$tmp/drive-hyp.err"
 status=$?
 set -e
-[[ "$status" -eq 0 ]] || fail "generate hypotheses drive exit status was $status, expected 0"
-grep -q '^action=generate_hypotheses$' "$tmp/drive-hyp.out" || fail "generate_hypotheses action not found"
-[[ -f "$drive_hyp_state/last_generated" ]] || fail "generate_hypotheses should write last_generated"
-items_after=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null | wc -l)
-[[ "$items_after" -gt "$items_before" ]] || fail "generate_hypotheses should create a backlog item"
-hyp_item=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null | head -1)
+[[ "$status" -eq 0 ]] || fail "drive hyp->acquire exit status was $status, expected 0"
+grep -q '^action=start_backlog_item$' "$tmp/drive-hyp.out" || fail "drive hyp should loop to start_backlog_item"
+[[ -f "$drive_hyp_state/last_generated" ]] || fail "drive hyp should write last_generated"
+# Verify the hypothesis was created and acquired
+hyp_items=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null)
+hyp_count=$(printf '%s\n' "$hyp_items" | wc -l)
+[[ "$hyp_count" -eq 1 ]] || fail "drive hyp should create exactly 1 backlog item, got $hyp_count"
+hyp_item=$(printf '%s\n' "$hyp_items" | head -1)
 hyp_type=$(grep -o '"type"[[:space:]]*:[[:space:]]*"[^"]*"' "$hyp_item" | sed 's/.*"type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-[[ "$hyp_type" == "hypothesis" ]] || fail "generated item type should be hypothesis, got $hyp_type"
+[[ "$hyp_type" == "hypothesis" ]] || fail "drive hyp item type should be hypothesis, got $hyp_type"
+hyp_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$hyp_item" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$hyp_status" == "in_progress" ]] || fail "drive hyp item should be acquired (in_progress), got $hyp_status"
+# Mutex should be acquired
+[[ -d "$drive_tmp/mutex_free" ]] || fail "drive hyp should acquire mutex"
+[[ -f "$drive_tmp/mutex_free/holder.json" ]] || fail "drive hyp mutex holder.json missing"
 
 # Held mutex -> wait_for_mutex
 mkdir -p "$drive_tmp/mutex_held"
@@ -1272,13 +1282,15 @@ grep -q '^action=start_backlog_item$' "$tmp/drive-start.out" || fail "start_back
 [[ -f "$drive_tmp/mutex_start/holder.json" ]] || fail "holder.json not written"
 
 # Stale mutex -> mutex-release-stale.sh, then loop continues to acquire task
+drive_stale_bl="$drive_tmp/bl_stale"
 drive_stale_mutex="$drive_tmp/mutex_stale"
-mkdir -p "$drive_stale_mutex"
+mkdir -p "$drive_stale_bl/items" "$drive_stale_mutex"
+BACKLOG_DIR="$drive_stale_bl" ./scripts/backlog.sh add --type task --title "Stale recovery task" --priority 70 >/dev/null
 cat > "$drive_stale_mutex/holder.json" <<'JSON'
 {"holder_id":"dead-worker","reason":"drive stale test","started_at":"2000-01-01T00:00:00Z","updated_at":"2000-01-01T00:05:00Z"}
 JSON
 set +e
-BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_stale_mutex" \
+BACKLOG_DIR="$drive_stale_bl" MUTEX_DIR="$drive_stale_mutex" \
   ./scripts/drive.sh --stale-minutes 1 >"$tmp/drive-stale.out" 2>"$tmp/drive-stale.err"
 status=$?
 set -e

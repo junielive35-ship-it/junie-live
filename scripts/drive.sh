@@ -121,7 +121,8 @@ while [[ $iteration -lt $max_iterations ]]; do
           --source "system:stale_pr" --priority 65 2>/dev/null || true
       fi
 
-      rm -f "$rpt" "$fup_out" ;;
+      rm -f "$rpt" "$fup_out"
+      _cont=true ;;
     generate_hypotheses)
       pr_failing=$(read_val pr_failing)
       pr_stale=$(read_val pr_stale)
@@ -148,7 +149,8 @@ while [[ $iteration -lt $max_iterations ]]; do
         --title "$title" \
         --desc "$desc" \
         --source "system" \
-        --priority 50 2>/dev/null || true ;;
+        --priority 50 2>/dev/null || true
+      _cont=true ;;
     idle|wait_for_mutex)
       ;;
     *)
