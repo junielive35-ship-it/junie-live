@@ -23,10 +23,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Periodic backlog hygiene before the drive decision
+# Periodic backlog hygiene and rescore before the drive decision
 "$ROOT/scripts/backlog-hygiene.sh" \
   --stale-minutes "$stale_minutes" \
   --archive-days 7 \
+  2>/dev/null || true
+
+"$ROOT/scripts/backlog-rescore.sh" \
+  --backlog-dir "$backlog_dir" \
+  --max-boost 20 \
   2>/dev/null || true
 
 na_out=$(mktemp)
