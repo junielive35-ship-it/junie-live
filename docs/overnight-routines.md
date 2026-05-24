@@ -16,16 +16,23 @@ The overnight setup is split into three cron-backed roles:
 
 These roles are implemented locally by:
 
+- `scripts/start-autonomous-window.sh` — admin-facing wrapper for bounded natural-language autonomous work windows;
 - `scripts/overnight-controller.sh`
 - `scripts/overnight-watchdog.sh`
 - `scripts/overnight-report.sh`
 
-They are intentionally plain shell scripts so scheduled jobs can run without an interactive terminal. `hire-junie.sh` now creates the OpenClaw agent first, then calls `scripts/install-overnight-crons.sh`, so every newly hired Junie instance installs real OpenClaw cron jobs out of the box and also receives local audit/fallback artifacts:
+They are intentionally plain shell scripts so scheduled jobs and Telegram-triggered admin work windows can run without an interactive terminal. `hire-junie.sh` now creates the OpenClaw agent first, then calls `scripts/install-overnight-crons.sh`, so every newly hired Junie instance installs real OpenClaw cron jobs out of the box and also receives local audit/fallback artifacts:
 
 - `.openclaw/cron/overnight-routines.json` — structured job definitions for the controller, watchdog, and morning report;
 - `.openclaw/cron/overnight-routines.crontab` — equivalent host-cron lines for administrators/installers that use system cron.
 
 The helper installs/updates OpenClaw cron jobs by default using stable `Junie Live overnight ...` names, removing only matching Junie Live jobs for the same agent before re-adding them. It does not mutate a host crontab, and verification uses dry-run/fake OpenClaw binaries so tests never touch the real cron registry. Schedules and timeouts are configurable from `hire-junie.sh`; use `--no-overnight-crons`, `--overnight-artifacts-only`, or `--overnight-disabled` to opt out, generate fallback artifacts only, or install disabled jobs.
+
+## Admin-triggered autonomous windows
+
+After initialization, an administrator can ask in Telegram for bounded autonomous work with natural language such as “start autonomous loop for 4h”, “поработай автономно 9 часов”, or “работай над проектом до утра”. Junie should treat this as an operational autonomous-work request, not as a request for the admin to provide repo, backlog, mutex, opencode, verification, commit, or morning-report details.
+
+Junie resolves the duration/end time from the message, asks one concise question only when that bound is missing or ambiguous, validates initialization/repo/mutex context, and starts `scripts/start-autonomous-window.sh --duration ... --background` with explicit workspace-local state. If preflight is unsafe, it reports the blocker and points to the preflight state/log file. This on-demand window uses the same controller/watchdog/morning-report contract as cron overnight work, but it is manually triggered and bounded by the admin's requested duration rather than a scheduled cron start.
 
 ## Expected state and log files
 
