@@ -10,6 +10,9 @@ hypothesis_state_dir="${HYPOTHESIS_STATE_DIR:-$ROOT/state/hypothesis}"
 stale_minutes=60
 stale_hours=24
 hypothesis_interval_hours=24
+worker_state_dir="${AUTONOMOUS_WORKER_STATE_DIR:-${HOME:-$ROOT}/.openclaw/workspace-junie-live/.openclaw/state/autonomous-worker}"
+worker_cmd_template="${AUTONOMOUS_WORKER_CMD:-}"
+worker_timeout_seconds="${AUTONOMOUS_WORKER_TIMEOUT_SECONDS:-0}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -19,6 +22,9 @@ while [[ $# -gt 0 ]]; do
     --stale-minutes) stale_minutes="$2"; shift 2 ;;
     --stale-hours) stale_hours="$2"; shift 2 ;;
     --hypothesis-interval-hours) hypothesis_interval_hours="$2"; shift 2 ;;
+    --worker-state-dir) worker_state_dir="$2"; shift 2 ;;
+    --worker-cmd-template) worker_cmd_template="$2"; shift 2 ;;
+    --worker-timeout-seconds) worker_timeout_seconds="$2"; shift 2 ;;
     *) printf 'Unknown: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
@@ -141,6 +147,49 @@ while [[ $iteration -lt $max_iterations ]]; do
         acquire_type=$(grep '^type=' "$acquire_out" 2>/dev/null | sed 's/^type=//') || true
         acquire_desc=$(grep '^description=' "$acquire_out" 2>/dev/null | sed 's/^description=//') || true
         add_summary "acquired backlog item ${acquire_id} (${acquire_title})"
+
+        worker_out=$(mktemp)
+        worker_args=(
+          --repo "$repo"
+          --backlog-dir "$backlog_dir"
+          --state-dir "$worker_state_dir"
+          --timeout-seconds "$worker_timeout_seconds"
+          --item-id "$acquire_id"
+          --item-title "$acquire_title"
+          --item-type "$acquire_type"
+          --item-description "$acquire_desc"
+        )
+        if [[ -n "$worker_cmd_template" ]]; then
+          worker_args+=(--worker-cmd-template "$worker_cmd_template")
+        fi
+        set +e
+        "$ROOT/scripts/run-backlog-worker.sh" "${worker_args[@]}" >"$worker_out" 2>&1
+        worker_status=$?
+        set -e
+        cat "$worker_out"
+        worker_log=$(grep '^log_file=' "$worker_out" 2>/dev/null | tail -1 | sed 's/^log_file=//') || true
+        if [[ "$worker_status" -eq 0 ]]; then
+          rel_out=$(mktemp)
+          BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
+            "$ROOT/scripts/task-release.sh" --status done >"$rel_out" 2>/dev/null || true
+          cat "$rel_out"
+          add_summary "completed backlog item ${acquire_id}"
+          rm -f "$rel_out" "$worker_out" "$acquire_out"
+          printf 'action=completed_backlog_item\n'
+          printf 'worker_status=success\n'
+          printf 'worker_log=%s\n' "${worker_log:-}"
+          exit 0
+        fi
+
+        BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
+          "$ROOT/scripts/task-release.sh" --status blocked >/dev/null 2>&1 || true
+        add_summary "blocked backlog item ${acquire_id}; worker failed status=${worker_status}"
+        rm -f "$worker_out" "$acquire_out"
+        printf 'action=blocked_backlog_item\n'
+        printf 'worker_status=failed\n'
+        printf 'worker_exit_status=%s\n' "$worker_status"
+        printf 'worker_log=%s\n' "${worker_log:-}"
+        exit "$worker_status"
       fi
       rm -f "$acquire_out" ;;
     investigate_critical|address_failing_ci|address_stale_prs)

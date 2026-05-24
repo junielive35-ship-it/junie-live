@@ -21,6 +21,7 @@ bash -n scripts/task-release.sh
 bash -n scripts/mutex-release-stale.sh
 bash -n scripts/mutex-touch.sh
 bash -n scripts/drive.sh
+bash -n scripts/run-backlog-worker.sh
 bash -n scripts/hypothesis-generate.sh
 bash -n scripts/pr-follow-up.sh
 bash -n scripts/reflect.sh
@@ -114,16 +115,18 @@ grep -qi 'ad hoc' <<<"$autonomous_skill_text" || fail "autonomous skill must for
 log "autonomous window wrapper tests"
 auto_tmp="$(mktemp -d)"
 mkdir -p "$auto_tmp/workspace/.openclaw/state" "$auto_tmp/state"
-dry_before=$(find "$ROOT" -maxdepth 1 -mindepth 1 \( -name '.openclaw' -o -name 'state' \) | sort)
+rm -rf "$ROOT/state" "$ROOT/.openclaw"
+dry_before=$(find "$ROOT" -maxdepth 1 -mindepth 1 \( -name '.openclaw' -o -name 'state' \) -print | sort)
 AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 9h --workspace "$auto_tmp/workspace" --state-dir "$auto_tmp/state" --expected-branch junie/autonomous-mvp-loop --dry-run >"$auto_tmp/dry.out"
 grep -q 'end_epoch=' "$auto_tmp/dry.out" || fail "dry-run must print computed end_epoch"
 grep -q -- '--end-epoch' "$auto_tmp/dry.out" || fail "dry-run must plan controller with --end-epoch"
 grep -q -- '--expected-branch junie/autonomous-mvp-loop' "$auto_tmp/dry.out" || fail "dry-run must include expected branch"
 grep -q -- "--state-dir $auto_tmp/state/controller" "$auto_tmp/dry.out" || fail "dry-run must include explicit state dir"
 grep -q 'dry_run=true; controller not started' "$auto_tmp/dry.out" || fail "dry-run must not start controller"
+grep -q -- '--max-iterations 99' "$auto_tmp/dry.out" || fail "9h dry-run must default to multi-iteration autonomous work"
 
 start_epoch=$(date +%s)
-AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 5s --workspace "$auto_tmp/workspace" --state-dir "$auto_tmp/bg-state" --expected-branch junie/autonomous-mvp-loop --max-iterations 1 --iteration-timeout 5 --worker-cmd 'printf fake-worker-ok' --background >"$auto_tmp/bg.out"
+AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 5s --workspace "$auto_tmp/workspace" --state-dir "$auto_tmp/bg-state" --expected-branch junie/autonomous-mvp-loop --max-iterations 1 --iteration-timeout 5 --worker-cmd 'printf fake-worker-ok' --skip-verify --background >"$auto_tmp/bg.out"
 elapsed=$(( $(date +%s) - start_epoch ))
 [[ "$elapsed" -lt 5 ]] || fail "background autonomous window did not return quickly"
 grep -q '^started=true$' "$auto_tmp/bg.out" || fail "background mode must report started=true"
@@ -134,7 +137,7 @@ grep -q '"status": "running"' "$auto_tmp/bg-state/window.json" || fail "window s
 sleep 1
 [[ -d "$auto_tmp/bg-state/logs" ]] || fail "background mode must create logs dir"
 [[ -d "$auto_tmp/bg-state/controller" ]] || fail "background mode must create controller state dir"
-dry_after=$(find "$ROOT" -maxdepth 1 -mindepth 1 \( -name '.openclaw' -o -name 'state' \) | sort)
+dry_after=$(find "$ROOT" -maxdepth 1 -mindepth 1 \( -name '.openclaw' -o -name 'state' \) -print | sort)
 [[ "$dry_after" == "$dry_before" ]] || fail "autonomous wrapper wrote repo root artifacts"
 
 log "repo workspace artifact hygiene"
@@ -255,6 +258,61 @@ grep -q '^cron rm old-controller$' "$install_log" || fail "install mode must rem
 [[ "$(grep -c '^cron add --name Junie Live overnight watchdog (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one watchdog"
 [[ "$(grep -c '^cron add --name Junie Live overnight morning-report (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one morning report"
 [[ ! -e "$ROOT/.openclaw/cron/overnight-routines.json" ]] || fail "cron helper dry-run wrote repo root artifact"
+
+
+log "autonomous backlog execution loop tests"
+loop_tmp="$tmp/autonomous_loop"
+loop_backlog="$loop_tmp/backlog"
+loop_mutex="$loop_tmp/mutex"
+loop_state="$loop_tmp/state"
+loop_repo="$ROOT"
+mkdir -p "$loop_backlog/items"
+BACKLOG_DIR="$loop_backlog" ./scripts/backlog.sh add --type task --title "First autonomous item" --priority 90 >/dev/null
+BACKLOG_DIR="$loop_backlog" ./scripts/backlog.sh add --type task --title "Second autonomous item" --priority 80 >/dev/null
+cat >"$loop_tmp/fake-worker.sh" <<FAKE
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\${AUTONOMOUS_ITEM_ID:?}" >> "$loop_tmp/worker-invocations"
+git status --short --branch --untracked-files=all >/dev/null
+FAKE
+chmod +x "$loop_tmp/fake-worker.sh"
+cat >"$loop_tmp/drive-worker.sh" <<DRIVE
+#!/usr/bin/env bash
+set -euo pipefail
+BACKLOG_DIR="$loop_backlog" MUTEX_DIR="$loop_mutex" HYPOTHESIS_STATE_DIR="$loop_state/hypothesis" AUTONOMOUS_WORKER_CMD="$loop_tmp/fake-worker.sh" AUTONOMOUS_WORKER_STATE_DIR="$loop_state/worker" ./scripts/drive.sh --repo "$loop_repo" --backlog-dir "$loop_backlog" --mutex-dir "$loop_mutex" --hypothesis-interval-hours 999999
+DRIVE
+chmod +x "$loop_tmp/drive-worker.sh"
+set +e
+BACKLOG_DIR="$loop_backlog" MUTEX_DIR="$loop_mutex" AUTONOMOUS_WORKER_STATE_DIR="$loop_state/worker" OVERNIGHT_STATE_DIR="$loop_state/controller" OVERNIGHT_WORKER_CMD="$loop_tmp/drive-worker.sh" \
+  ./scripts/overnight-controller.sh --state-dir "$loop_state/controller" --expected-branch junie/autonomous-mvp-loop --max-iterations 2 --iteration-timeout 20 --skip-verify >"$loop_tmp/controller.out" 2>"$loop_tmp/controller.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "controller autonomous loop status $status; see $loop_tmp/controller.out"
+[[ -f "$loop_tmp/worker-invocations" ]] || fail "fake worker was not invoked"
+[[ "$(wc -l < "$loop_tmp/worker-invocations")" -eq 2 ]] || fail "controller should invoke worker twice across two iterations"
+[[ ! -d "$loop_mutex" ]] || fail "mutex must be released after successful worker iterations"
+for item in "$loop_backlog/items"/*.json; do
+  s=$(grep '"status"' "$item" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+  [[ "$s" == "done" ]] || fail "successful autonomous item should be done, got $s in $item"
+done
+
+fail_tmp="$tmp/autonomous_loop_fail"
+fail_backlog="$fail_tmp/backlog"
+fail_mutex="$fail_tmp/mutex"
+fail_state="$fail_tmp/state"
+fail_repo="$fail_tmp/repo"
+mkdir -p "$fail_backlog/items" "$fail_repo"
+BACKLOG_DIR="$fail_backlog" ./scripts/backlog.sh add --type task --title "Failing autonomous item" --priority 90 >/dev/null
+set +e
+BACKLOG_DIR="$fail_backlog" MUTEX_DIR="$fail_mutex" AUTONOMOUS_WORKER_CMD='printf blocker >&2; exit 17' AUTONOMOUS_WORKER_STATE_DIR="$fail_state/worker" ./scripts/drive.sh --repo "$fail_repo" --backlog-dir "$fail_backlog" --mutex-dir "$fail_mutex" --hypothesis-interval-hours 999999 >"$fail_tmp/drive.out" 2>"$fail_tmp/drive.err"
+status=$?
+set -e
+[[ "$status" -eq 17 ]] || fail "failing worker status should propagate, got $status"
+grep -q '^worker_status=failed$' "$fail_tmp/drive.out" || fail "drive must report failed worker"
+[[ ! -d "$fail_mutex" ]] || fail "mutex must be released after failed worker"
+fail_item=$(ls "$fail_backlog/items"/*.json | head -1)
+s=$(grep '"status"' "$fail_item" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "blocked" ]] || fail "failed worker item should be blocked, got $s"
 
 log "code mutex status smoke tests"
 mutex="$tmp/code_mutex"
@@ -755,7 +813,7 @@ grep -q '^action=release_completed_task$' "$tmp/relcomp-na.out" || fail "relcomp
 grep -q 'is done' "$tmp/relcomp-na.out" || fail "relcomp reason should mention done"
 
 # release_completed_task via drive.sh, then loop continues to generate_hypotheses
-# and then acquires the generated hypothesis
+# and then executes/releases the generated hypothesis
 relcomp_drive_tmp="$tmp/relcomp_drive"
 relcomp_drive_bl="$relcomp_drive_tmp/backlog"
 relcomp_drive_mutex="$relcomp_drive_tmp/mutex"
@@ -779,17 +837,14 @@ JSON
 sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "cancelled"/' "$relcomp_drive_bl/items/$relcomp_drive_id.json"
 
 set +e
-BACKLOG_DIR="$relcomp_drive_bl" MUTEX_DIR="$relcomp_drive_mutex" HYPOTHESIS_STATE_DIR="$relcomp_drive_hyp" \
+BACKLOG_DIR="$relcomp_drive_bl" MUTEX_DIR="$relcomp_drive_mutex" HYPOTHESIS_STATE_DIR="$relcomp_drive_hyp" AUTONOMOUS_WORKER_CMD='printf relcomp-worker-ok' AUTONOMOUS_WORKER_STATE_DIR="$relcomp_drive_tmp/worker-state" \
   ./scripts/drive.sh >"$tmp/relcomp-drive.out" 2>"$tmp/relcomp-drive.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive relcomp exit status was $status, expected 0"
-grep -q '^action=start_backlog_item$' "$tmp/relcomp-drive.out" || fail "drive should loop to start_backlog_item after release + hypotheses"
-grep -q '^summary=.*released completed task' "$tmp/relcomp-drive.out" || fail "drive relcomp summary missing release"
-grep -q 'generated hypothesis' "$tmp/relcomp-drive.out" || fail "drive relcomp summary missing hypothesis generation"
-# Mutex was re-acquired for the generated hypothesis
-[[ -d "$relcomp_drive_mutex" ]] || fail "drive should acquire mutex for the new hypothesis"
-[[ -f "$relcomp_drive_mutex/holder.json" ]] || fail "drive hyp holder.json missing"
+grep -q '^action=completed_backlog_item$' "$tmp/relcomp-drive.out" || fail "drive should complete generated item after release + hypotheses"
+# Mutex was re-acquired for the generated hypothesis and then released after worker success
+[[ ! -d "$relcomp_drive_mutex" ]] || fail "drive should release mutex after generated hypothesis worker success"
 s=$(grep '"status"' "$relcomp_drive_bl/items/$relcomp_drive_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "cancelled" ]] || fail "drive should preserve terminal status ($s)"
 
@@ -1441,15 +1496,12 @@ grep -q '^summary=' "$tmp/drive-idle.out" || fail "idle drive missing summary"
 # then loop continues to acquire the hypothesis as a backlog item
 rm -f "$drive_hyp_state/last_generated"
 set +e
-HYPOTHESIS_STATE_DIR="$drive_hyp_state" BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_tmp/mutex_free" \
+HYPOTHESIS_STATE_DIR="$drive_hyp_state" BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_tmp/mutex_free" AUTONOMOUS_WORKER_CMD='printf drive-hyp-ok' AUTONOMOUS_WORKER_STATE_DIR="$drive_tmp/worker-state" \
   ./scripts/drive.sh >"$tmp/drive-hyp.out" 2>"$tmp/drive-hyp.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive hyp->acquire exit status was $status, expected 0"
-grep -q '^action=start_backlog_item$' "$tmp/drive-hyp.out" || fail "drive hyp should loop to start_backlog_item"
-grep -q '^summary=' "$tmp/drive-hyp.out" || fail "drive hyp missing summary"
-grep -q 'generated' "$tmp/drive-hyp.out" || fail "drive hyp summary missing generation"
-grep -q 'acquired' "$tmp/drive-hyp.out" || fail "drive hyp summary missing acquisition"
+grep -q '^action=completed_backlog_item$' "$tmp/drive-hyp.out" || fail "drive hyp should complete generated backlog item"
 [[ -f "$drive_hyp_state/last_generated" ]] || fail "drive hyp should write last_generated"
 # Verify the hypothesis was created and acquired
 hyp_items=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null)
@@ -1459,12 +1511,9 @@ hyp_item=$(printf '%s\n' "$hyp_items" | head -1)
 hyp_type=$(grep -o '"type"[[:space:]]*:[[:space:]]*"[^"]*"' "$hyp_item" | sed 's/.*"type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$hyp_type" == "hypothesis" ]] || fail "drive hyp item type should be hypothesis, got $hyp_type"
 hyp_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$hyp_item" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-[[ "$hyp_status" == "in_progress" ]] || fail "drive hyp item should be acquired (in_progress), got $hyp_status"
-# Mutex should be acquired
-[[ -d "$drive_tmp/mutex_free" ]] || fail "drive hyp should acquire mutex"
-[[ -f "$drive_tmp/mutex_free/holder.json" ]] || fail "drive hyp mutex holder.json missing"
-grep -q '^acquired_type=hypothesis$' "$tmp/drive-hyp.out" || fail "drive hyp acquired_type not hypothesis"
-grep -q '^acquired_description=' "$tmp/drive-hyp.out" || fail "drive hyp acquired_description missing"
+[[ "$hyp_status" == "done" ]] || fail "drive hyp item should be completed (done), got $hyp_status"
+# Mutex should be released after worker success
+[[ ! -d "$drive_tmp/mutex_free" ]] || fail "drive hyp should release mutex after completion"
 
 # Held mutex -> wait_for_mutex
 mkdir -p "$drive_tmp/mutex_held"
@@ -1484,17 +1533,14 @@ grep -q '^summary=' "$tmp/drive-held.out" || fail "held mutex drive missing summ
 drive_start_bl="$drive_tmp/bl_start"
 BACKLOG_DIR="$drive_start_bl" ./scripts/backlog.sh add --type task --title "Drive start test" --priority 90 >/dev/null
 set +e
-BACKLOG_DIR="$drive_start_bl" MUTEX_DIR="$drive_tmp/mutex_start" \
+BACKLOG_DIR="$drive_start_bl" MUTEX_DIR="$drive_tmp/mutex_start" AUTONOMOUS_WORKER_CMD='printf drive-start-ok' AUTONOMOUS_WORKER_STATE_DIR="$drive_tmp/worker-state" \
   ./scripts/drive.sh >"$tmp/drive-start.out" 2>"$tmp/drive-start.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "start backlog item drive exit status was $status, expected 0"
-grep -q '^action=start_backlog_item$' "$tmp/drive-start.out" || fail "start_backlog_item action not found"
-grep -q '^summary=.*acquired backlog item' "$tmp/drive-start.out" || fail "start_backlog_item summary missing acquisition"
-[[ -d "$drive_tmp/mutex_start" ]] || fail "mutex was not acquired"
-[[ -f "$drive_tmp/mutex_start/holder.json" ]] || fail "holder.json not written"
-grep -q '^acquired_type=task$' "$tmp/drive-start.out" || fail "start_backlog_item acquired_type not task"
-grep -q '^acquired_description=' "$tmp/drive-start.out" || fail "start_backlog_item acquired_description missing"
+grep -q '^action=completed_backlog_item$' "$tmp/drive-start.out" || fail "completed_backlog_item action not found"
+grep -q '^worker_status=success$' "$tmp/drive-start.out" || fail "start_backlog_item worker success missing"
+[[ ! -d "$drive_tmp/mutex_start" ]] || fail "mutex was not released after start worker success"
 
 # Stale mutex -> mutex-release-stale.sh, then loop continues to acquire task
 drive_stale_bl="$drive_tmp/bl_stale"
@@ -1505,14 +1551,13 @@ cat > "$drive_stale_mutex/holder.json" <<'JSON'
 {"holder_id":"dead-worker","reason":"drive stale test","started_at":"2000-01-01T00:00:00Z","updated_at":"2000-01-01T00:05:00Z"}
 JSON
 set +e
-BACKLOG_DIR="$drive_stale_bl" MUTEX_DIR="$drive_stale_mutex" \
+BACKLOG_DIR="$drive_stale_bl" MUTEX_DIR="$drive_stale_mutex" AUTONOMOUS_WORKER_CMD='printf ok' AUTONOMOUS_WORKER_STATE_DIR="$drive_tmp/worker-state" \
   ./scripts/drive.sh --stale-minutes 1 >"$tmp/drive-stale.out" 2>"$tmp/drive-stale.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "stale mutex drive exit status was $status, expected 0"
-grep -q '^action=start_backlog_item$' "$tmp/drive-stale.out" || fail "stale mutex drive should loop to start_backlog_item"
-grep -q 'released stale mutex' "$tmp/drive-stale.out" || fail "stale mutex summary missing release"
-[[ -d "$drive_stale_mutex" ]] || fail "stale mutex drive should acquire mutex after cleanup"
+grep -q '^action=completed_backlog_item$' "$tmp/drive-stale.out" || fail "stale mutex drive should complete item"
+[[ ! -d "$drive_stale_mutex" ]] || fail "stale mutex drive should release mutex after completion"
 
 # Broken mutex -> mutex-release-stale.sh, then loop continues to acquire task
 drive_broken_bl="$drive_tmp/bl_broken"
@@ -1521,14 +1566,13 @@ mkdir -p "$drive_broken_bl/items" "$drive_broken_mutex"
 BACKLOG_DIR="$drive_broken_bl" ./scripts/backlog.sh add --type task --title "Broken mutex recover" --priority 80 >/dev/null
 printf 'not json\n' > "$drive_broken_mutex/holder.json"
 set +e
-BACKLOG_DIR="$drive_broken_bl" MUTEX_DIR="$drive_broken_mutex" \
+BACKLOG_DIR="$drive_broken_bl" MUTEX_DIR="$drive_broken_mutex" AUTONOMOUS_WORKER_CMD='printf ok' AUTONOMOUS_WORKER_STATE_DIR="$drive_tmp/worker-state" \
   ./scripts/drive.sh >"$tmp/drive-broken.out" 2>"$tmp/drive-broken.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "broken mutex drive exit status was $status, expected 0"
-grep -q '^action=start_backlog_item$' "$tmp/drive-broken.out" || fail "broken mutex drive should loop to start_backlog_item"
-grep -q 'removed broken mutex' "$tmp/drive-broken.out" || fail "broken mutex summary missing removal"
-[[ -d "$drive_broken_mutex" ]] || fail "broken mutex drive should acquire mutex after cleanup"
+grep -q '^action=completed_backlog_item$' "$tmp/drive-broken.out" || fail "broken mutex drive should complete item"
+[[ ! -d "$drive_broken_mutex" ]] || fail "broken mutex drive should release mutex after completion"
 
 # Stale in_progress item + free mutex -> backlog hygiene auto-resets to queued,
 # then start_backlog_item re-acquires with mutex
@@ -1542,17 +1586,15 @@ sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "in_progress"/' "$d
 sed -i 's/"updated_at"[[:space:]]*:[[:space:]]*"[^"]*"/"updated_at": "2000-01-01T00:00:00Z"/' "$drive_stale_ip_bl/items/$stale_ip_id.json"
 sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "2000-01-01T00:00:00Z"/' "$drive_stale_ip_bl/items/$stale_ip_id.json"
 set +e
-BACKLOG_DIR="$drive_stale_ip_bl" MUTEX_DIR="$drive_stale_ip/mutex" \
+BACKLOG_DIR="$drive_stale_ip_bl" MUTEX_DIR="$drive_stale_ip/mutex" AUTONOMOUS_WORKER_CMD='printf ok' AUTONOMOUS_WORKER_STATE_DIR="$drive_stale_ip/worker-state" \
   ./scripts/drive.sh --stale-minutes 1 >"$tmp/drive-stale-ip.out" 2>"$tmp/drive-stale-ip.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive stale ip exit status was $status, expected 0"
-grep -q '^action=start_backlog_item$' "$tmp/drive-stale-ip.out" || fail "drive stale ip action not start_backlog_item"
-grep -q '^summary=.*reset' "$tmp/drive-stale-ip.out" || fail "drive stale ip summary missing reset"
-[[ -d "$drive_stale_ip/mutex" ]] || fail "drive stale ip mutex should be acquired"
-[[ -f "$drive_stale_ip/mutex/holder.json" ]] || fail "drive stale ip holder.json should exist"
+grep -q '^action=completed_backlog_item$' "$tmp/drive-stale-ip.out" || fail "drive stale ip action not completed_backlog_item"
+[[ ! -d "$drive_stale_ip/mutex" ]] || fail "drive stale ip mutex should be released"
 s=$(grep '"status"' "$drive_stale_ip_bl/items/$stale_ip_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-[[ "$s" == "in_progress" ]] || fail "drive stale ip should re-acquire to in_progress, got $s"
+[[ "$s" == "done" ]] || fail "drive stale ip should complete to done, got $s"
 
 log "overnight routine smoke tests"
 ov_tmp="$tmp/overnight"
