@@ -168,7 +168,7 @@ PY
 exit 0
 STUB
 chmod +x "$opencode_tmp/bin/opencode"
-PATH="$opencode_tmp/bin:$PATH" HOME="$opencode_tmp/home" OPENCODE_ARGV_JSON="$opencode_tmp/argv.json" \
+PATH="$opencode_tmp/bin:$PATH" HOME="$opencode_tmp/home" AUTONOMOUS_OPENCODE_BIN= OPENROUTER_API_KEY= OPENCODE_ARGV_JSON="$opencode_tmp/argv.json" \
   ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state" \
     --item-id test-opencode --item-type test --item-title 'Verify default opencode invocation' \
     --item-description 'Prompt content must be delivered through a supported opencode run message.' >"$opencode_tmp/out.txt"
@@ -233,7 +233,7 @@ exit 0
 STUB
 chmod +x "$opencode_tmp/bin/opencode-env"
 PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" \
-  AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode-env" \
+  AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode-env" OPENROUTER_API_KEY= \
   OPENCODE_ARGV_JSON="$opencode_tmp/argv-keyfile.json" OPENROUTER_ENV_CAPTURE="$opencode_tmp/env-keyfile.txt" \
   ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state-keyfile" \
     --item-id test-opencode-keyfile --item-type test --item-title 'Verify OpenRouter key-file env' \
@@ -244,7 +244,7 @@ grep -q '^present=yes$' "$opencode_tmp/env-keyfile.txt" || fail "OpenRouter key 
 
 mkdir -p "$opencode_tmp/home-fallback/.opencode/bin"
 cp "$opencode_tmp/bin/opencode" "$opencode_tmp/home-fallback/.opencode/bin/opencode"
-PATH="/usr/bin:/bin" HOME="$opencode_tmp/home-fallback" OPENCODE_ARGV_JSON="$opencode_tmp/argv-fallback.json" \
+PATH="/usr/bin:/bin" HOME="$opencode_tmp/home-fallback" AUTONOMOUS_OPENCODE_BIN= OPENCODE_ARGV_JSON="$opencode_tmp/argv-fallback.json" \
   ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state-fallback" \
     --item-id test-opencode-fallback --item-type test --item-title 'Verify fallback opencode invocation' \
     --item-description 'HOME dot-opencode fallback must work when PATH lacks opencode.' >"$opencode_tmp/out-fallback.txt"
