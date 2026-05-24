@@ -201,7 +201,7 @@ if '--prompt-file' in argv:
     fail('default opencode argv must not use unsupported --prompt-file')
 if not argv or argv[0] != 'run':
     fail(f'default opencode argv must start with run, got {argv!r}')
-for flag, expected in [('--model', 'anthropic/claude-opus-4.5'), ('--variant', 'low'), ('--agent', 'build')]:
+for flag, expected in [('--model', 'openrouter/anthropic/claude-opus-4.6'), ('--variant', 'low'), ('--agent', 'build')]:
     if flag not in argv:
         fail(f'missing {flag} in default opencode argv: {argv!r}')
     value = argv[argv.index(flag) + 1] if argv.index(flag) + 1 < len(argv) else None
@@ -215,7 +215,8 @@ for text in ['You are an autonomous code-changing worker', 'Verify default openc
         fail(f'prompt message missing expected text: {text!r}')
 PY
 
-PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode" OPENCODE_ARGV_JSON="$opencode_tmp/argv-env.json" \
+PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" \
+  AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode" OPENCODE_ARGV_JSON="$opencode_tmp/argv-env.json" \
   ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state-env" \
     --item-id test-opencode-env --item-type test --item-title 'Verify env opencode invocation' \
     --item-description 'AUTONOMOUS_OPENCODE_BIN must work when PATH lacks opencode.' >"$opencode_tmp/out-env.txt"
@@ -230,6 +231,34 @@ if 'AUTONOMOUS_OPENCODE_BIN must work when PATH lacks opencode.' not in argv[-1]
     print('ERROR: env opencode prompt content missing', file=sys.stderr)
     sys.exit(1)
 PY
+
+# Verify OPENROUTER_API_KEY is loaded from $HOME/openrouter.key for unattended cron/background runs without leaking it.
+printf 'sk-or-v1-secret-that-must-not-leak\n' >"$opencode_tmp/home/openrouter.key"
+cat > "$opencode_tmp/bin/opencode-env" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+python3 - "$OPENCODE_ARGV_JSON" "$OPENROUTER_ENV_CAPTURE" "${OPENROUTER_API_KEY:-}" "$@" <<'PYCAP'
+import json, sys
+argv_path, env_path, key = sys.argv[1:4]
+argv = sys.argv[4:]
+with open(argv_path, 'w') as f:
+    json.dump(argv, f)
+with open(env_path, 'w') as f:
+    f.write('present=' + ('yes' if key else 'no') + '\n')
+    f.write('length=' + str(len(key)) + '\n')
+PYCAP
+exit 0
+STUB
+chmod +x "$opencode_tmp/bin/opencode-env"
+PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" \
+  AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode-env" \
+  OPENCODE_ARGV_JSON="$opencode_tmp/argv-keyfile.json" OPENROUTER_ENV_CAPTURE="$opencode_tmp/env-keyfile.txt" \
+  ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state-keyfile" \
+    --item-id test-opencode-keyfile --item-type test --item-title 'Verify OpenRouter key-file env' \
+    --item-description 'OPENROUTER_API_KEY should be loaded from HOME/openrouter.key.' >"$opencode_tmp/out-keyfile.txt"
+grep -q '^worker_status=success$' "$opencode_tmp/out-keyfile.txt" || fail "default opencode worker did not succeed with OpenRouter key file"
+grep -q '^present=yes$' "$opencode_tmp/env-keyfile.txt" || fail "OpenRouter key file was not exported to opencode subprocess"
+! grep -R -q 'sk-or-v1-secret-that-must-not-leak' "$opencode_tmp/out-keyfile.txt" "$opencode_tmp/argv-keyfile.json" "$opencode_tmp/state-keyfile" || fail "OpenRouter key leaked to worker output, argv, or logs"
 
 mkdir -p "$opencode_tmp/home-fallback/.opencode/bin"
 cp "$opencode_tmp/bin/opencode" "$opencode_tmp/home-fallback/.opencode/bin/opencode"
@@ -256,12 +285,13 @@ if [[ "${1:-}" == "auth" && "${2:-}" == "list" ]]; then
   printf 'openrouter sk-or-v1-secret-that-must-not-leak\n'
   exit 0
 fi
-printf 'Error: Model not found: %s. Did you mean: anthropic/claude-opus-4.5?\n' "${3:-unknown}" >&2
+printf 'Error: Model not found: %s. Did you mean: openrouter/anthropic/claude-opus-4.6?\n' "${3:-unknown}" >&2
 exit 1
 STUB
 chmod +x "$opencode_tmp/bin/opencode-fail"
 fail_status=0
-PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode-fail" \
+PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" \
+  AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode-fail" \
   ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state-fail" \
     --item-id test-opencode-fail --item-type test --item-title 'Verify model diagnostic' \
     --item-description 'Model-not-found should block with actionable diagnostics.' >"$opencode_tmp/out-fail.txt" 2>&1 || fail_status=$?
