@@ -865,6 +865,7 @@ grep -q '^action=idle$' "$tmp/drive-idle.out" || fail "idle action not found"
 
 # Empty backlog + free mutex + no recent hypotheses -> generate_hypotheses
 rm -f "$drive_hyp_state/last_generated"
+items_before=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null | wc -l)
 set +e
 HYPOTHESIS_STATE_DIR="$drive_hyp_state" BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_tmp/mutex_free" \
   ./scripts/drive.sh >"$tmp/drive-hyp.out" 2>"$tmp/drive-hyp.err"
@@ -872,6 +873,12 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "generate hypotheses drive exit status was $status, expected 0"
 grep -q '^action=generate_hypotheses$' "$tmp/drive-hyp.out" || fail "generate_hypotheses action not found"
+[[ -f "$drive_hyp_state/last_generated" ]] || fail "generate_hypotheses should write last_generated"
+items_after=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null | wc -l)
+[[ "$items_after" -gt "$items_before" ]] || fail "generate_hypotheses should create a backlog item"
+hyp_item=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null | head -1)
+hyp_type=$(grep -o '"type"[[:space:]]*:[[:space:]]*"[^"]*"' "$hyp_item" | sed 's/.*"type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$hyp_type" == "hypothesis" ]] || fail "generated item type should be hypothesis, got $hyp_type"
 
 # Held mutex -> wait_for_mutex
 mkdir -p "$drive_tmp/mutex_held"
