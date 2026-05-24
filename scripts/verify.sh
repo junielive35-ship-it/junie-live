@@ -12,6 +12,7 @@ bash -n hire-junie.sh
 bash -n scripts/code-mutex-status.sh
 bash -n scripts/backlog.sh
 bash -n scripts/routine-health.sh
+bash -n scripts/backlog-hygiene.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -256,5 +257,104 @@ set -e
 [[ "$status" -eq 2 ]] || fail "broken mutex exit status was $status, expected 2"
 grep -q '^status=CRITICAL$' "$tmp/rh-broken.out" || fail "broken mutex status not CRITICAL"
 grep -q 'Mutex BROKEN' "$tmp/rh-broken.out" || fail "broken mutex not in details"
+
+log "backlog hygiene smoke tests"
+hygiene_tmp="$tmp/backlog_hygiene"
+hygiene_backlog="$hygiene_tmp/backlog"
+mkdir -p "$hygiene_backlog/items" "$hygiene_backlog/archive"
+ts_now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ts_old="2000-01-01T00:00:00Z"
+ts_yesterday="$(date -u -d '30 hours ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo '2000-01-01T00:00:00Z')"
+
+# Empty backlog -> OK
+set +e
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh >"$tmp/hygiene-empty.out" 2>"$tmp/hygiene-empty.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "empty hygiene exit status was $status, expected 0"
+grep -q '^archived=0$' "$tmp/hygiene-empty.out" || fail "empty hygiene archived count wrong"
+grep -q '^reset_in_progress=0$' "$tmp/hygiene-empty.out" || fail "empty hygiene reset count wrong"
+grep -q '^stale_queued=0$' "$tmp/hygiene-empty.out" || fail "empty hygiene stale count wrong"
+
+# Add fresh items that should NOT be archived
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type task --title "Fresh done" >/dev/null
+fresh_done_id=$(BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$fresh_done_id" ]] || fail "hygiene fresh done add failed"
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh update "$fresh_done_id" --status done >/dev/null
+
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type task --title "Fresh queued" >/dev/null
+# All items are fresh so archive should do nothing
+set +e
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --archive-days 1 >"$tmp/hygiene-fresh.out" 2>"$tmp/hygiene-fresh.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "fresh hygiene exit status was $status, expected 0"
+grep -q '^archived=0$' "$tmp/hygiene-fresh.out" || fail "fresh hygiene should not archive"
+grep -q '^reset_in_progress=0$' "$tmp/hygiene-fresh.out" || fail "fresh hygiene should not reset"
+
+# Add old done item that should be archived
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type task --title "Old done" >/dev/null
+old_done_id=$(BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh update "$old_done_id" --status done >/dev/null
+sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "'"$ts_old"'"/' "$hygiene_backlog/items/$old_done_id.json"
+
+set +e
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --archive-days 1 >"$tmp/hygiene-old-done.out" 2>"$tmp/hygiene-old-done.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "old done archive exit status was $status, expected 2"
+grep -q '^archived=1$' "$tmp/hygiene-old-done.out" || fail "old done should be archived"
+[[ ! -f "$hygiene_backlog/items/$old_done_id.json" ]] || fail "old done item should have moved to archive"
+[[ -f "$hygiene_backlog/archive/$old_done_id.json" ]] || fail "old done item should be in archive dir"
+
+# Add stale in_progress item that should be reset to queued
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type task --title "Stale in progress" --priority 80 >/dev/null
+stale_ip_id=$(BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh acquire >/dev/null
+sed -i 's/"updated_at"[[:space:]]*:[[:space:]]*"[^"]*"/"updated_at": "'"$ts_old"'"/' "$hygiene_backlog/items/$stale_ip_id.json"
+sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "'"$ts_old"'"/' "$hygiene_backlog/items/$stale_ip_id.json"
+
+set +e
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --stale-minutes 1 >"$tmp/hygiene-stale-ip.out" 2>"$tmp/hygiene-stale-ip.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "stale ip reset exit status was $status, expected 2"
+grep -q '^reset_in_progress=1$' "$tmp/hygiene-stale-ip.out" || fail "stale ip should be reset"
+s=$(grep '"status"' "$hygiene_backlog/items/$stale_ip_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "queued" ]] || fail "stale ip should be reset to queued, got $s"
+
+# Check dry-run: add another old done, verify no actual archive
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type task --title "Dry run done" >/dev/null
+dry_id=$(BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh update "$dry_id" --status done >/dev/null
+sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "'"$ts_old"'"/' "$hygiene_backlog/items/$dry_id.json"
+
+# Count items before dry-run
+items_before=$(ls "$hygiene_backlog/items/"*.json 2>/dev/null | wc -l)
+archives_before=$(ls "$hygiene_backlog/archive/"*.json 2>/dev/null | wc -l)
+
+set +e
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --archive-days 1 --dry-run >"$tmp/hygiene-dry.out" 2>"$tmp/hygiene-dry.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "dry-run hygiene exit status was $status, expected 0"
+grep -q 'WOULD_ARCHIVE' "$tmp/hygiene-dry.out" || fail "dry-run should show would-archive"
+
+items_after=$(ls "$hygiene_backlog/items/"*.json 2>/dev/null | wc -l)
+archives_after=$(ls "$hygiene_backlog/archive/"*.json 2>/dev/null | wc -l)
+[[ "$items_before" -eq "$items_after" ]] || fail "dry-run should not move items ($items_before vs $items_after)"
+[[ "$archives_before" -eq "$archives_after" ]] || fail "dry-run should not add archives ($archives_before vs $archives_after)"
+
+# Stale queued items should trigger warning exit
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type hypothesis --title "Stale queued hypothesis" --priority 10 >/dev/null
+stale_q_id=$(BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh list --status queued 2>/dev/null | tail -1 | cut -f1)
+[[ -f "$hygiene_backlog/items/$stale_q_id.json" ]] || fail "stale queued item missing"
+sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "'"$ts_yesterday"'"/' "$hygiene_backlog/items/$stale_q_id.json"
+
+set +e
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --stale-queued-days 1 >"$tmp/hygiene-stale-q.out" 2>"$tmp/hygiene-stale-q.err"
+status=$?
+set -e
+grep -q '^stale_queued=1$' "$tmp/hygiene-stale-q.out" || fail "stale queued count should be 1"
 
 log "all checks passed"
