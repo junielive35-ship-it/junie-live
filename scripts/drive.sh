@@ -64,6 +64,7 @@ while [[ $iteration -lt $max_iterations ]]; do
   read_val() { grep "^${1}=" "$na_out" 2>/dev/null | sed 's/^[^=]*=//' || true; }
 
   action=$(read_val action)
+  reason=$(read_val reason)
   mutex=$(read_val mutex)
   backlog_queued=$(read_val backlog_queued)
   backlog_in_progress=$(read_val backlog_in_progress)
@@ -172,6 +173,7 @@ if [[ -z "$loop_action" ]]; then
 fi
 
 printf 'action=%s\n' "$loop_action"
+printf 'reason=%s\n' "${reason:-}"
 printf 'mutex=%s\n' "${mutex:-UNKNOWN}"
 printf 'backlog_queued=%s\n' "${backlog_queued:-0}"
 printf 'backlog_in_progress=%s\n' "${backlog_in_progress:-0}"
