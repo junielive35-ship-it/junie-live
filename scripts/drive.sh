@@ -97,10 +97,30 @@ case "$action" in
 
     rm -f "$rpt" "$fup_out" ;;
   generate_hypotheses)
+    pr_failing=$(read_val pr_failing)
+    pr_stale=$(read_val pr_stale)
+    backlog_queued=$(read_val backlog_queued)
+    overall_status=$(read_val overall_status)
+
+    ctx_parts=()
+    [[ "${overall_status:-OK}" != "OK" ]] && ctx_parts+=("status=${overall_status}")
+    [[ "${backlog_queued:-0}" -gt 0 ]] && ctx_parts+=("${backlog_queued} queued")
+    [[ "${pr_failing:-0}" -gt 0 ]] && ctx_parts+=("${pr_failing} failing CI")
+    [[ "${pr_stale:-0}" -gt 0 ]] && ctx_parts+=("${pr_stale} stale PRs")
+
+    if [[ "${#ctx_parts[@]}" -gt 0 ]]; then
+      ctx_str=$(IFS=', '; printf '%s' "${ctx_parts[*]}")
+      title="System health review: ${ctx_str}"
+      desc="Automated trigger: hypothesis generation interval elapsed. Current signals: ${ctx_str}."
+    else
+      title="Periodic system health review"
+      desc="Automated trigger: hypothesis generation interval elapsed. All nominal — review for latent improvement opportunities."
+    fi
+
     HYPOTHESIS_STATE_DIR="$hypothesis_state_dir" \
       "$ROOT/scripts/hypothesis-generate.sh" \
-      --title "Periodic system health review" \
-      --desc "Automated trigger: hypothesis generation interval elapsed. Review current system state and backlog for improvement opportunities." \
+      --title "$title" \
+      --desc "$desc" \
       --source "system" \
       --priority 50 2>/dev/null || true
     exit 0 ;;
