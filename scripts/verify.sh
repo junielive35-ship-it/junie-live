@@ -56,6 +56,25 @@ grep -qi 'Autonomous MVP loop iteration' "$contract" || fail "overnight contract
 grep -qi '\.git/info/exclude' "$contract" || fail "overnight contract must mention .git/info/exclude masking"
 grep -qi 'workspace trash' "$contract" || fail "overnight contract must mention workspace trash"
 
+log "initialization seed repo hygiene guidance"
+seed_agents="initialization/AGENTS.md"
+seed_delegation="initialization/docs/delegation-protocol.md"
+seed_review="initialization/docs/review-protocol.md"
+for seed_file in "$seed_agents" "$seed_delegation" "$seed_review"; do
+  [[ -f "$seed_file" ]] || fail "missing initialization seed file: $seed_file"
+done
+seed_hygiene_text="$(cat "$seed_agents" "$seed_delegation" "$seed_review")"
+grep -q 'git status --short --branch --untracked-files=all' <<<"$seed_hygiene_text" || fail "initialization seed must require full git status checks after worker work"
+grep -qi 'final state should be clean' <<<"$seed_hygiene_text" || fail "initialization seed must require clean or called-out final status"
+grep -qi 'intentional changes' <<<"$seed_hygiene_text" || fail "initialization seed must call out intentional remaining changes"
+grep -q 'AGENTS.md' <<<"$seed_hygiene_text" || fail "initialization seed must name root AGENTS.md artifacts"
+grep -q 'USER.md' <<<"$seed_hygiene_text" || fail "initialization seed must name root USER.md artifacts"
+grep -q '\.openclaw/' <<<"$seed_hygiene_text" || fail "initialization seed must name root .openclaw artifacts"
+grep -q '\.git/info/exclude' <<<"$seed_hygiene_text" || fail "initialization seed must forbid .git/info/exclude masking"
+grep -q '\.gitignore' <<<"$seed_hygiene_text" || fail "initialization seed must forbid .gitignore masking"
+grep -qi 'Autonomous MVP loop iteration N' <<<"$seed_hygiene_text" || fail "initialization seed must reject generic iteration-counter commit subjects"
+grep -qi 'actual change' <<<"$seed_hygiene_text" || fail "initialization seed must require commit subjects based on actual changes"
+
 log "repo workspace artifact hygiene"
 workspace_artifacts=(AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw)
 for artifact in "${workspace_artifacts[@]}"; do
