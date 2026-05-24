@@ -15,6 +15,7 @@ bash -n scripts/routine-health.sh
 bash -n scripts/backlog-hygiene.sh
 bash -n scripts/pr-status.sh
 bash -n scripts/report.sh
+bash -n scripts/next-action.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -519,5 +520,78 @@ set -e
 [[ "$status" -eq 2 ]] || fail "stale report exit status was $status, expected 2"
 grep -q '^status=CRITICAL$' "$tmp/report-stale.out" || fail "stale report status not CRITICAL"
 grep -q '^mutex=STALE$' "$tmp/report-stale.out" || fail "stale report mutex not STALE"
+
+log "next-action smoke tests"
+na_tmp="$tmp/next_action"
+
+# Empty backlog + free mutex + no gh -> idle
+mkdir -p "$na_tmp/items"
+set +e
+BACKLOG_DIR="$na_tmp" ./scripts/next-action.sh >"$tmp/na-idle.out" 2>"$tmp/na-idle.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "idle next-action exit status was $status, expected 0"
+grep -q '^action=idle$' "$tmp/na-idle.out" || fail "idle next-action action not idle"
+grep -q '^mutex=FREE' "$tmp/na-idle.out" || fail "idle next-action mutex not FREE"
+
+# Free mutex + queued item -> start_backlog_item
+na_backlog="$na_tmp/with_item"
+BACKLOG_DIR="$na_backlog" ./scripts/backlog.sh add --type task --title "Next action task" --priority 80 >/dev/null
+set +e
+BACKLOG_DIR="$na_backlog" ./scripts/next-action.sh >"$tmp/na-work.out" 2>"$tmp/na-work.err"
+status=$?
+set -e
+[[ "$status" -eq 1 ]] || fail "work next-action exit status was $status, expected 1"
+grep -q '^action=start_backlog_item$' "$tmp/na-work.out" || fail "work next-action action not start_backlog_item"
+grep -q '^backlog_queued=1$' "$tmp/na-work.out" || fail "work next-action backlog_queued not 1"
+
+# Held mutex -> wait_for_mutex
+na_mutex="$na_tmp/mutex_held"
+mkdir -p "$na_mutex"
+cat > "$na_mutex/holder.json" <<'JSON'
+{
+  "holder_id": "active-worker",
+  "reason": "next-action held test",
+  "started_at": "2999-01-01T00:00:00Z",
+  "updated_at": "2999-01-01T00:02:00Z"
+}
+JSON
+set +e
+BACKLOG_DIR="$na_backlog" MUTEX_DIR="$na_mutex" ./scripts/next-action.sh >"$tmp/na-held.out" 2>"$tmp/na-held.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "held next-action exit status was $status, expected 0"
+grep -q '^action=wait_for_mutex$' "$tmp/na-held.out" || fail "held next-action action not wait_for_mutex"
+grep -q '^mutex=HELD$' "$tmp/na-held.out" || fail "held next-action mutex not HELD"
+
+# Stale mutex -> release_stale_mutex
+na_stale_mutex="$na_tmp/mutex_stale"
+mkdir -p "$na_stale_mutex"
+cat > "$na_stale_mutex/holder.json" <<'JSON'
+{
+  "holder_id": "dead-worker",
+  "reason": "next-action stale test",
+  "started_at": "2000-01-01T00:00:00Z",
+  "updated_at": "2000-01-01T00:05:00Z"
+}
+JSON
+set +e
+BACKLOG_DIR="$na_backlog" MUTEX_DIR="$na_stale_mutex" ./scripts/next-action.sh --stale-minutes 1 >"$tmp/na-stale.out" 2>"$tmp/na-stale.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "stale next-action exit status was $status, expected 2"
+grep -q '^action=release_stale_mutex$' "$tmp/na-stale.out" || fail "stale next-action action not release_stale_mutex"
+grep -q '^mutex=STALE$' "$tmp/na-stale.out" || fail "stale next-action mutex not STALE"
+
+# Broken mutex -> fix_mutex
+na_broken_mutex="$na_tmp/mutex_broken"
+mkdir -p "$na_broken_mutex"
+printf 'not json\n' > "$na_broken_mutex/holder.json"
+set +e
+BACKLOG_DIR="$na_backlog" MUTEX_DIR="$na_broken_mutex" ./scripts/next-action.sh >"$tmp/na-broken.out" 2>"$tmp/na-broken.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "broken next-action exit status was $status, expected 2"
+grep -q '^action=fix_mutex$' "$tmp/na-broken.out" || fail "broken next-action action not fix_mutex"
 
 log "all checks passed"
