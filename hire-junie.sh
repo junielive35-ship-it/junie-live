@@ -21,8 +21,9 @@ Options:
   --seed-dir DIR              Junie seed dir. Default: ./initialization
   --model MODEL               OpenClaw model id. Default: openrouter/openai/gpt-5.5
   --no-restart                Configure everything but do not restart Gateway.
-  --no-overnight-crons        Do not generate overnight cron artifacts.
-  --overnight-disabled        Generate overnight cron artifacts disabled.
+  --no-overnight-crons        Do not install or generate overnight cron artifacts.
+  --overnight-artifacts-only  Generate audit/fallback artifacts but do not install OpenClaw cron jobs.
+  --overnight-disabled        Generate/install overnight cron jobs disabled.
   --overnight-controller-schedule CRON
                               Default: 0 1 * * *
   --overnight-watchdog-schedule CRON
@@ -70,6 +71,7 @@ MODEL="openrouter/openai/gpt-5.5"
 RESTART=1
 INSTALL_OVERNIGHT_CRONS=1
 OVERNIGHT_DISABLED=0
+OVERNIGHT_ARTIFACTS_ONLY=0
 OVERNIGHT_CONTROLLER_SCHEDULE="0 1 * * *"
 OVERNIGHT_WATCHDOG_SCHEDULE="*/15 * * * *"
 OVERNIGHT_REPORT_SCHEDULE="0 8 * * *"
@@ -95,6 +97,8 @@ while [[ $# -gt 0 ]]; do
       RESTART=0; shift ;;
     --no-overnight-crons)
       INSTALL_OVERNIGHT_CRONS=0; shift ;;
+    --overnight-artifacts-only)
+      OVERNIGHT_ARTIFACTS_ONLY=1; shift ;;
     --overnight-disabled)
       OVERNIGHT_DISABLED=1; shift ;;
     --overnight-controller-schedule)
@@ -161,6 +165,11 @@ if [[ -e "$WORKSPACE/BOOTSTRAP.md" ]]; then
   exit 1
 fi
 
+openclaw agents add "$AGENT_ID" \
+  --workspace "$WORKSPACE" \
+  --model "$MODEL" \
+  --non-interactive
+
 if [[ "$INSTALL_OVERNIGHT_CRONS" -eq 1 ]]; then
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   cron_args=(
@@ -175,13 +184,9 @@ if [[ "$INSTALL_OVERNIGHT_CRONS" -eq 1 ]]; then
     --max-iterations "$OVERNIGHT_MAX_ITERATIONS"
   )
   [[ "$OVERNIGHT_DISABLED" -eq 0 ]] || cron_args+=(--disabled)
+  [[ "$OVERNIGHT_ARTIFACTS_ONLY" -eq 0 ]] || cron_args+=(--artifacts-only)
   "$repo_root/scripts/install-overnight-crons.sh" "${cron_args[@]}"
 fi
-
-openclaw agents add "$AGENT_ID" \
-  --workspace "$WORKSPACE" \
-  --model "$MODEL" \
-  --non-interactive
 
 openclaw channels add \
   --channel telegram \

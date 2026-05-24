@@ -20,12 +20,12 @@ These roles are implemented locally by:
 - `scripts/overnight-watchdog.sh`
 - `scripts/overnight-report.sh`
 
-They are intentionally plain shell scripts so cron can run them without an interactive terminal or model tooling. `hire-junie.sh` now calls `scripts/install-overnight-crons.sh` during workspace creation, so every newly hired Junie instance receives local installable cron artifacts out of the box:
+They are intentionally plain shell scripts so scheduled jobs can run without an interactive terminal. `hire-junie.sh` now creates the OpenClaw agent first, then calls `scripts/install-overnight-crons.sh`, so every newly hired Junie instance installs real OpenClaw cron jobs out of the box and also receives local audit/fallback artifacts:
 
 - `.openclaw/cron/overnight-routines.json` — structured job definitions for the controller, watchdog, and morning report;
 - `.openclaw/cron/overnight-routines.crontab` — equivalent host-cron lines for administrators/installers that use system cron.
 
-The helper writes only workspace-local artifacts. It does not mutate a real crontab or the OpenClaw cron registry during verification. Schedules and timeouts are configurable from `hire-junie.sh`, and `--no-overnight-crons` or `--overnight-disabled` can be used when an administrator wants to opt out or review before enabling.
+The helper installs/updates OpenClaw cron jobs by default using stable `Junie Live overnight ...` names, removing only matching Junie Live jobs for the same agent before re-adding them. It does not mutate a host crontab, and verification uses dry-run/fake OpenClaw binaries so tests never touch the real cron registry. Schedules and timeouts are configurable from `hire-junie.sh`; use `--no-overnight-crons`, `--overnight-artifacts-only`, or `--overnight-disabled` to opt out, generate fallback artifacts only, or install disabled jobs.
 
 ## Expected state and log files
 
