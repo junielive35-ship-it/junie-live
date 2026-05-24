@@ -494,6 +494,33 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "reflect nonexistent exit status was $status, expected 0"
 
+# reflect.sh with --notes -> stores in reflection JSON
+BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh add --type hypothesis --title "Reflect notes" --priority 40 >/dev/null
+refl_notes_id=$(BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$refl_notes_id" ]] || fail "reflect notes add failed"
+BACKLOG_DIR="$refl_backlog" REFLECTIONS_DIR="$refl_dir" ./scripts/reflect.sh "$refl_notes_id" done \
+  --notes "Outcome: verified fix works. What worked: clear reproduction steps." >/dev/null
+[[ -f "$refl_dir/${refl_notes_id}.json" ]] || fail "reflect notes should create reflection file"
+grep -q '"notes"' "$refl_dir/${refl_notes_id}.json" || fail "reflect notes should store notes field"
+grep -q 'Outcome: verified fix works' "$refl_dir/${refl_notes_id}.json" || fail "reflect notes should store notes content"
+
+# reflect.sh without --notes should not have notes field
+BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh add --type task --title "Reflect no notes" --priority 30 >/dev/null
+refl_no_notes_id=$(BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$refl_no_notes_id" ]] || fail "reflect no-notes add failed"
+BACKLOG_DIR="$refl_backlog" REFLECTIONS_DIR="$refl_dir" ./scripts/reflect.sh "$refl_no_notes_id" done >/dev/null
+grep -q '"notes"' "$refl_dir/${refl_no_notes_id}.json" && fail "reflect no-notes should not have notes field" || true
+
+# reflect.sh with notes containing JSON-special characters
+BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh add --type task --title "Reflect special chars" --priority 20 >/dev/null
+refl_special_id=$(BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$refl_special_id" ]] || fail "reflect special add failed"
+BACKLOG_DIR="$refl_backlog" REFLECTIONS_DIR="$refl_dir" ./scripts/reflect.sh "$refl_special_id" blocked \
+  --notes 'Contains "quotes" and \backslashes\ and newlines' >/dev/null
+grep -q 'Contains.*quotes.*backslashes' "$refl_dir/${refl_special_id}.json" || fail "reflect notes should escape special chars"
+s=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$refl_dir/${refl_special_id}.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "blocked" ]] || fail "reflect special status should be blocked, got $s"
+
 # task-release integration with reflection
 refl_ta_tmp="$tmp/refl_task_acquire"
 refl_ta_backlog="$refl_ta_tmp/backlog"

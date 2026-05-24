@@ -4,6 +4,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 task_id="${1:-}"
 new_status="${2:-done}"
+notes=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --notes) notes="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
 
 [[ -z "$task_id" ]] && exit 0
 
@@ -25,16 +33,20 @@ read_field() {
   printf '%s' "$val"
 }
 
+escape_json() {
+  printf '%s' "$1" | sed 's/["\]/\\&/g'
+}
+
 title=$(read_field "$item_file" title)
 type=$(read_field "$item_file" type)
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 cat > "$reflections_dir/${task_id}.json" <<EOF
 {
-  "task_id": "$(printf '%s' "$task_id" | sed 's/"/\\"/g')",
-  "type": "$(printf '%s' "$type" | sed 's/"/\\"/g')",
-  "title": "$(printf '%s' "$title" | sed 's/"/\\"/g')",
-  "status": "$(printf '%s' "$new_status" | sed 's/"/\\"/g')",
-  "reflected_at": "$ts"
+  "task_id": "$(escape_json "$task_id")",
+  "type": "$(escape_json "$type")",
+  "title": "$(escape_json "$title")",
+  "status": "$(escape_json "$new_status")",
+  "reflected_at": "$ts"$(if [[ -n "$notes" ]]; then printf ',\n  "notes": "%s"' "$(escape_json "$notes")"; fi)
 }
 EOF
