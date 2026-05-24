@@ -20,13 +20,15 @@ Triggered by DM, mention, or relevant group-chat request.
 
 Flow:
 
-1. Classify the message: question, task request, bug report, feature request, decision request, FYI/no action.
+1. Classify the message: question, task request, bug report, feature request, decision request, autonomous work window, FYI/no action.
 2. Clarify if needed.
 3. For meaningful tasks, retrieve relevant `MEMORY.md` and docs.
 4. Validate against strategy, architecture, accepted design choices, and prior decisions.
 5. Challenge contradictions instead of blindly accepting the request.
 6. Confirm shared understanding for non-trivial tasks.
 7. Queue, execute, defer, or ask for approval.
+
+For admin messages like “поработай автономно 9 часов”, “иди улучшай продукт 9 часов”, “работай над проектом до утра”, or “start autonomous loop for 4h”, Junie should recognize a bounded autonomous work-window intent after initialization. The admin should not need to specify repo, backlog, mutex, opencode, verification, meaningful commits, or morning report details; Junie derives those from the initialized workspace. Resolve the duration/end time from the message or ask one concise question if it is missing/ambiguous, then use `scripts/start-autonomous-window.sh --duration ... --background` rather than ad hoc loops. Reply with started/blocked status, duration/end time, state/log/report location, and what to expect next.
 
 ### 2. Code task execution
 
@@ -88,7 +90,7 @@ Responsibilities:
 
 ## Scheduled / continuous routines
 
-The product/technical contract for stable out-of-box overnight cron work is defined in [`docs/overnight-routines.md`](docs/overnight-routines.md). Scheduled routines should preserve that controller/watchdog/morning-report contract even when implemented by smaller scripts. New instances get real OpenClaw cron jobs installed by default during `hire-junie.sh` initialization, plus workspace-local audit/fallback artifacts: `.openclaw/cron/overnight-routines.json` and `.openclaw/cron/overnight-routines.crontab`. The jobs run in isolated sessions, allow `exec,read`, and invoke non-interactive shell commands with explicit repo, state, and log paths; no separate enable/import admin step is required unless `--overnight-artifacts-only` was chosen.
+The product/technical contract for stable out-of-box overnight cron work and admin-triggered autonomous work windows is defined in [`docs/overnight-routines.md`](docs/overnight-routines.md). Scheduled routines should preserve that controller/watchdog/morning-report contract even when implemented by smaller scripts. New instances get real OpenClaw cron jobs installed by default during `hire-junie.sh` initialization, plus workspace-local audit/fallback artifacts: `.openclaw/cron/overnight-routines.json` and `.openclaw/cron/overnight-routines.crontab`. The jobs run in isolated sessions, allow `exec,read`, and invoke non-interactive shell commands with explicit repo, state, and log paths; no separate enable/import admin step is required unless `--overnight-artifacts-only` was chosen.
 
 ### 6. Code mutex status check
 

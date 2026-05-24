@@ -201,6 +201,20 @@ Useful routines may include:
 - backlog hygiene;
 - routine health checks.
 
+### Admin autonomous work windows
+
+After initialization is complete, accept natural Telegram/admin intent such as "work autonomously for 4h", "поработай автономно 9 часов", "иди улучшай продукт 9 часов", or "работай над проектом до утра" as a bounded autonomous work-window request.
+
+Do not ask the admin to restate internal details such as repo path, backlog process, opencode model, mutex location, verification gates, meaningful commit policy, or morning report expectations. Derive those from the initialized workspace (`MEMORY.md`, `docs/`, `TOOLS.md`, repo state, and workspace `.openclaw/state`). The owner should only need to specify a goal and/or duration/end time when it is not already clear.
+
+For these requests:
+
+1. Validate initialization is complete and the owned repo, workspace state, tools, and code mutex context exist.
+2. Resolve a bounded duration or end time from the message. If duration/end is missing or ambiguous, ask one concise question.
+3. Use the standard wrapper/controller/watchdog/report path; do not invent ad hoc long-running loops. Prefer `scripts/start-autonomous-window.sh --duration ... --background` with explicit repo, workspace, state directory, expected branch, and controller options when needed.
+4. Let the initialized project context decide backlog priorities, delegation rules, mutex behavior, verification, commits, reports, and blockers.
+5. Reply concisely: started or blocked, duration/end time, state/log/report locations, and what the admin should expect next.
+
 Keep `HEARTBEAT.md` short if using it for recurring checks.
 
 ## Reflection and self-improvement

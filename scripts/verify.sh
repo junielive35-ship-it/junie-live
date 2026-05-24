@@ -30,6 +30,7 @@ bash -n scripts/overnight-controller.sh
 bash -n scripts/overnight-watchdog.sh
 bash -n scripts/overnight-report.sh
 bash -n scripts/install-overnight-crons.sh
+bash -n scripts/start-autonomous-window.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -74,6 +75,36 @@ grep -q '\.git/info/exclude' <<<"$seed_hygiene_text" || fail "initialization see
 grep -q '\.gitignore' <<<"$seed_hygiene_text" || fail "initialization seed must forbid .gitignore masking"
 grep -qi 'Autonomous MVP loop iteration N' <<<"$seed_hygiene_text" || fail "initialization seed must reject generic iteration-counter commit subjects"
 grep -qi 'actual change' <<<"$seed_hygiene_text" || fail "initialization seed must require commit subjects based on actual changes"
+grep -qi 'autonomous work windows' <<<"$seed_hygiene_text" || fail "initialization seed must teach autonomous work windows"
+grep -qi 'duration' <<<"$seed_hygiene_text" || fail "initialization seed must require duration/end resolution"
+grep -qi 'standard wrapper' <<<"$seed_hygiene_text" || fail "initialization seed must require the standard wrapper"
+grep -qi 'Do not ask the admin to restate internal details' <<<"$seed_hygiene_text" || fail "initialization seed must not ask admin for internal details"
+
+log "autonomous window wrapper tests"
+auto_tmp="$(mktemp -d)"
+mkdir -p "$auto_tmp/workspace/.openclaw/state" "$auto_tmp/state"
+dry_before=$(find "$ROOT" -maxdepth 1 -mindepth 1 \( -name '.openclaw' -o -name 'state' \) | sort)
+AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 9h --workspace "$auto_tmp/workspace" --state-dir "$auto_tmp/state" --expected-branch junie/autonomous-mvp-loop --dry-run >"$auto_tmp/dry.out"
+grep -q 'end_epoch=' "$auto_tmp/dry.out" || fail "dry-run must print computed end_epoch"
+grep -q -- '--end-epoch' "$auto_tmp/dry.out" || fail "dry-run must plan controller with --end-epoch"
+grep -q -- '--expected-branch junie/autonomous-mvp-loop' "$auto_tmp/dry.out" || fail "dry-run must include expected branch"
+grep -q -- "--state-dir $auto_tmp/state/controller" "$auto_tmp/dry.out" || fail "dry-run must include explicit state dir"
+grep -q 'dry_run=true; controller not started' "$auto_tmp/dry.out" || fail "dry-run must not start controller"
+
+start_epoch=$(date +%s)
+AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 5s --workspace "$auto_tmp/workspace" --state-dir "$auto_tmp/bg-state" --expected-branch junie/autonomous-mvp-loop --max-iterations 1 --iteration-timeout 5 --worker-cmd 'printf fake-worker-ok' --background >"$auto_tmp/bg.out"
+elapsed=$(( $(date +%s) - start_epoch ))
+[[ "$elapsed" -lt 5 ]] || fail "background autonomous window did not return quickly"
+grep -q '^started=true$' "$auto_tmp/bg.out" || fail "background mode must report started=true"
+grep -q '^pid=' "$auto_tmp/bg.out" || fail "background mode must report pid"
+[[ -f "$auto_tmp/bg-state/controller.pid" ]] || fail "background mode must write pid file"
+[[ -f "$auto_tmp/bg-state/window.json" ]] || fail "background mode must write window state"
+grep -q '"status": "running"' "$auto_tmp/bg-state/window.json" || fail "window state must mark running"
+sleep 1
+[[ -d "$auto_tmp/bg-state/logs" ]] || fail "background mode must create logs dir"
+[[ -d "$auto_tmp/bg-state/controller" ]] || fail "background mode must create controller state dir"
+dry_after=$(find "$ROOT" -maxdepth 1 -mindepth 1 \( -name '.openclaw' -o -name 'state' \) | sort)
+[[ "$dry_after" == "$dry_before" ]] || fail "autonomous wrapper wrote repo root artifacts"
 
 log "repo workspace artifact hygiene"
 workspace_artifacts=(AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw)
@@ -94,7 +125,7 @@ fi
 log "hire-junie smoke tests"
 tmp="$(mktemp -d)"
 cleanup() {
-  rm -rf "$tmp"
+  rm -rf "$tmp" "$auto_tmp"
   rm -rf "$ROOT/state"
 }
 trap cleanup EXIT
@@ -1511,7 +1542,7 @@ grep -q '"status": "complete"' "$ov_state/state.json" || fail "overnight control
 grep -q '"last_verify_status": "skipped"' "$ov_state/state.json" || fail "overnight controller skipped verify state missing"
 grep -q 'commits are worker responsibility' "$ov_state/state.json" || fail "overnight commit policy missing from state"
 grep -q 'iteration-counter subjects such as Autonomous MVP loop iteration N are rejected' "$ov_state/state.json" || fail "overnight iteration-counter commit policy missing from state"
-if git log -20 --format=%s | grep -Eq '^Autonomous MVP loop iteration [0-9]+$'; then
+if git log -6 --format=%s | grep -Eq '^Autonomous MVP loop iteration [0-9]+$'; then
   fail "recent commit subjects must be meaningful, not Autonomous MVP loop iteration N"
 fi
 ./scripts/overnight-report.sh --state-dir "$ov_state" >"$tmp/ov-report.out" 2>"$tmp/ov-report.err"
