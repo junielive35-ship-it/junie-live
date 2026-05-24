@@ -2,6 +2,10 @@
 
 Assumption for v1: Telegram is the only incoming event source. Junie can communicate with the team via Telegram, access GitHub code, and create/update pull requests.
 
+## Current implementation status
+
+This document mixes operating model, contracts, and implemented routines. Use [`implementation-status.md`](implementation-status.md) to see what is implemented, partial, contract-only, deferred, or unknown before treating a routine as available.
+
 ## Core runtime principles
 
 - Junie acts like a senior developer/product owner, not a passive executor.

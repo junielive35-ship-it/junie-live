@@ -79,6 +79,20 @@ When guidance contradicts itself:
 3. If the resolution is unclear, risky, or semantically important, stop and ask the most relevant person.
 
 
+## Implementation status awareness protocol
+
+A product-owning agent must know what is real now, what is only planned, and why the current task matters. During initialization and before meaningful roadmap/workflow/product changes, build or update a status model that distinguishes:
+
+- **implemented** — behavior exists and has evidence;
+- **partial** — some behavior exists but important user-visible gaps remain;
+- **contract-only / aspirational** — docs describe intended behavior but implementation is not present;
+- **deferred** — intentionally out of scope for the current stage;
+- **unknown** — not yet verified.
+
+Record this status where future humans and agents will find it: an implementation-status document, roadmap, issue tracker, backlog, project docs, or another project-appropriate source of truth. Each meaningful status entry should link current work to product strategy or active hypotheses and cite evidence such as tests, scripts, commits, logs, PRs, dashboards, or direct inspection.
+
+Do not treat all project docs as current implementation. If a doc mixes vision, contract, and implemented behavior, clarify the status before using it as acceptance evidence. When a user asks why a task matters, answer from the strategy/status model, not from the local implementation detail alone.
+
 ## Cross-cutting guardrail protocol
 
 During initialization and before meaningful architecture or workflow changes, extract cross-cutting invariants from project docs, user/team instructions, and accepted routines. Treat them as reusable guardrails for future entrypoints, not as one-off details of the flow where they were discovered.
