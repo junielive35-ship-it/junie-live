@@ -19,6 +19,7 @@ bash -n scripts/next-action.sh
 bash -n scripts/task-acquire.sh
 bash -n scripts/task-release.sh
 bash -n scripts/mutex-release-stale.sh
+bash -n scripts/hypothesis-generate.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -722,10 +723,22 @@ grep -q '^mutex=STALE$' "$tmp/report-stale.out" || fail "stale report mutex not 
 log "next-action smoke tests"
 na_tmp="$tmp/next_action"
 
-# Empty backlog + free mutex + no gh -> idle
+# Empty backlog + free mutex + no gh + no last_generated -> generate_hypotheses
 mkdir -p "$na_tmp/items"
 set +e
-BACKLOG_DIR="$na_tmp" ./scripts/next-action.sh >"$tmp/na-idle.out" 2>"$tmp/na-idle.err"
+BACKLOG_DIR="$na_tmp" ./scripts/next-action.sh >"$tmp/na-hyp-gen.out" 2>"$tmp/na-hyp-gen.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "hyp-gen next-action exit status was $status, expected 0"
+grep -q '^action=generate_hypotheses$' "$tmp/na-hyp-gen.out" || fail "empty next-action action not generate_hypotheses"
+grep -q '^mutex=FREE' "$tmp/na-hyp-gen.out" || fail "empty next-action mutex not FREE"
+
+# Empty backlog + free mutex + recent last_generated -> idle
+na_hyp_state="$na_tmp/hypothesis"
+mkdir -p "$na_hyp_state"
+date -u +%s > "$na_hyp_state/last_generated"
+set +e
+HYPOTHESIS_STATE_DIR="$na_hyp_state" BACKLOG_DIR="$na_tmp" ./scripts/next-action.sh >"$tmp/na-idle.out" 2>"$tmp/na-idle.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "idle next-action exit status was $status, expected 0"
@@ -791,5 +804,46 @@ status=$?
 set -e
 [[ "$status" -eq 2 ]] || fail "broken next-action exit status was $status, expected 2"
 grep -q '^action=fix_mutex$' "$tmp/na-broken.out" || fail "broken next-action action not fix_mutex"
+
+log "hypothesis generate smoke tests"
+hg_tmp="$tmp/hypothesis_gen"
+hg_backlog="$hg_tmp/backlog"
+hg_hyp_state="$hg_tmp/hypothesis"
+
+# Missing --title -> exit 2
+set +e
+BACKLOG_DIR="$hg_backlog" HYPOTHESIS_STATE_DIR="$hg_hyp_state" \
+  ./scripts/hypothesis-generate.sh >"$tmp/hg-no-title.out" 2>"$tmp/hg-no-title.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "missing title exit status was $status, expected 2"
+grep -q 'Missing --title' "$tmp/hg-no-title.err" || fail "missing title error not reported"
+
+# Valid generation with --title -> creates backlog item and state dir
+set +e
+BACKLOG_DIR="$hg_backlog" HYPOTHESIS_STATE_DIR="$hg_hyp_state" \
+  ./scripts/hypothesis-generate.sh --title "Test hypothesis" --desc "Based on smoke test" --source analytics --priority 75 >"$tmp/hg-valid.out" 2>"$tmp/hg-valid.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "valid hypothesis exit status was $status, expected 0"
+hg_id=$(cat "$tmp/hg-valid.out")
+[[ -n "$hg_id" ]] || fail "hypothesis generate did not output an id"
+[[ -f "$hg_backlog/items/$hg_id.json" ]] || fail "hypothesis item file not created"
+[[ -f "$hg_hyp_state/last_generated" ]] || fail "hypothesis state not written"
+t=$(grep '"type"' "$hg_backlog/items/$hg_id.json" | sed 's/.*"type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$t" == "hypothesis" ]] || fail "hypothesis type should be hypothesis, got $t"
+s=$(grep '"source"' "$hg_backlog/items/$hg_id.json" | sed 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "analytics" ]] || fail "hypothesis source should be analytics, got $s"
+
+# Mark hypothesis as done so backlog is empty, then verify next-action picks up recent last_generated -> idle
+BACKLOG_DIR="$hg_backlog" ./scripts/backlog.sh update "$hg_id" --status done >/dev/null
+BACKLOG_DIR="$hg_backlog" ./scripts/backlog.sh archive >/dev/null
+set +e
+BACKLOG_DIR="$hg_backlog" HYPOTHESIS_STATE_DIR="$hg_hyp_state" \
+  ./scripts/next-action.sh --hypothesis-interval-hours 1 >"$tmp/hg-next-idle.out" 2>"$tmp/hg-next-idle.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "post-hypothesis next-action exit status was $status, expected 0"
+grep -q '^action=idle$' "$tmp/hg-next-idle.out" || fail "post-hypothesis next-action should idle"
 
 log "all checks passed"
