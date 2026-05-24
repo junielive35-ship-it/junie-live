@@ -1270,7 +1270,8 @@ set -e
 grep -q '^action=fix_mutex$' "$tmp/drive-broken.out" || fail "fix_mutex action not found"
 [[ ! -d "$drive_broken_mutex" ]] || fail "broken mutex dir should be removed"
 
-# Stale in_progress item + free mutex -> check_stale_in_progress, resets item to queued
+# Stale in_progress item + free mutex -> backlog hygiene auto-resets to queued,
+# then start_backlog_item re-acquires with mutex
 drive_stale_ip="$tmp/drive_stale_ip"
 drive_stale_ip_bl="$drive_stale_ip/backlog"
 mkdir -p "$drive_stale_ip_bl/items"
@@ -1286,8 +1287,10 @@ BACKLOG_DIR="$drive_stale_ip_bl" MUTEX_DIR="$drive_stale_ip/mutex" \
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive stale ip exit status was $status, expected 0"
-grep -q '^action=check_stale_in_progress$' "$tmp/drive-stale-ip.out" || fail "drive stale ip action not check_stale_in_progress"
+grep -q '^action=start_backlog_item$' "$tmp/drive-stale-ip.out" || fail "drive stale ip action not start_backlog_item"
+[[ -d "$drive_stale_ip/mutex" ]] || fail "drive stale ip mutex should be acquired"
+[[ -f "$drive_stale_ip/mutex/holder.json" ]] || fail "drive stale ip holder.json should exist"
 s=$(grep '"status"' "$drive_stale_ip_bl/items/$stale_ip_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-[[ "$s" == "queued" ]] || fail "drive stale ip should reset to queued, got $s"
+[[ "$s" == "in_progress" ]] || fail "drive stale ip should re-acquire to in_progress, got $s"
 
 log "all checks passed"
