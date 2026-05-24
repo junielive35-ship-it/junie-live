@@ -1771,6 +1771,118 @@ set -e
 [[ ! -d "$ov_mutex_dir" ]] || fail "watchdog should release matching stale mutex when explicitly requested"
 grep -q 'mutex_action=released' "$ov_mutex_state/watchdog-findings.txt" || fail "watchdog did not record mutex release"
 
+log "autonomous fix retry and cleanup regression tests"
+fix_tmp="$tmp/autonomous_fix_retry"
+mkdir -p "$fix_tmp"
+
+# Defaults are part of the public autonomous contract: 7200s hard timeout and 7 fix retries.
+AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 5s --workspace "$auto_tmp/workspace" --state-dir "$fix_tmp/default-window" --expected-branch junie/autonomous-mvp-loop --dry-run >"$fix_tmp/default-window.out"
+grep -q -- '--iteration-timeout 7200' "$fix_tmp/default-window.out" || fail "autonomous window default timeout must be 7200 seconds"
+grep -q -- '--fix-retries 7' "$fix_tmp/default-window.out" || fail "autonomous window default fix budget must be 7"
+AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS=true ./scripts/start-autonomous-window.sh --duration 5s --workspace "$auto_tmp/workspace" --state-dir "$fix_tmp/override-window" --expected-branch junie/autonomous-mvp-loop --fix-retries 3 --iteration-timeout 11 --dry-run >"$fix_tmp/override-window.out"
+grep -q -- '--iteration-timeout 11' "$fix_tmp/override-window.out" || fail "autonomous window timeout override missing from controller plan"
+grep -q -- '--fix-retries 3' "$fix_tmp/override-window.out" || fail "autonomous window fix budget override missing from controller plan"
+OVERNIGHT_WORKER_CMD='printf dry-worker' ./scripts/overnight-controller.sh --state-dir "$fix_tmp/controller-default" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 1 --dry-run >"$fix_tmp/controller-default.out" 2>"$fix_tmp/controller-default.err"
+grep -q '"fix_retries": 7' "$fix_tmp/controller-default/state.json" || fail "controller dry-run state must record default fix budget 7"
+OVERNIGHT_WORKER_CMD='printf dry-worker' ./scripts/overnight-controller.sh --state-dir "$fix_tmp/controller-override" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 1 --fix-retries 2 --dry-run >"$fix_tmp/controller-override.out" 2>"$fix_tmp/controller-override.err"
+grep -q '"fix_retries": 2' "$fix_tmp/controller-override/state.json" || fail "controller dry-run state must record overridden fix budget"
+
+# Verification failure after worker success must call the worker again as a fix attempt and pass once state is corrected.
+printf 'bad\n' > "$fix_tmp/needs-fix.txt"
+cat >"$fix_tmp/verify-needs-fix.sh" <<VERIFY
+#!/usr/bin/env bash
+set -euo pipefail
+grep -qx fixed "$fix_tmp/needs-fix.txt"
+VERIFY
+chmod +x "$fix_tmp/verify-needs-fix.sh"
+cat >"$fix_tmp/fix-worker.sh" <<FIXWORKER
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\${AUTONOMOUS_FIX_ATTEMPT:-worker}" >> "$fix_tmp/fix-worker-invocations.txt"
+if [[ -n "\${AUTONOMOUS_FIX_ATTEMPT:-}" ]]; then
+  [[ -n "\${AUTONOMOUS_VERIFY_LOG:-}" && -f "\$AUTONOMOUS_VERIFY_LOG" ]] || exit 19
+  printf 'fixed\n' > "$fix_tmp/needs-fix.txt"
+fi
+git status --short --branch --untracked-files=all >/dev/null
+FIXWORKER
+chmod +x "$fix_tmp/fix-worker.sh"
+set +e
+OVERNIGHT_WORKER_CMD="$fix_tmp/fix-worker.sh" AUTONOMOUS_VERIFY_CMD="$fix_tmp/verify-needs-fix.sh" ./scripts/overnight-controller.sh --state-dir "$fix_tmp/fix-success-state" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 1 --iteration-timeout 5 --fix-retries 3 >"$fix_tmp/fix-success.out" 2>"$fix_tmp/fix-success.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "controller should recover verification failure via fix attempt; status=$status"
+grep -qx fixed "$fix_tmp/needs-fix.txt" || fail "fake fix worker did not correct verification state"
+grep -q '^worker$' "$fix_tmp/fix-worker-invocations.txt" || fail "initial worker invocation missing before fix retry"
+grep -q '^1$' "$fix_tmp/fix-worker-invocations.txt" || fail "fix attempt did not rerun worker with AUTONOMOUS_FIX_ATTEMPT=1"
+grep -q '"status": "complete"' "$fix_tmp/fix-success-state/state.json" || fail "controller did not complete after successful fix"
+grep -q '"last_verify_status": "passed_after_fix_1"' "$fix_tmp/fix-success-state/state.json" || fail "controller state must record passed_after_fix_1"
+[[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail "fix success path left tracked repo changes"
+
+# Exhausted fix attempts must block the acquired task, release the mutex, run cleanup, preserve status/diff, and leave the repo clean.
+exhaust_backlog="$fix_tmp/exhaust-backlog"
+exhaust_mutex="$fix_tmp/exhaust-mutex"
+exhaust_state="$fix_tmp/exhaust-state"
+mkdir -p "$exhaust_backlog/items"
+BACKLOG_DIR="$exhaust_backlog" ./scripts/backlog.sh add --type task --title "Exhaust fix attempts" --priority 99 >/dev/null
+BACKLOG_DIR="$exhaust_backlog" ./scripts/task-acquire.sh --mutex-dir "$exhaust_mutex" >"$fix_tmp/exhaust-acquire.out"
+exhaust_id=$(grep '^id=' "$fix_tmp/exhaust-acquire.out" | sed 's/^id=//')
+cat >"$fix_tmp/verify-always-fails.sh" <<'VERIFYFAIL'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'still failing\n' >&2
+exit 42
+VERIFYFAIL
+chmod +x "$fix_tmp/verify-always-fails.sh"
+cat >"$fix_tmp/exhaust-worker.sh" <<EXWORKER
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\${AUTONOMOUS_FIX_ATTEMPT:-worker}" >> "$fix_tmp/exhaust-worker-invocations.txt"
+printf 'dirty tracked from failed fix\n' >> "$ROOT/hire-junie.sh"
+printf 'untracked failed artifact\n' > "$ROOT/autonomous-failed-artifact.tmp"
+EXWORKER
+chmod +x "$fix_tmp/exhaust-worker.sh"
+set +e
+BACKLOG_DIR="$exhaust_backlog" MUTEX_DIR="$exhaust_mutex" OVERNIGHT_WORKER_CMD="$fix_tmp/exhaust-worker.sh" AUTONOMOUS_VERIFY_CMD="$fix_tmp/verify-always-fails.sh" ./scripts/overnight-controller.sh --state-dir "$exhaust_state" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" --max-iterations 1 --iteration-timeout 5 --fix-retries 2 >"$fix_tmp/exhaust.out" 2>"$fix_tmp/exhaust.err"
+status=$?
+set -e
+[[ "$status" -eq 1 ]] || fail "controller should exit nonzero when fix attempts are exhausted; status=$status"
+grep -q '^worker$' "$fix_tmp/exhaust-worker-invocations.txt" || fail "exhaust path missing initial worker invocation"
+grep -q '^1$' "$fix_tmp/exhaust-worker-invocations.txt" || fail "exhaust path missing fix attempt 1"
+grep -q '^2$' "$fix_tmp/exhaust-worker-invocations.txt" || fail "exhaust path missing fix attempt 2"
+grep -q '"status": "failed"' "$exhaust_state/state.json" || fail "exhaust state must be failed"
+grep -q '"phase": "verify_failed"' "$exhaust_state/state.json" || fail "exhaust state phase must be verify_failed"
+grep -q '"last_verify_status": "failed_after_fix_2"' "$exhaust_state/state.json" || fail "exhaust state must preserve final failed_after_fix status"
+grep -q '"status": "blocked"' "$exhaust_backlog/items/$exhaust_id.json" || fail "exhausted fix attempts must block the current backlog task"
+[[ ! -d "$exhaust_mutex" ]] || fail "exhausted fix attempts must release the mutex"
+grep -R -q 'cleanup_status=clean' "$exhaust_state/logs" || fail "cleanup script did not run or report clean"
+grep -R -q 'dirty tracked from failed fix' "$exhaust_state/cleanup" || fail "cleanup must preserve tracked diff before reset"
+grep -R -q 'autonomous-failed-artifact.tmp' "$exhaust_state/cleanup" || fail "cleanup must preserve untracked artifact status/name"
+[[ ! -e "$ROOT/autonomous-failed-artifact.tmp" ]] || fail "cleanup did not remove root untracked failed artifact"
+[[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail "cleanup did not restore tracked repo cleanliness"
+
+# Cleanup standalone must preserve dirty tracked and untracked temp repo state outside the repo, then clean the repo.
+cleanup_repo="$fix_tmp/cleanup-repo"
+cleanup_state="$fix_tmp/cleanup-state"
+mkdir -p "$cleanup_repo" "$cleanup_state"
+git -C "$cleanup_repo" init -q
+git -C "$cleanup_repo" config user.email verify@example.invalid
+git -C "$cleanup_repo" config user.name Verify
+printf 'base\n' > "$cleanup_repo/file.txt"
+git -C "$cleanup_repo" add file.txt
+git -C "$cleanup_repo" commit -qm base
+printf 'changed\n' >> "$cleanup_repo/file.txt"
+mkdir -p "$cleanup_repo/nested"
+printf 'untracked\n' > "$cleanup_repo/nested/artifact.txt"
+./scripts/cleanup-failed-task.sh --repo "$cleanup_repo" --state-dir "$cleanup_state" --reason "standalone cleanup regression" >"$fix_tmp/cleanup-standalone.out"
+grep -q '^cleanup_status=clean$' "$fix_tmp/cleanup-standalone.out" || fail "standalone cleanup did not report clean"
+[[ -z "$(git -C "$cleanup_repo" status --porcelain --untracked-files=all)" ]] || fail "standalone cleanup repo not clean afterward"
+[[ ! -e "$cleanup_repo/nested/artifact.txt" ]] || fail "standalone cleanup left untracked artifact in repo"
+grep -R -q 'changed' "$cleanup_state" || fail "standalone cleanup did not preserve tracked diff"
+grep -R -q 'nested/artifact.txt' "$cleanup_state" || fail "standalone cleanup did not preserve untracked status/name"
+tar_file=$(find "$cleanup_state" -name '*untracked-before.tar' -print -quit)
+[[ -n "$tar_file" ]] || fail "standalone cleanup did not preserve untracked files as tar"
+tar -tf "$tar_file" | grep -q 'nested/artifact.txt' || fail "standalone cleanup untracked tar missing artifact"
+
 log "memory size check smoke tests"
 msc_tmp="$tmp/memory_size_check"
 mkdir -p "$msc_tmp"
