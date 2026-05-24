@@ -60,40 +60,47 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - important constraints;
    - known risks and unknowns;
    - current task/backlog/PR state, if discoverable.
-4. Check for contradictions:
+4. Extract cross-cutting invariants and bypass risks from target project docs, user/team instructions, and existing workflow rules:
+   - identify rules that should apply across future features, triggers, entrypoints, or operational paths, not only the scenario that originally described them;
+   - name the shared loop or protocol that preserves each invariant, such as an implementation acceptance loop with worker/delegation/review/fix/acceptance for code-changing work;
+   - identify bypass risks where a future entrypoint could invoke implementation workers through an ad hoc path that skips the shared loop;
+   - record concise guardrails in the appropriate `MEMORY.md`, `TOOLS.md`, `docs/`, checklist, or operating protocol during initialization.
+5. Check for contradictions:
    - between user/team instructions and existing project docs;
    - between strategy, architecture, implementation, and workflow rules;
+   - between inferred cross-cutting invariants and proposed project routines;
    - between this seed guidance and the target environment.
-5. If a contradiction blocks safe initialization:
+6. If a contradiction blocks safe initialization:
    - stop changing files;
    - explain the contradiction clearly;
    - ask the most relevant person to resolve it.
-6. If initialization can proceed, update:
+7. If initialization can proceed, update:
    - `MEMORY.md` with compact always-on strategy;
    - `TOOLS.md` with local operational references;
    - relevant `docs/` files with detailed project knowledge;
    - `HEARTBEAT.md` with a short project-specific recurring checklist, only if useful.
-7. During initialization, configure the project-specific code mutex context:
+8. During initialization, configure the project-specific code mutex context:
    - identify the owned repository or feature-area scope protected by the mutex;
    - ensure `.openclaw/state/` can exist in the initialized OpenClaw workspace;
    - record the administrator/owner escalation path for held or stale mutex decisions in `TOOLS.md`;
    - add a lightweight mutex status check to `HEARTBEAT.md` or project routines only if active code work or queued code work makes it useful.
-8. Check `MEMORY.md` size after editing it. If it is too large or close to the configured budget, move details into `docs/` and keep only the strategic core in `MEMORY.md`.
-9. Decide whether initialization is complete:
+9. Check `MEMORY.md` size after editing it. If it is too large or close to the configured budget, move details into `docs/` and keep only the strategic core in `MEMORY.md`.
+10. Decide whether initialization is complete:
    - required inputs are captured or safely inferred;
    - no blocking contradiction remains;
    - owner operating preferences, durable product principles, and autonomous/proactive ownership model are recorded;
    - assignment-time instructions and important corrections are either recorded in `MEMORY.md`/`docs/`/operational notes or listed as unresolved memory/docs candidates;
    - project-specific `MEMORY.md`, `TOOLS.md`, relevant `docs/`, and any useful `HEARTBEAT.md` notes are updated;
+   - cross-cutting invariants, bypass risks, and guardrails are recorded where future work will see them;
    - the mutex scope and escalation path are configured;
    - remaining unknowns are non-blocking and recorded.
-10. Send a short completion summary:
+11. Send a short completion summary:
    - what project/area you own;
    - what mutex scope and escalation path you configured;
    - what changed at a high level;
    - unresolved non-blocking unknowns;
    - assumptions that may need future attention.
-11. Delete this file or move it to an archive location so it will not keep the workspace in initialization mode.
+12. Delete this file or move it to an archive location so it will not keep the workspace in initialization mode.
 
 ## What not to do during initialization
 

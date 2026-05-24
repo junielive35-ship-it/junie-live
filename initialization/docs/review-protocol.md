@@ -19,6 +19,9 @@ Use this file to guide implementation review before accepting worker output or o
 - Are accidental root workspace artifacts such as `AGENTS.md`, `USER.md`, `.openclaw/`, or runtime state files absent from the repo root unless intentionally tracked?
 - Did the change avoid masking workspace trash with `.gitignore`, `.git/info/exclude`, global excludes, or similar mechanisms?
 - If committed, does the commit subject describe the actual change instead of a generic iteration counter such as `Autonomous MVP loop iteration N`?
+- For any new code-changing entrypoint or trigger, does it reuse or faithfully implement the shared implementation acceptance loop: worker/delegation/review/fix/acceptance?
+- Could this new path invoke implementation workers through an ad hoc route that bypasses review, fix requests, acceptance, or user-outcome evidence? If so, reject it until the guardrail is restored.
+- Are cross-cutting invariants and bypass risks documented where future maintainers will see them?
 
 ## Outcome acceptance gate
 
