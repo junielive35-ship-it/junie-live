@@ -40,6 +40,8 @@ max_iterations=10
 iteration=0
 loop_action=""
 summary_parts=()
+acquire_id=""
+acquire_title=""
 
 add_summary() { summary_parts+=("$1"); }
 
@@ -248,3 +250,5 @@ printf 'backlog_next=%s\n' "${backlog_next:-none}"
 printf 'pr_failing=%s\n' "${pr_failing:-0}"
 printf 'pr_stale=%s\n' "${pr_stale:-0}"
 printf 'health=%s\n' "${overall_status:-UNKNOWN}"
+printf 'acquired_id=%s\n' "${acquire_id:-}"
+printf 'acquired_title=%s\n' "${acquire_title:-}"
