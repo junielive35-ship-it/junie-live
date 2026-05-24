@@ -90,8 +90,16 @@ while [[ $iteration -lt $max_iterations ]]; do
         --stale-minutes "$stale_minutes" 2>/dev/null || true
       _cont=true ;;
     start_backlog_item)
+      acquire_out=$(mktemp)
       BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
-        "$ROOT/scripts/task-acquire.sh" ;;
+        "$ROOT/scripts/task-acquire.sh" >"$acquire_out" 2>/dev/null || true
+      cat "$acquire_out"
+      acquire_mutex=$(grep '^mutex=' "$acquire_out" 2>/dev/null | sed 's/^mutex=//') || true
+      if [[ "$acquire_mutex" == "ACQUIRED" ]]; then
+        mutex="ACQUIRED"
+        backlog_in_progress=1
+      fi
+      rm -f "$acquire_out" ;;
     investigate_critical|address_failing_ci|address_stale_prs)
       fup_out=$(mktemp)
       REPO="$repo" "$ROOT/scripts/pr-follow-up.sh" \
