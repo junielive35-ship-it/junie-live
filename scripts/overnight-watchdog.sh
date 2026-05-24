@@ -140,5 +140,31 @@ else
   say "mutex_status=free"
 fi
 
+# ---- Backlog in_progress items without active owner (contract: stuck detection requirement 6) ----
+if [[ -d "$backlog_dir/items" ]]; then
+  orphan_count=0
+  for bf in "$backlog_dir/items"/*.json; do
+    [[ -f "$bf" ]] || continue
+    bstatus=$(field "$bf" status)
+    [[ "$bstatus" == "in_progress" ]] || continue
+    bupdated=$(field "$bf" updated_at)
+    bage=999999
+    if [[ -n "$bupdated" ]]; then
+      bts=$(date -d "$bupdated" +%s 2>/dev/null || echo 0)
+      bage=$(( $(date +%s) - bts ))
+    fi
+    if [[ "$bage" -gt "$stale_seconds" ]]; then
+      bid=$(field "$bf" id)
+      # Check if there is an active (non-terminal) controller that might own this item
+      if [[ "$terminal" == true || ! -f "$state_file" ]]; then
+        orphan_count=$((orphan_count + 1))
+        say "WARNING backlog item stuck in_progress without active owner: ${bid:-unknown} (age=${bage}s)"
+        [[ "$status" -lt 1 ]] && status=1
+      fi
+    fi
+  done
+  say "backlog_stuck_in_progress=$orphan_count"
+fi
+
 if [[ "$run_status" == "complete" && ! -f "$state_dir/morning-report.txt" ]]; then say "WARNING report missing after completed run"; [[ "$status" -lt 1 ]] && status=1; fi
 exit "$status"
