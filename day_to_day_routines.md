@@ -153,7 +153,7 @@ Runs on a configurable schedule.
 Responsibilities:
 
 - deduplicate tasks and hypotheses;
-- rescore after new evidence;
+- rescore after new evidence (use `scripts/backlog-rescore.sh` for age-based prioritization);
 - merge related items;
 - archive stale, invalidated, or low-value items;
 - keep execution queue understandable.

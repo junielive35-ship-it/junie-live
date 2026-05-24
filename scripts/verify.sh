@@ -23,6 +23,7 @@ bash -n scripts/drive.sh
 bash -n scripts/hypothesis-generate.sh
 bash -n scripts/pr-follow-up.sh
 bash -n scripts/reflect.sh
+bash -n scripts/backlog-rescore.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -369,6 +370,47 @@ BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --stale-queued-days 
 status=$?
 set -e
 grep -q '^stale_queued=1$' "$tmp/hygiene-stale-q.out" || fail "stale queued count should be 1"
+
+log "backlog-rescore smoke tests"
+rescore_tmp="$tmp/rescore"
+rescore_bl="$rescore_tmp/backlog"
+mkdir -p "$rescore_bl/items"
+
+BACKLOG_DIR="$rescore_bl" ./scripts/backlog.sh add --type task --title "Recent" --priority 50 >/dev/null
+recent_id=$(BACKLOG_DIR="$rescore_bl" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+
+BACKLOG_DIR="$rescore_bl" ./scripts/backlog.sh add --type hypothesis --title "Old" --priority 40 >/dev/null
+old_id=$(BACKLOG_DIR="$rescore_bl" ./scripts/backlog.sh list 2>/dev/null | tail -1 | cut -f1)
+sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "2000-01-01T00:00:00Z"/' "$rescore_bl/items/$old_id.json"
+
+# Dry-run: should show would-rescore for old item, not recent
+set +e
+BACKLOG_DIR="$rescore_bl" ./scripts/backlog-rescore.sh --dry-run --max-boost 10 >"$tmp/rescore-dry.out" 2>"$tmp/rescore-dry.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "rescore dry-run exit status was $status, expected 0"
+grep -q "WOULD_RESCORE.*$old_id" "$tmp/rescore-dry.out" || fail "rescore dry-run should propose boosting old item"
+grep -q "WOULD_RESCORE.*$recent_id" "$tmp/rescore-dry.out" && fail "rescore dry-run should NOT propose boosting recent item"
+grep -q '^rescored=1$' "$tmp/rescore-dry.out" || fail "rescore dry-run should report rescored=1"
+
+# Live run: boosts old item, not recent
+set +e
+BACKLOG_DIR="$rescore_bl" ./scripts/backlog-rescore.sh --max-boost 10 >"$tmp/rescore-live.out" 2>"$tmp/rescore-live.err"
+status=$?
+set -e
+[[ "$status" -eq 1 ]] || fail "rescore live exit status was $status, expected 1"
+old_prio=$(grep '"priority"' "$rescore_bl/items/$old_id.json" | sed 's/.*"priority"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/')
+[[ "$old_prio" -gt 40 ]] || fail "old item priority should have been boosted, got $old_prio"
+recent_prio=$(grep '"priority"' "$rescore_bl/items/$recent_id.json" | sed 's/.*"priority"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/')
+[[ "$recent_prio" -eq 50 ]] || fail "recent item priority should remain 50, got $recent_prio"
+
+# Second run with no changes: no rescore needed
+set +e
+BACKLOG_DIR="$rescore_bl" ./scripts/backlog-rescore.sh --max-boost 10 >"$tmp/rescore-idle.out" 2>"$tmp/rescore-idle.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "rescore idle exit status was $status, expected 0"
+grep -q '^rescored=0$' "$tmp/rescore-idle.out" || fail "rescore idle should report rescored=0"
 
 log "task acquire/release smoke tests"
 ta_tmp="$tmp/task_acquire"
