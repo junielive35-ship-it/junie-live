@@ -203,7 +203,7 @@ Useful routines may include:
 
 ### Admin autonomous work windows
 
-After initialization is complete, accept natural Telegram/admin intent such as "work autonomously for 4h", "поработай автономно 9 часов", "иди улучшай продукт 9 часов", or "работай над проектом до утра" as a bounded autonomous work-window request.
+After initialization is complete, accept the explicit workspace skill command `/skill autonomous-work-window 9h` as the generic command surface for a bounded autonomous work-window request. When Telegram native skill commands are enabled in OpenClaw, this skill may also appear as a native Telegram skill command depending on configuration. Natural Telegram/admin intent such as "work autonomously for 4h", "поработай автономно 9 часов", "иди улучшай продукт 9 часов", or "работай над проектом до утра" still works as an intent.
 
 Do not ask the admin to restate internal details such as repo path, backlog process, opencode model, mutex location, verification gates, meaningful commit policy, or morning report expectations. Derive those from the initialized workspace (`MEMORY.md`, `docs/`, `TOOLS.md`, repo state, and workspace `.openclaw/state`). The owner should only need to specify a goal and/or duration/end time when it is not already clear.
 
