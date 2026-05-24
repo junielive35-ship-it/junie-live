@@ -7,7 +7,7 @@ Use this file to guide implementation review before accepting worker output or o
 - If Markdown tables were added or edited, did the worker run an available Markdown/table syntax check on the affected files?
 - Is the requested work grounded in the project strategy, current implementation status, and active priorities?
 - If project docs describe the requested capability, are they clearly treated as implemented, partial, contract-only, deferred, or unknown?
-- Is there an implementation status source, backlog item, issue, or roadmap entry that future humans/agents can use to verify what is real now?
+- Is there an implementation status source, backlog item, issue, or roadmap entry that future humans/agents can use to verify what is real now? If not, should `docs/implementation-status.md` or the project equivalent be updated?
 - What is the requested user outcome in concrete, testable terms?
 - Does the change solve that requested outcome end to end, not merely add prerequisites, scaffolding, infrastructure, or docs?
 - Is there meaningful evidence for the user outcome itself, or only evidence for a partial/internal component?
