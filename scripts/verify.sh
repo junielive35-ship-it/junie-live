@@ -145,4 +145,28 @@ BACKLOG_DIR="$backlog" ./scripts/backlog.sh archive >"$tmp/bl-archive.out"
 grep -q "Archived 1 items" "$tmp/bl-archive.out" || fail "backlog archive should move done item"
 [[ -f "$backlog/archive/$add2_id.json" ]] || fail "backlog archive did not move item file"
 
+log "backlog acquire smoke tests"
+acq_backlog="$tmp/backlog_acquire"
+BACKLOG_DIR="$acq_backlog" ./scripts/backlog.sh add --type task --title "Low prio" --priority 20 >"$tmp/bl-acq-add1.out"
+acq_id1=$(cat "$tmp/bl-acq-add1.out")
+[[ -n "$acq_id1" ]] || fail "acquire add1 did not output an id"
+BACKLOG_DIR="$acq_backlog" ./scripts/backlog.sh add --type hypothesis --title "High prio" --priority 95 >"$tmp/bl-acq-add2.out"
+acq_id2=$(cat "$tmp/bl-acq-add2.out")
+[[ -n "$acq_id2" ]] || fail "acquire add2 did not output an id"
+
+BACKLOG_DIR="$acq_backlog" ./scripts/backlog.sh acquire >"$tmp/bl-acq.out"
+[[ -f "$acq_backlog/items/$acq_id2.json" ]] || fail "acquire target item missing"
+s=$(grep '"status"' "$acq_backlog/items/$acq_id2.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "in_progress" ]] || fail "acquire did not set status to in_progress, got $s"
+grep -q "id=$acq_id2" "$tmp/bl-acq.out" || fail "acquire output missing target id"
+grep -q "status=in_progress" "$tmp/bl-acq.out" || fail "acquire output missing in_progress status"
+
+BACKLOG_DIR="$acq_backlog" ./scripts/backlog.sh acquire >"$tmp/bl-acq2.out"
+s=$(grep '"status"' "$acq_backlog/items/$acq_id1.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "in_progress" ]] || fail "second acquire did not set remaining item to in_progress, got $s"
+grep -q "id=$acq_id1" "$tmp/bl-acq2.out" || fail "second acquire output missing id"
+
+BACKLOG_DIR="$acq_backlog" ./scripts/backlog.sh acquire >"$tmp/bl-acq3.out"
+[[ ! -s "$tmp/bl-acq3.out" ]] || fail "third acquire should produce no output when all items claimed"
+
 log "all checks passed"
