@@ -39,7 +39,7 @@ Start the window with the standard wrapper after initialization, normally:
 scripts/start-autonomous-window.sh --duration <resolved-duration-or-end> --background
 ```
 
-Add explicit `--workspace`, `--repo`, `--state-dir`, `--expected-branch`, controller limits, or goal/context options only when the initialized project guidance or wrapper requires them. Let the wrapper/controller handle backlog choice, sequential opencode delegation, verification, commits, watchdog/report state, and blocker handling.
+Add explicit `--workspace`, `--repo`, `--state-dir`, `--expected-branch`, controller limits, or goal/context options only when the initialized project guidance or wrapper requires them. Let the wrapper/controller handle repeated backlog choice, sequential opencode-compatible worker delegation, verification, meaningful commits, task release/blocking, mutex cleanup, watchdog/report state, and blocker handling until the requested end time, max iterations, or a blocker.
 
 ## Telegram response format
 

@@ -10,7 +10,7 @@ An administrator should be able to say, conceptually, “work overnight on backl
 
 The overnight setup is split into three cron-backed roles:
 
-1. **Controller** — starts the overnight work window, fills or refreshes the backlog, selects eligible top-priority work, verifies gates, delegates execution, and writes durable state as it progresses.
+1. **Controller** — starts the overnight work window, fills or refreshes the backlog, selects eligible top-priority work, delegates implementation through `scripts/run-backlog-worker.sh`, verifies gates, releases/updates task and mutex state, and writes durable state as it progresses.
 2. **Watchdog** — runs independently during and after the controller window to detect stuck agents, stale opencode workers, stale mutex holders, missing progress, and broken routine state. It may stop a stuck worker, preserve logs, mark work blocked, and release or transfer the mutex only according to the mutex contract.
 3. **Morning report** — summarizes what happened overnight: work attempted, backlog changes, commits/PRs, verification results, blockers, cleanup actions, and recommended next decisions.
 
@@ -32,7 +32,7 @@ The helper installs/updates OpenClaw cron jobs by default using stable `Junie Li
 
 After initialization, an administrator can ask in Telegram for bounded autonomous work with natural language such as “start autonomous loop for 4h”, “поработай автономно 9 часов”, or “работай над проектом до утра”. Junie should treat this as an operational autonomous-work request, not as a request for the admin to provide repo, backlog, mutex, opencode, verification, commit, or morning-report details.
 
-Junie resolves the duration/end time from the message, asks one concise question only when that bound is missing or ambiguous, validates initialization/repo/mutex context, and starts `scripts/start-autonomous-window.sh --duration ... --background` with explicit workspace-local state. If preflight is unsafe, it reports the blocker and points to the preflight state/log file. This on-demand window uses the same controller/watchdog/morning-report contract as cron overnight work, but it is manually triggered and bounded by the admin's requested duration rather than a scheduled cron start.
+Junie resolves the duration/end time from the message, asks one concise question only when that bound is missing or ambiguous, validates initialization/repo/mutex context, and starts `scripts/start-autonomous-window.sh --duration ... --background` with explicit workspace-local state. If preflight is unsafe, it reports the blocker and points to the preflight state/log file. This on-demand window uses the same controller/watchdog/morning-report contract as cron overnight work, but it is manually triggered and bounded by the admin's requested duration rather than a scheduled cron start. The wrapper defaults to a multi-iteration controller limit for admin windows, so a request such as `/skill autonomous-work-window 9h` can keep selecting and completing backlog items until the time bound, max iterations, or a blocker stops it.
 
 ## Expected state and log files
 
@@ -66,7 +66,7 @@ Detection must prefer concrete evidence: mutex metadata, routine state, process/
 
 The controller must check the code-change mutex before starting code-changing work. If the mutex is held, the controller records the holder summary and either waits, skips code work, or follows an administrator-approved override policy. It must not rely on manual mutex checks by the administrator.
 
-Every delegated worker must have explicit timeouts and an expected next action. On timeout or stuck detection, the watchdog must:
+Every delegated worker must have explicit timeouts and an expected next action. `scripts/run-backlog-worker.sh` is the opencode-compatible worker boundary: it writes prompts/logs under workspace state, accepts `AUTONOMOUS_WORKER_CMD`/`--worker-cmd-template` for noninteractive workers, passes backlog item context, and blocks explicitly if no worker command/opencode CLI is available. On timeout or stuck detection, the watchdog must:
 
 1. preserve relevant logs and state;
 2. stop or mark the worker/session as cancelled when safe;

@@ -6,7 +6,7 @@ repo="$ROOT"
 workspace="${HOME:-$ROOT}/.openclaw/workspace-junie-live"
 state_dir=""
 expected_branch="${OVERNIGHT_EXPECTED_BRANCH:-junie/autonomous-mvp-loop}"
-max_iterations="${OVERNIGHT_MAX_ITERATIONS:-1}"
+max_iterations="${OVERNIGHT_MAX_ITERATIONS:-99}"
 iteration_timeout="${OVERNIGHT_ITERATION_TIMEOUT_SECONDS:-900}"
 duration=""
 hours=""
@@ -14,6 +14,7 @@ dry_run=false
 background=false
 allow_main_for_tests=false
 allow_dirty_for_tests="${AUTONOMOUS_ALLOW_DIRTY_FOR_TESTS:-false}"
+skip_verify=false
 worker_cmd="${OVERNIGHT_WORKER_CMD:-}"
 
 usage() {
@@ -34,6 +35,7 @@ Options:
   --worker-cmd CMD           Optional worker command override, mainly for tests
   --background               Start controller in the background and return status quickly
   --dry-run                  Print planned command/state without starting long work
+  --skip-verify              Pass through to controller (mainly tests)
   --allow-main-for-tests     Permit main branch only for isolated tests
 USAGE
 }
@@ -51,6 +53,7 @@ while [[ $# -gt 0 ]]; do
     --worker-cmd) worker_cmd="$2"; shift 2 ;;
     --background) background=true; shift ;;
     --dry-run) dry_run=true; shift ;;
+    --skip-verify) skip_verify=true; shift ;;
     --allow-main-for-tests) allow_main_for_tests=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'Unknown: %s\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -139,6 +142,9 @@ cmd=("$repo/scripts/overnight-controller.sh"
   --end-epoch "$end_epoch")
 if [[ -n "$worker_cmd" ]]; then
   cmd+=(--worker-cmd "$worker_cmd")
+fi
+if $skip_verify; then
+  cmd+=(--skip-verify)
 fi
 
 cat >"$window_state" <<JSON
