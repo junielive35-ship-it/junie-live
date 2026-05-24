@@ -10,7 +10,7 @@ state_dir="${AUTONOMOUS_WORKER_STATE_DIR:-$(junie_autonomous_worker_state_dir_de
 worker_cmd_template="${AUTONOMOUS_WORKER_CMD:-}"
 timeout_seconds="${AUTONOMOUS_WORKER_TIMEOUT_SECONDS:-0}"
 opencode_bin="${AUTONOMOUS_OPENCODE_BIN:-}"
-opencode_model="${AUTONOMOUS_OPENCODE_MODEL:-anthropic/claude-opus-4.5}"
+opencode_model="${AUTONOMOUS_OPENCODE_MODEL:-openrouter/anthropic/claude-opus-4.6}"
 opencode_variant="${AUTONOMOUS_OPENCODE_VARIANT:-low}"
 opencode_agent="${AUTONOMOUS_OPENCODE_AGENT:-build}"
 item_id=""
@@ -115,6 +115,14 @@ if [[ -z "$worker_cmd_template" ]]; then
   use_default_opencode=true
 fi
 
+if [[ "$use_default_opencode" == true && -z "${OPENROUTER_API_KEY:-}" && -f "${HOME:-}/openrouter.key" ]]; then
+  openrouter_key="$(tr -d '\r\n' <"${HOME}/openrouter.key")"
+  if [[ -n "$openrouter_key" ]]; then
+    export OPENROUTER_API_KEY="$openrouter_key"
+  fi
+  unset openrouter_key
+fi
+
 export AUTONOMOUS_ITEM_ID="$item_id"
 export AUTONOMOUS_ITEM_TITLE="$item_title"
 export AUTONOMOUS_ITEM_TYPE="$item_type"
@@ -160,7 +168,7 @@ if [[ "$use_default_opencode" == true ]] && grep -Eiq 'model not found|invalid m
   printf 'item_id=%s\nexit_status=%s\nlog_file=%s\n' "$item_id" "$status" "$log_file"
   printf 'reason=opencode model/provider configuration failed before work started\n'
   printf 'opencode_model=%s\nopencode_variant=%s\nopencode_agent=%s\n' "$opencode_model" "$opencode_variant" "$opencode_agent"
-  printf 'diagnostic=opencode requires a configured provider/model. With OpenRouter, OpenCode reports model names without the openrouter/ prefix in suggestions (for example anthropic/claude-opus-4.5), while the OpenRouter provider/credential must be configured separately. Allowed production providers are OpenAI GPT-5.2+, Anthropic Sonnet/Opus 4.6+, or Google Gemini 3.1 Pro+. Run: %q models and %q auth list; then set AUTONOMOUS_OPENCODE_MODEL to an available allowed model.\n' "$opencode_bin" "$opencode_bin"
+  printf 'diagnostic=opencode requires a configured provider/model. The production default is OpenRouter Claude Opus 4.6 (%s); if OPENROUTER_API_KEY is unset, the worker loads $HOME/openrouter.key for the opencode subprocess when present. Allowed production providers are OpenAI GPT-5.2+, Anthropic Sonnet/Opus 4.6+, or Google Gemini 3.1 Pro+. Run: %q models and %q auth list; then set AUTONOMOUS_OPENCODE_MODEL to an available allowed model.\n' "$opencode_model" "$opencode_bin" "$opencode_bin"
   opencode_config_diagnostics
   exit 2
 fi
