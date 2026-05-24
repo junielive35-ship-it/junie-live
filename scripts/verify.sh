@@ -847,4 +847,84 @@ set -e
 [[ "$status" -eq 0 ]] || fail "post-hypothesis next-action exit status was $status, expected 0"
 grep -q '^action=idle$' "$tmp/hg-next-idle.out" || fail "post-hypothesis next-action should idle"
 
+log "drive smoke tests"
+drive_tmp="$tmp/drive"
+drive_backlog="$drive_tmp/backlog"
+drive_hyp_state="$drive_tmp/hyp_state"
+
+# Empty backlog + free mutex + recent hypotheses -> idle
+mkdir -p "$drive_backlog/items" "$drive_hyp_state"
+date -u +%s > "$drive_hyp_state/last_generated"
+set +e
+HYPOTHESIS_STATE_DIR="$drive_hyp_state" BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_tmp/mutex_free" \
+  ./scripts/drive.sh >"$tmp/drive-idle.out" 2>"$tmp/drive-idle.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "idle drive exit status was $status, expected 0"
+grep -q '^action=idle$' "$tmp/drive-idle.out" || fail "idle action not found"
+
+# Empty backlog + free mutex + no recent hypotheses -> generate_hypotheses
+rm -f "$drive_hyp_state/last_generated"
+set +e
+HYPOTHESIS_STATE_DIR="$drive_hyp_state" BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_tmp/mutex_free" \
+  ./scripts/drive.sh >"$tmp/drive-hyp.out" 2>"$tmp/drive-hyp.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "generate hypotheses drive exit status was $status, expected 0"
+grep -q '^action=generate_hypotheses$' "$tmp/drive-hyp.out" || fail "generate_hypotheses action not found"
+
+# Held mutex -> wait_for_mutex
+mkdir -p "$drive_tmp/mutex_held"
+cat > "$drive_tmp/mutex_held/holder.json" <<'JSON'
+{"holder_id":"test-holder","reason":"drive held test","started_at":"2999-01-01T00:00:00Z","updated_at":"2999-01-01T00:02:00Z"}
+JSON
+set +e
+HYPOTHESIS_STATE_DIR="$drive_hyp_state" BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_tmp/mutex_held" \
+  ./scripts/drive.sh >"$tmp/drive-held.out" 2>"$tmp/drive-held.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "held mutex drive exit status was $status, expected 0"
+grep -q '^action=wait_for_mutex$' "$tmp/drive-held.out" || fail "wait_for_mutex action not found"
+
+# Queued item + free mutex -> start_backlog_item (acquires task + mutex)
+drive_start_bl="$drive_tmp/bl_start"
+BACKLOG_DIR="$drive_start_bl" ./scripts/backlog.sh add --type task --title "Drive start test" --priority 90 >/dev/null
+set +e
+BACKLOG_DIR="$drive_start_bl" MUTEX_DIR="$drive_tmp/mutex_start" \
+  ./scripts/drive.sh >"$tmp/drive-start.out" 2>"$tmp/drive-start.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "start backlog item drive exit status was $status, expected 0"
+grep -q '^action=start_backlog_item$' "$tmp/drive-start.out" || fail "start_backlog_item action not found"
+[[ -d "$drive_tmp/mutex_start" ]] || fail "mutex was not acquired"
+[[ -f "$drive_tmp/mutex_start/holder.json" ]] || fail "holder.json not written"
+
+# Stale mutex -> calls mutex-release-stale.sh, mutex removed
+drive_stale_mutex="$drive_tmp/mutex_stale"
+mkdir -p "$drive_stale_mutex"
+cat > "$drive_stale_mutex/holder.json" <<'JSON'
+{"holder_id":"dead-worker","reason":"drive stale test","started_at":"2000-01-01T00:00:00Z","updated_at":"2000-01-01T00:05:00Z"}
+JSON
+set +e
+BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_stale_mutex" \
+  ./scripts/drive.sh --stale-minutes 1 >"$tmp/drive-stale.out" 2>"$tmp/drive-stale.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "stale mutex drive exit status was $status, expected 0"
+grep -q '^action=release_stale_mutex$' "$tmp/drive-stale.out" || fail "release_stale_mutex action not found"
+[[ ! -d "$drive_stale_mutex" ]] || fail "stale mutex dir should be removed"
+
+# Broken mutex -> calls mutex-release-stale.sh (fix_mutex action), mutex removed
+drive_broken_mutex="$drive_tmp/mutex_broken"
+mkdir -p "$drive_broken_mutex"
+printf 'not json\n' > "$drive_broken_mutex/holder.json"
+set +e
+BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_broken_mutex" \
+  ./scripts/drive.sh >"$tmp/drive-broken.out" 2>"$tmp/drive-broken.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "broken mutex drive exit status was $status, expected 0"
+grep -q '^action=fix_mutex$' "$tmp/drive-broken.out" || fail "fix_mutex action not found"
+[[ ! -d "$drive_broken_mutex" ]] || fail "broken mutex dir should be removed"
+
 log "all checks passed"
