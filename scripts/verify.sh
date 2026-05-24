@@ -14,6 +14,7 @@ bash -n scripts/backlog.sh
 bash -n scripts/routine-health.sh
 bash -n scripts/backlog-hygiene.sh
 bash -n scripts/pr-status.sh
+bash -n scripts/report.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -456,5 +457,67 @@ set -e
 [[ "$status" -eq 1 ]] || fail "stale pr exit status was $status, expected 1"
 grep -q '^stale_prs=1$' "$tmp/pr-stale.out" || fail "stale pr count wrong"
 grep -q 'PR #77 stale' "$tmp/pr-stale.out" || fail "stale pr not in details"
+
+log "report smoke tests"
+report_tmp="$tmp/report"
+mkdir -p "$report_tmp/items"
+
+# Empty backlog + free mutex + no gh -> OK
+set +e
+BACKLOG_DIR="$report_tmp" ./scripts/report.sh >"$tmp/report-empty.out" 2>"$tmp/report-empty.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "empty report exit status was $status, expected 0"
+grep -q '^status=OK$' "$tmp/report-empty.out" || fail "empty report status not OK"
+grep -q '^mutex=FREE$' "$tmp/report-empty.out" || fail "empty report mutex not FREE"
+grep -q '^backlog_total=0$' "$tmp/report-empty.out" || fail "empty report backlog_total not 0"
+grep -q '^pr_check_available=false$' "$tmp/report-empty.out" || fail "empty report pr check not false"
+grep -q '^summary=' "$tmp/report-empty.out" || fail "empty report missing summary"
+
+# Held mutex + backlog items -> OK with relevant fields
+report_mutex="$report_tmp/mutex"
+mkdir -p "$report_mutex"
+BACKLOG_DIR="$report_tmp" ./scripts/backlog.sh add --type task --title "Report task" --priority 50 >/dev/null
+cat > "$report_mutex/holder.json" <<'JSON'
+{
+  "holder_id": "report-worker",
+  "reason": "report smoke test",
+  "started_at": "2999-01-01T00:00:00Z",
+  "updated_at": "2999-01-01T00:02:00Z",
+  "expected_next_action": "finish smoke test"
+}
+JSON
+set +e
+BACKLOG_DIR="$report_tmp" MUTEX_DIR="$report_mutex" ./scripts/report.sh >"$tmp/report-held.out" 2>"$tmp/report-held.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "held report exit status was $status, expected 0"
+grep -q '^status=OK$' "$tmp/report-held.out" || fail "held report status not OK"
+grep -q '^mutex=HELD$' "$tmp/report-held.out" || fail "held report mutex not HELD"
+grep -q '^backlog_total=1$' "$tmp/report-held.out" || fail "held report backlog_total not 1"
+grep -q '^backlog_queued=1$' "$tmp/report-held.out" || fail "held report backlog_queued not 1"
+
+# All checks pass with correct combined exit
+Rval=$(grep '^mutex=' "$tmp/report-empty.out" | sed 's/^mutex=//')
+Bval=$(grep '^backlog_total=' "$tmp/report-empty.out" | sed 's/^backlog_total=//')
+[[ "$Rval" == "FREE" ]] || fail "report.sh mutex value incorrect: $Rval"
+[[ "$Bval" == "0" ]] || fail "report.sh backlog_total value incorrect: $Bval"
+
+# Stale mutex -> CRITICAL
+cat > "$report_mutex/holder.json" <<'JSON'
+{
+  "holder_id": "dead-worker",
+  "reason": "stale report test",
+  "started_at": "2000-01-01T00:00:00Z",
+  "updated_at": "2000-01-01T00:05:00Z"
+}
+JSON
+set +e
+BACKLOG_DIR="$report_tmp" MUTEX_DIR="$report_mutex" ./scripts/report.sh --stale-minutes 1 >"$tmp/report-stale.out" 2>"$tmp/report-stale.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "stale report exit status was $status, expected 2"
+grep -q '^status=CRITICAL$' "$tmp/report-stale.out" || fail "stale report status not CRITICAL"
+grep -q '^mutex=STALE$' "$tmp/report-stale.out" || fail "stale report mutex not STALE"
 
 log "all checks passed"
