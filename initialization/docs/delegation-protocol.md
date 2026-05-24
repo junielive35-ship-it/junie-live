@@ -12,6 +12,8 @@ Use this file to guide coding-worker or subagent delegation for the assigned pro
 - Code-changing opencode workers run sequentially under the code mutex unless an approved isolation strategy exists. The mutex is the atomic lock directory `.openclaw/state/code_mutex/` with holder metadata in `holder.json`.
 - Markdown-only direct edits still need normal strategic/context review and must follow approval rules for semantic changes.
 - Prompts should include relevant goal, constraints, architecture notes, verification expectations, and non-goals.
+- Prompts must include the requested user outcome in concrete terms and ask the worker to report `outcome_status=done|partial|blocked`, with gaps if not done.
+- Worker handoffs must distinguish user-visible outcome evidence from internal/scaffolding evidence. Passing helper-script tests is not enough when the user requested an end-to-end behavior.
 - Worker handoffs must include `git status --short --branch --untracked-files=all` for the owned repo after work. The final status should be clean or list only intentional changes.
 - Workers must treat root workspace artifacts such as `AGENTS.md`, `USER.md`, `.openclaw/`, and similar runtime files in the repo root as mistakes unless the repo intentionally tracks them. They must prevent or clean these artifacts, not hide them with `.gitignore`, `.git/info/exclude`, or other exclude masks.
 - Autonomous/worker commit subjects must summarize actual changes; reject generic iteration counters such as `Autonomous MVP loop iteration N`.
@@ -29,7 +31,11 @@ Constraints and non-goals:
 
 Expected output:
 
-Verification required:
+Requested user outcome / acceptance criteria:
+
+Verification required, including user-outcome evidence:
+
+Outcome status to report (`done`, `partial`, or `blocked`) and any gaps:
 
 Risks/questions to report:
 ```
