@@ -204,7 +204,7 @@ git status --short --branch --untracked-files=all
 
 The final state should be clean, or contain only intentional changes that are explicitly called out in the handoff.
 
-Root workspace artifacts such as `AGENTS.md`, `USER.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `HEARTBEAT.md`, `.openclaw/`, or runtime state files appearing in the target repo root are mistakes unless that repo intentionally tracks them. Prevent these artifacts from being created in the repo; if they appear, clean them up and verify status again.
+Root workspace artifacts such as `AGENTS.md`, `USER.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `HEARTBEAT.md`, `.openclaw/`, `state/`, or other runtime state files appearing in the target repo root are mistakes unless that repo intentionally tracks them. Prevent these artifacts from being created in the repo; if they appear, clean them up and verify status again. Runtime state defaults should point to an initialized workspace (for example `${JUNIE_WORKSPACE:-$HOME/.openclaw/workspace-<project>}/.openclaw/state/...`) or an explicit temp dir in tests, never the repo root. Do not run workspace bootstrap with the target repo root as the workspace.
 
 Do not hide accidental runtime/workspace trash with `.gitignore`, `.git/info/exclude`, global excludes, or similar masking. Fix the cause or remove the trash instead.
 

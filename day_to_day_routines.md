@@ -46,7 +46,7 @@ Flow:
 8. Open or update a GitHub pull request.
 9. Release mutex when the code-changing work is done, blocked, cancelled, or handed off.
 
-Concrete mutex state lives in `.openclaw/state/code_mutex/holder.json` inside the initialized OpenClaw workspace. The lock is acquired by atomically creating `.openclaw/state/code_mutex/`; the metadata JSON is only for human-readable state and does not provide atomicity.
+Concrete mutex state lives in `.openclaw/state/code_mutex/holder.json` inside the initialized OpenClaw workspace, not in the repo root. The lock is acquired by atomically creating `.openclaw/state/code_mutex/`; the metadata JSON is only for human-readable state and does not provide atomicity. Repo scripts default runtime state to `${JUNIE_WORKSPACE:-$HOME/.openclaw/workspace-junie-live}/.openclaw/state/...`; tests may override with temp dirs, but production/default runs must never create repo-root `.openclaw/` or `state/`.
 
 If the mutex is already held, do not start code-changing work. Cron/scheduled jobs ask the configured administrator/owner whether to wait, abort, or override. Telegram intake asks the caller the same question and includes the current holder summary when available.
 
@@ -236,3 +236,8 @@ Autonomous windows retry verification failures up to 7 fixes, then block, releas
 ## Autonomous window local failures
 
 Use `scripts/start-autonomous-window.sh` for admin work windows. It continues after safe local task failures by default (`--continue-on-local-failure --max-local-failures 3`), blocking and cleaning the failed task before selecting the next one. Stop and inspect state/logs if the controller reports `cleanup_failed` or `too_many_local_failures`.
+
+
+## Repo Root Hygiene
+
+Do not run OpenClaw workspace bootstrap with this git repo as the workspace. Root files such as `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `USER.md`, `HEARTBEAT.md`, `IDENTITY.md`, `.openclaw/`, and `state/` are runtime/workspace artifacts here and must be prevented or cleaned, not hidden with `.gitignore` or `.git/info/exclude`. Use `scripts/check-repo-hygiene.sh` or `scripts/verify.sh` before accepting autonomous work.

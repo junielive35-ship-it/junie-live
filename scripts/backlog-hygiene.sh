@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
+# shellcheck source=scripts/runtime-paths.sh
+source "$ROOT/scripts/runtime-paths.sh"
+backlog_dir="${BACKLOG_DIR:-$(junie_backlog_dir_default)}"
 items_dir="$backlog_dir/items"
 archive_dir="$backlog_dir/archive"
 stale_minutes=120

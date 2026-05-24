@@ -10,6 +10,8 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log "bash syntax"
 bash -n hire-junie.sh
 bash -n scripts/code-mutex-status.sh
+bash -n scripts/runtime-paths.sh
+bash -n scripts/check-repo-hygiene.sh
 bash -n scripts/backlog.sh
 bash -n scripts/routine-health.sh
 bash -n scripts/backlog-hygiene.sh
@@ -233,8 +235,11 @@ if 'HOME dot-opencode fallback must work when PATH lacks opencode.' not in argv[
     sys.exit(1)
 PY
 
+log "repo hygiene preflight"
+./scripts/check-repo-hygiene.sh >/dev/null
+
 log "repo workspace artifact hygiene"
-workspace_artifacts=(AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw)
+workspace_artifacts=(AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw state)
 for artifact in "${workspace_artifacts[@]}"; do
   [[ ! -e "$artifact" ]] || fail "root workspace artifact must not exist in repo: $artifact"
 done
@@ -252,8 +257,9 @@ fi
 log "hire-junie smoke tests"
 tmp="$(mktemp -d)"
 cleanup() {
-  rm -rf "$tmp" "$auto_tmp"
-  rm -rf "$ROOT/state"
+  rm -rf "${tmp:-}" "${auto_tmp:-}" "${runtime_tmp:-}"
+  rm -rf "$ROOT/state" "$ROOT/.openclaw"
+  rm -f "$ROOT/AGENTS.md" "$ROOT/SOUL.md" "$ROOT/USER.md" "$ROOT/TOOLS.md" "$ROOT/IDENTITY.md" "$ROOT/HEARTBEAT.md"
 }
 trap cleanup EXIT
 mkdir -p "$tmp/bin" "$tmp/seed"
@@ -1340,11 +1346,12 @@ grep -q 'update-branch' "$gh_log" && fail "fup dry-run should not call gh pr upd
 
 log "report smoke tests"
 report_tmp="$tmp/report"
+report_free_mutex="$tmp/report-free-mutex"
 mkdir -p "$report_tmp/items"
 
 # Empty backlog + free mutex + no gh -> OK
 set +e
-BACKLOG_DIR="$report_tmp" ./scripts/report.sh >"$tmp/report-empty.out" 2>"$tmp/report-empty.err"
+BACKLOG_DIR="$report_tmp" MUTEX_DIR="$report_free_mutex" ./scripts/report.sh >"$tmp/report-empty.out" 2>"$tmp/report-empty.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "empty report exit status was $status, expected 0"
@@ -1428,11 +1435,13 @@ grep -q '^mutex=STALE$' "$tmp/report-stale.out" || fail "stale report mutex not 
 
 log "next-action smoke tests"
 na_tmp="$tmp/next_action"
+na_mutex_free="$tmp/next_action_mutex_free"
+na_hyp_empty="$tmp/next_action_hyp_empty"
 
 # Empty backlog + free mutex + no gh + no last_generated -> generate_hypotheses
 mkdir -p "$na_tmp/items"
 set +e
-BACKLOG_DIR="$na_tmp" ./scripts/next-action.sh >"$tmp/na-hyp-gen.out" 2>"$tmp/na-hyp-gen.err"
+BACKLOG_DIR="$na_tmp" MUTEX_DIR="$na_mutex_free" HYPOTHESIS_STATE_DIR="$na_hyp_empty" ./scripts/next-action.sh >"$tmp/na-hyp-gen.out" 2>"$tmp/na-hyp-gen.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "hyp-gen next-action exit status was $status, expected 0"
@@ -1444,7 +1453,7 @@ na_hyp_state="$na_tmp/hypothesis"
 mkdir -p "$na_hyp_state"
 date -u +%s > "$na_hyp_state/last_generated"
 set +e
-HYPOTHESIS_STATE_DIR="$na_hyp_state" BACKLOG_DIR="$na_tmp" ./scripts/next-action.sh >"$tmp/na-idle.out" 2>"$tmp/na-idle.err"
+HYPOTHESIS_STATE_DIR="$na_hyp_state" BACKLOG_DIR="$na_tmp" MUTEX_DIR="$na_mutex_free" ./scripts/next-action.sh >"$tmp/na-idle.out" 2>"$tmp/na-idle.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "idle next-action exit status was $status, expected 0"
@@ -1455,7 +1464,7 @@ grep -q '^mutex=FREE' "$tmp/na-idle.out" || fail "idle next-action mutex not FRE
 na_backlog="$na_tmp/with_item"
 BACKLOG_DIR="$na_backlog" ./scripts/backlog.sh add --type task --title "Next action task" --priority 80 >/dev/null
 set +e
-BACKLOG_DIR="$na_backlog" ./scripts/next-action.sh >"$tmp/na-work.out" 2>"$tmp/na-work.err"
+BACKLOG_DIR="$na_backlog" MUTEX_DIR="$na_mutex_free" HYPOTHESIS_STATE_DIR="$na_hyp_state" ./scripts/next-action.sh >"$tmp/na-work.out" 2>"$tmp/na-work.err"
 status=$?
 set -e
 [[ "$status" -eq 1 ]] || fail "work next-action exit status was $status, expected 1"
@@ -1519,7 +1528,7 @@ stale_ip_id=$(BACKLOG_DIR="$na_stale_ip" ./scripts/backlog.sh next | grep '^id='
 [[ -n "$stale_ip_id" ]] || fail "stale_ip add failed"
 sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "in_progress"/' "$na_stale_ip/items/$stale_ip_id.json"
 set +e
-BACKLOG_DIR="$na_stale_ip" ./scripts/next-action.sh >"$tmp/na-stale-ip.out" 2>"$tmp/na-stale-ip.err"
+BACKLOG_DIR="$na_stale_ip" MUTEX_DIR="$na_mutex_free" HYPOTHESIS_STATE_DIR="$na_hyp_state" ./scripts/next-action.sh >"$tmp/na-stale-ip.out" 2>"$tmp/na-stale-ip.err"
 status=$?
 set -e
 [[ "$status" -eq 1 ]] || fail "stale_ip next-action exit status was $status, expected 1"
@@ -1531,6 +1540,7 @@ log "hypothesis generate smoke tests"
 hg_tmp="$tmp/hypothesis_gen"
 hg_backlog="$hg_tmp/backlog"
 hg_hyp_state="$hg_tmp/hypothesis"
+hg_mutex_free="$hg_tmp/mutex_free"
 
 # Missing --title -> exit 2
 set +e
@@ -1561,7 +1571,7 @@ s=$(grep '"source"' "$hg_backlog/items/$hg_id.json" | sed 's/.*"source"[[:space:
 BACKLOG_DIR="$hg_backlog" ./scripts/backlog.sh update "$hg_id" --status done >/dev/null
 BACKLOG_DIR="$hg_backlog" ./scripts/backlog.sh archive >/dev/null
 set +e
-BACKLOG_DIR="$hg_backlog" HYPOTHESIS_STATE_DIR="$hg_hyp_state" \
+BACKLOG_DIR="$hg_backlog" HYPOTHESIS_STATE_DIR="$hg_hyp_state" MUTEX_DIR="$hg_mutex_free" \
   ./scripts/next-action.sh --hypothesis-interval-hours 1 >"$tmp/hg-next-idle.out" 2>"$tmp/hg-next-idle.err"
 status=$?
 set -e
@@ -1995,3 +2005,6 @@ items_after2=$(find "$msc_bl3/items/" -name '*.json' 2>/dev/null | wc -l)
 [[ "$items_after2" -eq "$items_after1" ]] || fail "second call should not create duplicate candidate"
 
 log "all checks passed"
+
+log "repo hygiene final"
+./scripts/check-repo-hygiene.sh >/dev/null

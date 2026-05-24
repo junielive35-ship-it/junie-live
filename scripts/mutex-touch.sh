@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-mutex_dir="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}"
+# shellcheck source=scripts/runtime-paths.sh
+source "$ROOT/scripts/runtime-paths.sh"
+mutex_dir="${MUTEX_DIR:-$(junie_mutex_dir_default)}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

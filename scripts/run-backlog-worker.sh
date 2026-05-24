@@ -2,9 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/runtime-paths.sh
+source "$ROOT/scripts/runtime-paths.sh"
 repo="${REPO:-$ROOT}"
-backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
-state_dir="${AUTONOMOUS_WORKER_STATE_DIR:-${HOME:-$ROOT}/.openclaw/workspace-junie-live/.openclaw/state/autonomous-worker}"
+backlog_dir="${BACKLOG_DIR:-$(junie_backlog_dir_default)}"
+state_dir="${AUTONOMOUS_WORKER_STATE_DIR:-$(junie_autonomous_worker_state_dir_default)}"
 worker_cmd_template="${AUTONOMOUS_WORKER_CMD:-}"
 timeout_seconds="${AUTONOMOUS_WORKER_TIMEOUT_SECONDS:-0}"
 opencode_bin="${AUTONOMOUS_OPENCODE_BIN:-}"
