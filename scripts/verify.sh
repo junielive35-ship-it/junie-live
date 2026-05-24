@@ -50,6 +50,33 @@ while IFS= read -r file; do
   done < <(grep -oE '\[[^]]+\]\([^)]+\)' "$file" | sed -E 's/^.*\(([^)]+)\)$/\1/' || true)
 done < <(find . -path './.git' -prune -o -name '*.md' -type f -print)
 
+log "md consistency scan"
+mc_base="$(mktemp -d)"
+./scripts/md-consistency.sh >"$mc_base/md-consistency.out"
+grep -q '^checked=' "$mc_base/md-consistency.out" || fail "md-consistency missing checked count"
+mc_count=$(grep '^checked=' "$mc_base/md-consistency.out" | sed 's/^checked=//')
+[[ "$mc_count" -ge 10 ]] || fail "md-consistency checked too few refs: $mc_count"
+grep -q '^broken=0$' "$mc_base/md-consistency.out" || fail "md-consistency found broken refs in repo docs: $(cat "$mc_base/md-consistency.out")"
+
+mc_tmp="$mc_base/synthetic"
+mkdir -p "$mc_tmp/scripts"
+printf '#!/bin/true\n' > "$mc_tmp/scripts/exists.sh"
+printf '# Test\n\nSee `scripts/exists.sh` and `missing-script.sh`.\n' > "$mc_tmp/test.md"
+set +e
+./scripts/md-consistency.sh --repo "$mc_tmp" >"$mc_base/mc-broken.out" 2>"$mc_base/mc-broken.err"
+mc_status=$?
+set -e
+[[ "$mc_status" -eq 1 ]] || fail "md-consistency should exit 1 when broken refs found"
+grep -q '^broken=1$' "$mc_base/mc-broken.out" || fail "md-consistency should report 1 broken ref"
+grep -q 'missing-script.sh' "$mc_base/mc-broken.out" || fail "md-consistency should report missing-script.sh"
+
+mc_ws="$mc_base/workspace"
+mkdir -p "$mc_ws"
+printf '# Test\n\nReads `USER.md` for prefs.\n' > "$mc_ws/test.md"
+./scripts/md-consistency.sh --repo "$mc_ws" >"$mc_base/mc-workspace.out"
+grep -q '^broken=0$' "$mc_base/mc-workspace.out" || fail "md-consistency should not flag workspace .md files"
+rm -rf "$mc_base"
+
 
 log "overnight routines contract"
 contract="docs/overnight-routines.md"
