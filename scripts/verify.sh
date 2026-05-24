@@ -88,6 +88,9 @@ printf '%s\n' "$*" >> "${OPENCLAW_STUB_LOG:?}"
 case "$*" in
   "agents list") exit 0 ;;
   "devices approve --latest") exit 0 ;;
+  "cron list --agent junie-live --all --json") printf '{"jobs":[]}\n'; exit 0 ;;
+  cron\ add*) exit 0 ;;
+  cron\ rm*) exit 0 ;;
 esac
 exit 0
 STUB
@@ -100,6 +103,9 @@ PATH="$tmp/bin:$PATH" HOME="$tmp/home" OPENCLAW_STUB_LOG="$log_file" \
 
 grep -q 'Junie hiring configured.' "$tmp/success.out" || fail "success smoke did not complete"
 grep -q '^agents add junie-live ' "$log_file" || fail "agents add not called"
+agent_line=$(grep -n '^agents add junie-live ' "$log_file" | head -1 | cut -d: -f1)
+cron_line=$(grep -n '^cron add --name Junie Live overnight controller (junie-live) ' "$log_file" | head -1 | cut -d: -f1)
+[[ -n "$cron_line" && "$agent_line" -lt "$cron_line" ]] || fail "overnight cron install must happen after agent creation"
 grep -q '^channels add --channel telegram --account junie-live --token test-token$' "$log_file" || fail "channels add not called with expected account/token"
 grep -q '^config patch --file ' "$log_file" || fail "config patch not called"
 grep -q '^agents bind --agent junie-live --bind telegram:junie-live$' "$log_file" || fail "agents bind not called"
@@ -115,6 +121,14 @@ grep -q '/usr/bin/env bash' "$cron_json" || fail "cron commands must use explici
 grep -q 'OCL_NONINTERACTIVE=1' "$cron_json" || fail "cron commands must be non-interactive"
 grep -q 'state_dir' "$cron_json" || fail "cron definitions must include explicit state_dir"
 grep -q "$tmp/home/.openclaw/workspace-junie-live/.openclaw/state/overnight" "$cron_json" || fail "cron definitions must include workspace state dir"
+grep -q '^cron list --agent junie-live --all --json$' "$log_file" || fail "cron installer did not list existing OpenClaw jobs"
+grep -q '^cron add --name Junie Live overnight controller (junie-live) ' "$log_file" || fail "cron installer did not add controller"
+grep -q '^cron add --name Junie Live overnight watchdog (junie-live) ' "$log_file" || fail "cron installer did not add watchdog"
+grep -q '^cron add --name Junie Live overnight morning-report (junie-live) ' "$log_file" || fail "cron installer did not add morning report"
+grep -q -- '--session isolated' "$log_file" || fail "cron jobs must use isolated sessions"
+grep -q -- '--agent junie-live' "$log_file" || fail "cron jobs must target Junie agent"
+grep -q -- '--tools exec,read' "$log_file" || fail "cron jobs must allow exec/read tools"
+grep -q -- '--no-deliver' "$log_file" || fail "cron jobs must not rely on delivery"
 [[ ! -e "$ROOT/.openclaw/cron/overnight-routines.json" ]] || fail "cron helper wrote repo root artifact"
 
 set +e
@@ -138,6 +152,27 @@ grep -q 'exec /usr/bin/env bash' "$helper_json" || fail "helper commands must be
 grep -q 'OCL_NONINTERACTIVE=1' "$helper_json" || fail "helper commands must set non-interactive env"
 grep -q '"state_dir":' "$helper_json" || fail "helper definitions must include explicit state dirs"
 grep -q "$cron_tmp/workspace/.openclaw/state/overnight" "$helper_json" || fail "helper definitions must point state into initialized workspace"
+grep -q 'DRY-RUN: openclaw cron list --agent verify-junie --all --json' "$tmp/cron-helper.out" || fail "dry-run must not execute real cron list"
+grep -Fq 'DRY-RUN: openclaw cron add --name Junie\ Live\ overnight\ controller' "$tmp/cron-helper.out" || fail "dry-run must show controller add"
+grep -q -- '--session isolated' "$tmp/cron-helper.out" || fail "dry-run add must use isolated sessions"
+grep -Fq -- '--tools exec\,read' "$tmp/cron-helper.out" || fail "dry-run add must include exec/read allowlist"
+grep -q -- '--state-dir' "$tmp/cron-helper.out" || fail "dry-run prompt must include explicit state dir command"
+
+install_log="$tmp/cron-install.log"
+cat > "$tmp/bin/openclaw-install" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${OPENCLAW_STUB_LOG:?}"
+if [[ "$*" == "cron list --agent verify-junie --all --json" ]]; then
+  printf '{"jobs":[{"id":"old-controller","name":"Junie Live overnight controller (verify-junie)","agent":"verify-junie"}]}\n'
+fi
+STUB
+chmod +x "$tmp/bin/openclaw-install"
+OPENCLAW_STUB_LOG="$install_log" ./scripts/install-overnight-crons.sh --workspace "$cron_tmp/workspace2" --repo "$ROOT" --agent-id verify-junie --branch junie/autonomous-mvp-loop --openclaw-bin "$tmp/bin/openclaw-install" >"$tmp/cron-install.out"
+grep -q '^cron rm old-controller$' "$install_log" || fail "install mode must remove matching existing jobs before re-adding"
+[[ "$(grep -c '^cron add --name Junie Live overnight controller (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one controller"
+[[ "$(grep -c '^cron add --name Junie Live overnight watchdog (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one watchdog"
+[[ "$(grep -c '^cron add --name Junie Live overnight morning-report (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one morning report"
 [[ ! -e "$ROOT/.openclaw/cron/overnight-routines.json" ]] || fail "cron helper dry-run wrote repo root artifact"
 
 log "code mutex status smoke tests"
