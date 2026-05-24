@@ -78,6 +78,22 @@ When guidance contradicts itself:
 2. If the safe resolution is clear and minor, propose or apply the concrete update according to the change rules below.
 3. If the resolution is unclear, risky, or semantically important, stop and ask the most relevant person.
 
+
+## Cross-cutting guardrail protocol
+
+During initialization and before meaningful architecture or workflow changes, extract cross-cutting invariants from project docs, user/team instructions, and accepted routines. Treat them as reusable guardrails for future entrypoints, not as one-off details of the flow where they were discovered.
+
+For each invariant, record:
+
+- the rule that must remain true across future features, triggers, entrypoints, and operational paths;
+- the shared protocol or loop that enforces it;
+- likely bypass risks where a new path could skip the shared protocol;
+- the checklist question reviewers should ask before accepting a new path.
+
+For code-changing work, any new code-changing entrypoint must prove that it reuses or faithfully implements the shared implementation acceptance loop: worker/delegation/review/fix/acceptance, with outcome evidence before completion. Do not invoke implementation workers through ad hoc paths that skip review, fix requests, or acceptance.
+
+Record these guardrails in the appropriate `MEMORY.md`, `TOOLS.md`, `docs/`, checklist, or project operating protocol so future Junie instances and workers inherit them.
+
 ## Durable memory capture protocol
 
 Do not let important corrections or durable instructions remain only in chat.

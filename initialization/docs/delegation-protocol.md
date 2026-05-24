@@ -17,6 +17,8 @@ Use this file to guide coding-worker or subagent delegation for the assigned pro
 - Worker handoffs must include `git status --short --branch --untracked-files=all` for the owned repo after work. The final status should be clean or list only intentional changes.
 - Workers must treat root workspace artifacts such as `AGENTS.md`, `USER.md`, `.openclaw/`, and similar runtime files in the repo root as mistakes unless the repo intentionally tracks them. They must prevent or clean these artifacts, not hide them with `.gitignore`, `.git/info/exclude`, or other exclude masks.
 - Autonomous/worker commit subjects must summarize actual changes; reject generic iteration counters such as `Autonomous MVP loop iteration N`.
+- New code-changing entrypoints must not invent ad hoc implementation-worker paths. They must reuse or implement the shared implementation acceptance loop: worker/delegation/review/fix/acceptance, including review-driven fix requests and explicit acceptance before the task is called done.
+- Delegation briefs for new triggers or paths must call out cross-cutting invariants and bypass risks that the worker must preserve.
 
 ## Delegation brief template
 
