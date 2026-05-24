@@ -7,6 +7,14 @@ cd "$ROOT"
 log() { printf '==> %s\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+# Clear inherited environment variables from parent autonomous/opencode sessions
+# so tests are deterministic regardless of calling context (e.g. overnight controller,
+# opencode agent, cron).
+while IFS= read -r _var; do
+  unset "$_var"
+done < <(env | grep -oE '^AUTONOMOUS_[^=]+' || true)
+unset OPENROUTER_API_KEY OPENCODE OPENCODE_PID OPENCODE_PROCESS_ROLE 2>/dev/null || true
+
 log "preflight clean working tree"
 if git status --porcelain --untracked-files=all | grep -q .; then
   git status --short --branch --untracked-files=all >&2
