@@ -1026,6 +1026,9 @@ set -e
 grep -q '^status=OK$' "$tmp/report-empty.out" || fail "empty report status not OK"
 grep -q '^mutex=FREE$' "$tmp/report-empty.out" || fail "empty report mutex not FREE"
 grep -q '^backlog_total=0$' "$tmp/report-empty.out" || fail "empty report backlog_total not 0"
+grep -q '^backlog_completed=0$' "$tmp/report-empty.out" || fail "empty report backlog_completed not 0"
+grep -q '^mutex_holder_id=$' "$tmp/report-empty.out" || fail "empty report mutex_holder_id should be empty"
+grep -q '^mutex_task_id=$' "$tmp/report-empty.out" || fail "empty report mutex_task_id should be empty"
 grep -q '^pr_check_available=false$' "$tmp/report-empty.out" || fail "empty report pr check not false"
 grep -q '^summary=' "$tmp/report-empty.out" || fail "empty report missing summary"
 
@@ -1051,6 +1054,26 @@ grep -q '^status=OK$' "$tmp/report-held.out" || fail "held report status not OK"
 grep -q '^mutex=HELD$' "$tmp/report-held.out" || fail "held report mutex not HELD"
 grep -q '^backlog_total=1$' "$tmp/report-held.out" || fail "held report backlog_total not 1"
 grep -q '^backlog_queued=1$' "$tmp/report-held.out" || fail "held report backlog_queued not 1"
+grep -q '^backlog_completed=0$' "$tmp/report-held.out" || fail "held report backlog_completed not 0"
+grep -q '^mutex_holder_id=report-worker$' "$tmp/report-held.out" || fail "held report mutex_holder_id not report-worker"
+grep -q '^mutex_task_id=$' "$tmp/report-held.out" || fail "held report mutex_task_id should be empty"
+
+# Held mutex with task_id -> mutex_task_id reported
+cat > "$report_mutex/holder.json" <<'JSON'
+{
+  "holder_id": "task-holder",
+  "task_id": "task-42",
+  "reason": "report task_id test",
+  "started_at": "2999-01-01T00:00:00Z",
+  "updated_at": "2999-01-01T00:02:00Z"
+}
+JSON
+set +e
+BACKLOG_DIR="$report_tmp" MUTEX_DIR="$report_mutex" ./scripts/report.sh >"$tmp/report-taskid.out" 2>"$tmp/report-taskid.err"
+status=$?
+set -e
+grep -q '^mutex_holder_id=task-holder$' "$tmp/report-taskid.out" || fail "taskid report mutex_holder_id not task-holder"
+grep -q '^mutex_task_id=task-42$' "$tmp/report-taskid.out" || fail "taskid report mutex_task_id not task-42"
 
 # All checks pass with correct combined exit
 Rval=$(grep '^mutex=' "$tmp/report-empty.out" | sed 's/^mutex=//')
