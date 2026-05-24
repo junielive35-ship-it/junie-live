@@ -1855,6 +1855,18 @@ fi
 ./scripts/overnight-report.sh --state-dir "$ov_state" >"$tmp/ov-report.out" 2>"$tmp/ov-report.err"
 [[ -f "$ov_state/morning-report.txt" ]] || fail "overnight report artifact missing"
 grep -q '^Overnight report$' "$tmp/ov-report.out" || fail "overnight report header missing"
+grep -q '^Backlog:' "$tmp/ov-report.out" || fail "overnight report must include backlog summary"
+grep -q 'queued' "$tmp/ov-report.out" || fail "overnight report backlog line must include queued count"
+grep -q '^Commits in window:' "$tmp/ov-report.out" || fail "overnight report must include commits-in-window count"
+./scripts/overnight-report.sh --state-dir "$ov_state" --format kv >"$tmp/ov-report-kv.out" 2>"$tmp/ov-report-kv.err"
+grep -q '^backlog_total=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_total"
+grep -q '^backlog_queued=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_queued"
+grep -q '^backlog_in_progress=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_in_progress"
+grep -q '^backlog_completed=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_completed"
+grep -q '^commits_in_window=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include commits_in_window"
+grep -q '^local_failures=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include local_failures"
+grep -q '^routine_summary=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include routine_summary"
+grep -q '^watchdog=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include watchdog"
 set +e
 ./scripts/overnight-watchdog.sh --state-dir "$ov_state" --mutex-dir "$ov_tmp/no-mutex" --stale-seconds 999999 >"$tmp/ov-watchdog-complete.out" 2>"$tmp/ov-watchdog-complete.err"
 status=$?
