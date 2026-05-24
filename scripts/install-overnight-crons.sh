@@ -178,8 +178,10 @@ if not raw.strip():
 try:
     data = json.loads(raw)
 except json.JSONDecodeError as exc:
-    print(f"failed to parse OpenClaw cron list JSON: {exc}", file=sys.stderr)
-    sys.exit(1)
+    # Some OpenClaw versions can occasionally return empty/non-JSON output while still
+    # exiting 0 during agent/config churn. Do not make hiring fail because cleanup
+    # could not list existing jobs; adding stable-name jobs is safer than aborting setup.
+    sys.exit(0)
 jobs = data.get("jobs") if isinstance(data, dict) else data
 prefix = os.environ["PREFIX"]
 agent = os.environ["AGENT_ID"]
@@ -191,7 +193,7 @@ for job in jobs or []:
     if name.startswith(prefix) and (not job_agent or job_agent == agent):
         print(str(job.get("id") or job.get("name")))
 PY_IDS
-  )" || { err "failed to parse OpenClaw cron list output"; exit 1; }
+  )" || { err "warning: failed to parse OpenClaw cron list output; continuing without removing existing jobs"; ids=""; }
   if [[ -n "$ids" ]]; then
     while IFS= read -r id; do [[ -n "$id" ]] && run_openclaw cron rm "$id"; done <<<"$ids"
   fi

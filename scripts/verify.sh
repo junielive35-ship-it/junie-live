@@ -389,6 +389,18 @@ STUB
 chmod +x "$tmp/bin/openclaw-empty-list"
 OPENCLAW_STUB_LOG="$tmp/cron-empty-list.log" ./scripts/install-overnight-crons.sh --workspace "$cron_tmp/workspace-empty" --repo "$ROOT" --agent-id empty-junie --branch junie/autonomous-mvp-loop --openclaw-bin "$tmp/bin/openclaw-empty-list" >"$tmp/cron-empty-list.out"
 grep -q '^cron add --name Junie Live overnight watchdog (empty-junie) ' "$tmp/cron-empty-list.log" || fail "install mode must tolerate empty cron list output and still add watchdog"
+cat > "$tmp/bin/openclaw-bad-list" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${OPENCLAW_STUB_LOG:?}"
+if [[ "$*" == "cron list --agent bad-junie --all --json" ]]; then
+  printf 'not json\n'
+  exit 0
+fi
+STUB
+chmod +x "$tmp/bin/openclaw-bad-list"
+OPENCLAW_STUB_LOG="$tmp/cron-bad-list.log" ./scripts/install-overnight-crons.sh --workspace "$cron_tmp/workspace-bad" --repo "$ROOT" --agent-id bad-junie --branch junie/autonomous-mvp-loop --openclaw-bin "$tmp/bin/openclaw-bad-list" >"$tmp/cron-bad-list.out"
+grep -q '^cron add --name Junie Live overnight watchdog (bad-junie) ' "$tmp/cron-bad-list.log" || fail "install mode must tolerate non-json cron list output and still add watchdog"
 [[ "$(grep -c '^cron add --name Junie Live overnight controller (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one controller"
 [[ "$(grep -c '^cron add --name Junie Live overnight watchdog (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one watchdog"
 [[ "$(grep -c '^cron add --name Junie Live overnight morning-report (verify-junie) ' "$install_log")" -eq 1 ]] || fail "install mode must add exactly one morning report definition"
