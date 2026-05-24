@@ -21,6 +21,7 @@ bash -n scripts/task-release.sh
 bash -n scripts/mutex-release-stale.sh
 bash -n scripts/drive.sh
 bash -n scripts/hypothesis-generate.sh
+bash -n scripts/reflect.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -36,7 +37,10 @@ done < <(find . -path './.git' -prune -o -name '*.md' -type f -print)
 
 log "hire-junie smoke tests"
 tmp="$(mktemp -d)"
-cleanup() { rm -rf "$tmp"; }
+cleanup() {
+  rm -rf "$tmp"
+  rm -rf "$ROOT/state"
+}
 trap cleanup EXIT
 mkdir -p "$tmp/bin" "$tmp/seed"
 printf '# Init\n' > "$tmp/seed/INITIALIZATION.md"
@@ -402,7 +406,7 @@ s=$(grep '"status"' "$ta_backlog/items/$task_id.json" | sed 's/.*"status"[[:spac
 [[ "$s" == "in_progress" ]] || fail "task-acquire status should be in_progress, got $s"
 
 # task-release with default status (done)
-BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex" ./scripts/task-release.sh >"$tmp/ta-release.out" 2>"$tmp/ta-release.err"
+BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex" REFLECTIONS_DIR="$ta_tmp/reflections" ./scripts/task-release.sh >"$tmp/ta-release.out" 2>"$tmp/ta-release.err"
 grep -q '^released=true$' "$tmp/ta-release.out" || fail "task-release should report released=true"
 grep -q "^task_id=$task_id$" "$tmp/ta-release.out" || fail "task-release should report correct task_id"
 grep -q '^new_status=done$' "$tmp/ta-release.out" || fail "task-release should report new_status=done"
@@ -414,6 +418,125 @@ s=$(grep '"status"' "$ta_backlog/items/$task_id.json" | sed 's/.*"status"[[:spac
 BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex" ./scripts/task-release.sh >"$tmp/ta-free-release.out" 2>"$tmp/ta-free-release.err"
 grep -q '^released=false$' "$tmp/ta-free-release.out" || fail "task-release free mutex should report released=false"
 grep -q 'mutex already free' "$tmp/ta-free-release.out" || fail "task-release free mutex should explain"
+
+log "reflection smoke tests"
+refl_tmp="$tmp/reflection"
+refl_backlog="$refl_tmp/backlog"
+refl_dir="$refl_tmp/state/reflections"
+mkdir -p "$refl_backlog/items"
+
+# reflect.sh with no args does nothing (no error)
+set +e
+BACKLOG_DIR="$refl_backlog" ./scripts/reflect.sh >"$tmp/refl-noop.out" 2>"$tmp/refl-noop.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "reflect noop exit status was $status, expected 0"
+
+# reflect.sh with valid task -> creates reflection
+BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh add --type task --title "Reflect task" --priority 50 >/dev/null
+refl_id=$(BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$refl_id" ]] || fail "reflect add failed"
+BACKLOG_DIR="$refl_backlog" REFLECTIONS_DIR="$refl_dir" ./scripts/reflect.sh "$refl_id" done >"$tmp/refl-created.out" 2>"$tmp/refl-created.err"
+[[ -f "$refl_dir/${refl_id}.json" ]] || fail "reflect should create reflection file"
+t=$(grep -o '"task_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$refl_dir/${refl_id}.json" | sed 's/.*"task_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$t" == "$refl_id" ]] || fail "reflection file wrong task_id, got $t"
+t=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$refl_dir/${refl_id}.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$t" == "done" ]] || fail "reflection status should be done, got $t"
+
+# reflect.sh with nonexistent task -> silent no-op
+set +e
+BACKLOG_DIR="$refl_backlog" ./scripts/reflect.sh "nonexistent-task" >"$tmp/refl-nonexist.out" 2>"$tmp/refl-nonexist.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "reflect nonexistent exit status was $status, expected 0"
+
+# task-release integration with reflection
+refl_ta_tmp="$tmp/refl_task_acquire"
+refl_ta_backlog="$refl_ta_tmp/backlog"
+refl_ta_mutex="$refl_ta_tmp/mutex"
+mkdir -p "$refl_ta_backlog/items"
+
+BACKLOG_DIR="$refl_ta_backlog" ./scripts/backlog.sh add --type task --title "Release reflect" --priority 60 >/dev/null
+BACKLOG_DIR="$refl_ta_backlog" MUTEX_DIR="$refl_ta_mutex" ./scripts/task-acquire.sh >"$tmp/refl-ta-out" 2>/dev/null
+refl_ta_id=$(grep '^id=' "$tmp/refl-ta-out" | sed 's/^id=//')
+[[ -n "$refl_ta_id" ]] || fail "release-reflect acquire failed"
+[[ -d "$refl_ta_mutex" ]] || fail "release-reflect mutex not created"
+[[ -f "$refl_ta_mutex/holder.json" ]] || fail "release-reflect holder.json missing"
+
+refl_dir2="$refl_ta_tmp/state/reflections"
+BACKLOG_DIR="$refl_ta_backlog" MUTEX_DIR="$refl_ta_mutex" REFLECTIONS_DIR="$refl_dir2" ./scripts/task-release.sh >"$tmp/refl-tr-out" 2>"$tmp/refl-tr.err"
+grep -q '^released=true$' "$tmp/refl-tr-out" || fail "release-reflect should report released=true"
+[[ ! -d "$refl_ta_mutex" ]] || fail "release-reflect should remove mutex dir"
+[[ -f "$refl_dir2/${refl_ta_id}.json" ]] || fail "release-reflect should create reflection file"
+t=$(grep -o '"task_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$refl_dir2/${refl_ta_id}.json" | sed 's/.*"task_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$t" == "$refl_ta_id" ]] || fail "release-reflect reflection wrong task_id"
+
+# next-action release_completed_task detection
+relcomp_tmp="$tmp/release_completed"
+relcomp_backlog="$relcomp_tmp/backlog"
+relcomp_mutex="$relcomp_tmp/mutex"
+relcomp_repo="$relcomp_tmp/repo"
+mkdir -p "$relcomp_backlog/items" "$relcomp_repo"
+
+BACKLOG_DIR="$relcomp_backlog" ./scripts/backlog.sh add --type task --title "Completed but held" --priority 70 >/dev/null
+relcomp_id=$(BACKLOG_DIR="$relcomp_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$relcomp_id" ]] || fail "relcomp add failed"
+
+ts_now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+mkdir -p "$relcomp_mutex"
+cat > "$relcomp_mutex/holder.json" <<JSON
+{
+  "holder_id": "task-acquire:${relcomp_id}",
+  "task_id": "${relcomp_id}",
+  "reason": "release_completed_task smoke test",
+  "started_at": "${ts_now}",
+  "updated_at": "${ts_now}"
+}
+JSON
+# Manually set task to done (simulating external completion)
+sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "done"/' "$relcomp_backlog/items/$relcomp_id.json"
+
+set +e
+BACKLOG_DIR="$relcomp_backlog" MUTEX_DIR="$relcomp_mutex" REPO="$relcomp_repo" \
+  ./scripts/next-action.sh >"$tmp/relcomp-na.out" 2>"$tmp/relcomp-na.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "relcomp next-action exit status was $status, expected 0"
+grep -q '^action=release_completed_task$' "$tmp/relcomp-na.out" || fail "relcomp should detect completed task"
+grep -q 'is done' "$tmp/relcomp-na.out" || fail "relcomp reason should mention done"
+
+# release_completed_task via drive.sh
+relcomp_drive_tmp="$tmp/relcomp_drive"
+relcomp_drive_bl="$relcomp_drive_tmp/backlog"
+relcomp_drive_mutex="$relcomp_drive_tmp/mutex"
+mkdir -p "$relcomp_drive_bl/items" "$relcomp_drive_mutex"
+
+BACKLOG_DIR="$relcomp_drive_bl" ./scripts/backlog.sh add --type task --title "Drive relcomp" --priority 80 >/dev/null
+relcomp_drive_id=$(BACKLOG_DIR="$relcomp_drive_bl" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$relcomp_drive_id" ]] || fail "drive relcomp add failed"
+
+ts_now2="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+cat > "$relcomp_drive_mutex/holder.json" <<JSON
+{
+  "holder_id": "task-acquire:${relcomp_drive_id}",
+  "task_id": "${relcomp_drive_id}",
+  "reason": "drive release_completed_task test",
+  "started_at": "${ts_now2}",
+  "updated_at": "${ts_now2}"
+}
+JSON
+sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "cancelled"/' "$relcomp_drive_bl/items/$relcomp_drive_id.json"
+
+set +e
+BACKLOG_DIR="$relcomp_drive_bl" MUTEX_DIR="$relcomp_drive_mutex" \
+  ./scripts/drive.sh >"$tmp/relcomp-drive.out" 2>"$tmp/relcomp-drive.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "drive relcomp exit status was $status, expected 0"
+grep -q '^action=release_completed_task$' "$tmp/relcomp-drive.out" || fail "drive should detect completed task"
+[[ ! -d "$relcomp_drive_mutex" ]] || fail "drive should release mutex for completed task"
+s=$(grep '"status"' "$relcomp_drive_bl/items/$relcomp_drive_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "cancelled" ]] || fail "drive should preserve terminal status ($s)"
 
 log "mutex release stale smoke tests"
 mrs_tmp="$tmp/mutex_release_stale"

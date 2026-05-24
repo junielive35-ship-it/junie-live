@@ -32,10 +32,20 @@ fi
 task_id=$(grep -o '"task_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$holder_json" 2>/dev/null | head -1 | sed 's/.*"task_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
 
 if [[ -n "$task_id" ]]; then
-  BACKLOG_DIR="$backlog_dir" "$ROOT/scripts/backlog.sh" update "$task_id" --status "$new_status" >/dev/null 2>&1 || true
+  current_status=""
+  item_file="$backlog_dir/items/$task_id.json"
+  if [[ -f "$item_file" ]]; then
+    current_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$item_file" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+  fi
+  case "$current_status" in
+    done|cancelled|blocked|archived) ;;
+    *) BACKLOG_DIR="$backlog_dir" "$ROOT/scripts/backlog.sh" update "$task_id" --status "$new_status" >/dev/null 2>&1 || true ;;
+  esac
 fi
 
 rm -rf "$mutex_dir"
+
+"$ROOT/scripts/reflect.sh" "${task_id:-}" "$new_status" 2>/dev/null || true
 
 printf 'released=true\n'
 printf 'task_id=%s\n' "${task_id:-}"

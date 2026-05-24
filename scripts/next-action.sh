@@ -51,6 +51,28 @@ if [[ "$mutex" == "BROKEN" ]]; then
 elif [[ "$mutex" == "STALE" ]]; then
   action="release_stale_mutex"
   reason="Code mutex is stale; investigate and release if worker is dead"
+elif [[ "$mutex" == "HELD" ]]; then
+  holder_json="$mutex_dir/holder.json"
+  held_task_id=""
+  if [[ -f "$holder_json" ]]; then
+    held_task_id=$(grep -o '"task_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$holder_json" 2>/dev/null | head -1 | sed 's/.*"task_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+  fi
+  if [[ -n "$held_task_id" ]]; then
+    item_file="$backlog_dir/items/$held_task_id.json"
+    if [[ -f "$item_file" ]]; then
+      item_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$item_file" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+      case "$item_status" in
+        done|cancelled|blocked|archived)
+          action="release_completed_task"
+          reason="Task ${held_task_id} is ${item_status} but mutex is still held"
+          ;;
+      esac
+    fi
+  fi
+fi
+
+if [[ -n "$action" ]]; then
+  : # action already set by priority checks above
 elif [[ "$overall_status" == "CRITICAL" ]]; then
   action="investigate_critical"
   reason="Overall status is CRITICAL; investigate before starting new work"
@@ -99,6 +121,6 @@ case "$action" in
     exit 2 ;;
   address_stale_prs|start_backlog_item|check_stale_in_progress)
     exit 1 ;;
-  generate_hypotheses|wait_for_mutex|idle)
+  release_completed_task|generate_hypotheses|wait_for_mutex|idle)
     exit 0 ;;
 esac
