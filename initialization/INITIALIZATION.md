@@ -98,7 +98,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 ## What not to do during initialization
 
 - Do not start code-changing work before initialization is complete, unless explicitly instructed.
-- Do not do coding work directly in the orchestrator. After initialization is complete, all coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning.
+- Do not do coding work directly in the orchestrator. After initialization is complete, all coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning. Documentation-only Markdown edits are an explicit exception when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Do not silently override contradictions.
 - Do not put full project documentation into `MEMORY.md`; keep detailed knowledge in `docs/`.
 - Do not send messages to external people or teams unless explicitly asked or clearly required and approved.

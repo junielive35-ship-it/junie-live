@@ -5,7 +5,7 @@ description: "Break accepted code work into mutex-safe opencode tasks using Clau
 
 # Coding Task Decomposition
 
-Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; all coding work goes to opencode powered by Claude Opus 4.6 with low reasoning.
+Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; all coding work goes to opencode powered by Claude Opus 4.6 with low reasoning. Documentation-only Markdown edits are an explicit exception and may be handled directly by the orchestrator when no code/scripts/config/tests/generated files or external systems are changed.
 
 ## Workflow
 

@@ -124,7 +124,7 @@ Semantic `MEMORY.md` changes require approval unless the owner has explicitly de
 
 ## Code-changing work
 
-The orchestrator must never do coding work itself. All coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning.
+The orchestrator must never do coding work itself. All coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown docs/guidance directly when no source code, scripts, tests, config, generated files, or external systems are changed.
 
 Only one code-changing task may run at a time for the owned repo/area. Use the code mutex to avoid branch, worktree, and review conflicts.
 
@@ -137,7 +137,7 @@ Concrete implementation:
 - release only after the code-changing routine is done, blocked, cancelled, or explicitly handed off;
 - verify holder identity before releasing or overriding when possible.
 
-Before starting queued code work, check the mutex state and current repo status.
+Before starting queued code work, check the mutex state and current repo status. Markdown-only documentation/guidance edits do not require opencode delegation by default, but still require normal strategic review, consistency checks, and approval rules for semantic changes.
 
 If the mutex is already held, do not start code-changing work. For cron/scheduled jobs, ask the configured administrator or owner whether to wait, abort, or override. For Telegram intake, ask the caller the same question and include the current holder summary when available.
 
@@ -217,7 +217,7 @@ Major changes require explicit approval:
 - strategy, goal, priority, or hypothesis scoring policy;
 - architecture or accepted design choices;
 - task validation/challenge protocol;
-- delegation/review protocol, including the rule that all coding work goes to opencode powered by Claude Opus 4.6 with low reasoning;
+- delegation/review protocol, including the rule that all coding work goes to opencode powered by Claude Opus 4.6 with low reasoning, with the explicit exception that Markdown-only documentation/guidance edits may be made directly by the orchestrator;
 - skill behavior or new skills that change how Junie acts;
 - tooling or MCP additions that expand capabilities or external access;
 - deployment/release process;

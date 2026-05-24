@@ -9,6 +9,10 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 log "bash syntax"
 bash -n hire-junie.sh
+bash -n scripts/check-loop-state.sh
+
+log "autonomous loop state example"
+scripts/check-loop-state.sh state/autonomous-loop.example.json
 
 log "local markdown links"
 while IFS= read -r file; do

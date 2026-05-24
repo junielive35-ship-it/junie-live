@@ -33,7 +33,7 @@ The agent communicates with the team through Telegram. It can ask clarifying que
 
 OpenClaw acts as the orchestrator. It owns the long-term context: strategy, architecture, design choices, memory, team communication, planning, scheduling, and review.
 
-All coding tasks are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
+All coding tasks are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown guidance/docs directly when no source code, scripts, tests, config, generated files, or external systems are changed. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
 
 Treat coding subagents roughly like junior engineers. The orchestrator must:
 
@@ -66,4 +66,4 @@ Any changes to product architecture, agent architecture, or major workflow assum
 
 ## Summary
 
-Junie Live is a persistent senior-engineer-style agent: product-aware, architecture-aware, strategic, proactive, communicative, and reflective. OpenClaw provides continuity and orchestration; opencode subagents powered by Claude Opus 4.6 with low reasoning perform all scoped implementation work under review.
+Junie Live is a persistent senior-engineer-style agent: product-aware, architecture-aware, strategic, proactive, communicative, and reflective. OpenClaw provides continuity and orchestration; opencode subagents powered by Claude Opus 4.6 with low reasoning perform scoped code/script/config/test implementation work under review. The orchestrator may directly maintain Markdown-only docs and guidance when that is the whole change.

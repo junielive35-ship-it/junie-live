@@ -7,7 +7,7 @@ Assumption for v1: Telegram is the only incoming event source. Junie can communi
 - Junie acts like a senior developer/product owner, not a passive executor.
 - Meaningful work is validated against `MEMORY.md`, relevant `docs/`, architecture, strategy, and previous design choices.
 - Only one code-changing task may run at a time. A code change mutex protects the repo from parallel conflicting edits. See [`code_mutex.md`](code_mutex.md).
-- The orchestrator must never do coding work itself. All coding work is delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning.
+- The orchestrator must never do coding work itself. All coding work is delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown docs/guidance directly when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Code-changing opencode subagents are run sequentially under the mutex, never in parallel, to avoid branch/worktree conflicts and inconsistent reviews.
 - `MEMORY.md` is critical always-on strategy context. It is not automatically compacted. Size checks run only after `MEMORY.md` edits.
 - Schedules are project-dependent. “Hourly” or “daily” are configuration choices, not fixed rules.
@@ -36,7 +36,7 @@ Flow:
 
 1. Acquire code change mutex using the lock-directory flow from [`code_mutex.md`](code_mutex.md).
 2. Decompose task into scoped subagent tasks.
-3. Delegate implementation to opencode powered by Claude Opus 4.6 with low reasoning; never implement code directly in the orchestrator.
+3. Delegate implementation to opencode powered by Claude Opus 4.6 with low reasoning; never implement code directly in the orchestrator. Markdown-only documentation/guidance edits may be made directly by the orchestrator when they are the whole change.
 4. Run code-changing opencode subagents sequentially, not in parallel.
 5. Give each subagent precise context, constraints, and verification expectations.
 6. Review results against the full strategic/architectural context before starting the next code-changing subagent step.
@@ -218,7 +218,7 @@ Require explicit approval:
 - strategy, goal, priority, or hypothesis scoring policy;
 - architecture or accepted design choice;
 - task validation/challenge protocol;
-- delegation/review protocol, including the rule that all coding work is delegated to opencode powered by Claude Opus 4.6 with low reasoning;
+- delegation/review protocol, including the rule that all coding work is delegated to opencode powered by Claude Opus 4.6 with low reasoning, with the explicit exception that Markdown-only documentation/guidance edits may be made directly by the orchestrator;
 - skill behavior or new skill that changes how Junie acts;
 - MCP/tooling addition that expands capabilities or external access;
 - deployment/release process;
