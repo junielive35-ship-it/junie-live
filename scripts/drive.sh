@@ -23,6 +23,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Periodic backlog hygiene before the drive decision
+"$ROOT/scripts/backlog-hygiene.sh" \
+  --stale-minutes "$stale_minutes" \
+  --archive-days 7 \
+  2>/dev/null || true
+
 na_out=$(mktemp)
 trap 'rm -f "$na_out"' EXIT
 
