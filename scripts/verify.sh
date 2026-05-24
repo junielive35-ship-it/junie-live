@@ -1260,6 +1260,8 @@ hyp_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$hyp_item" | se
 # Mutex should be acquired
 [[ -d "$drive_tmp/mutex_free" ]] || fail "drive hyp should acquire mutex"
 [[ -f "$drive_tmp/mutex_free/holder.json" ]] || fail "drive hyp mutex holder.json missing"
+grep -q '^acquired_type=hypothesis$' "$tmp/drive-hyp.out" || fail "drive hyp acquired_type not hypothesis"
+grep -q '^acquired_description=' "$tmp/drive-hyp.out" || fail "drive hyp acquired_description missing"
 
 # Held mutex -> wait_for_mutex
 mkdir -p "$drive_tmp/mutex_held"
@@ -1288,6 +1290,8 @@ grep -q '^action=start_backlog_item$' "$tmp/drive-start.out" || fail "start_back
 grep -q '^summary=.*acquired backlog item' "$tmp/drive-start.out" || fail "start_backlog_item summary missing acquisition"
 [[ -d "$drive_tmp/mutex_start" ]] || fail "mutex was not acquired"
 [[ -f "$drive_tmp/mutex_start/holder.json" ]] || fail "holder.json not written"
+grep -q '^acquired_type=task$' "$tmp/drive-start.out" || fail "start_backlog_item acquired_type not task"
+grep -q '^acquired_description=' "$tmp/drive-start.out" || fail "start_backlog_item acquired_description missing"
 
 # Stale mutex -> mutex-release-stale.sh, then loop continues to acquire task
 drive_stale_bl="$drive_tmp/bl_stale"

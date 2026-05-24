@@ -42,6 +42,8 @@ loop_action=""
 summary_parts=()
 acquire_id=""
 acquire_title=""
+acquire_type=""
+acquire_desc=""
 
 add_summary() { summary_parts+=("$1"); }
 
@@ -136,6 +138,8 @@ while [[ $iteration -lt $max_iterations ]]; do
         backlog_in_progress=1
         acquire_id=$(grep '^id=' "$acquire_out" 2>/dev/null | sed 's/^id=//') || true
         acquire_title=$(grep '^title=' "$acquire_out" 2>/dev/null | sed 's/^title=//') || true
+        acquire_type=$(grep '^type=' "$acquire_out" 2>/dev/null | sed 's/^type=//') || true
+        acquire_desc=$(grep '^description=' "$acquire_out" 2>/dev/null | sed 's/^description=//') || true
         add_summary "acquired backlog item ${acquire_id} (${acquire_title})"
       fi
       rm -f "$acquire_out" ;;
@@ -252,3 +256,5 @@ printf 'pr_stale=%s\n' "${pr_stale:-0}"
 printf 'health=%s\n' "${overall_status:-UNKNOWN}"
 printf 'acquired_id=%s\n' "${acquire_id:-}"
 printf 'acquired_title=%s\n' "${acquire_title:-}"
+printf 'acquired_type=%s\n' "${acquire_type:-}"
+printf 'acquired_description=%s\n' "${acquire_desc:-}"
