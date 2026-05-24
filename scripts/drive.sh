@@ -55,6 +55,7 @@ while [[ $iteration -lt $max_iterations ]]; do
 
   na_out=$(mktemp)
 
+  HYPOTHESIS_STATE_DIR="$hypothesis_state_dir" \
   BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" REPO="$repo" \
     "$ROOT/scripts/next-action.sh" \
     --stale-minutes "$stale_minutes" --stale-hours "$stale_hours" \
