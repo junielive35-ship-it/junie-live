@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
 mutex_dir="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}"
 repo="${REPO:-$ROOT}"
+hypothesis_state_dir="${HYPOTHESIS_STATE_DIR:-$ROOT/state/hypothesis}"
 stale_minutes=60
 stale_hours=24
 hypothesis_interval_hours=24
@@ -52,6 +53,12 @@ case "$action" in
       "$ROOT/scripts/report.sh" \
       --stale-minutes "$stale_minutes" --stale-hours "$stale_hours" ;;
   generate_hypotheses)
+    HYPOTHESIS_STATE_DIR="$hypothesis_state_dir" \
+      "$ROOT/scripts/hypothesis-generate.sh" \
+      --title "Periodic system health review" \
+      --desc "Automated trigger: hypothesis generation interval elapsed. Review current system state and backlog for improvement opportunities." \
+      --source "system" \
+      --priority 50 2>/dev/null || true
     exit 0 ;;
   *)
     printf 'Unknown action: %s\n' "$action" >&2
