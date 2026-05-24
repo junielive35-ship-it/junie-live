@@ -26,6 +26,9 @@ bash -n scripts/pr-follow-up.sh
 bash -n scripts/reflect.sh
 bash -n scripts/memory-size-check.sh
 bash -n scripts/backlog-rescore.sh
+bash -n scripts/overnight-controller.sh
+bash -n scripts/overnight-watchdog.sh
+bash -n scripts/overnight-report.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -1408,6 +1411,81 @@ grep -q '^summary=.*reset' "$tmp/drive-stale-ip.out" || fail "drive stale ip sum
 [[ -f "$drive_stale_ip/mutex/holder.json" ]] || fail "drive stale ip holder.json should exist"
 s=$(grep '"status"' "$drive_stale_ip_bl/items/$stale_ip_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "in_progress" ]] || fail "drive stale ip should re-acquire to in_progress, got $s"
+
+log "overnight routine smoke tests"
+ov_tmp="$tmp/overnight"
+ov_state="$ov_tmp/state"
+ov_mutex="$ov_tmp/mutex"
+mkdir -p "$ov_state" "$ov_mutex"
+
+# Successful fake worker updates durable state and morning report artifact.
+set +e
+OVERNIGHT_WORKER_CMD='printf worker-ok\\n' ./scripts/overnight-controller.sh \
+  --state-dir "$ov_state" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" \
+  --max-iterations 1 --iteration-timeout 5 --skip-verify >"$tmp/ov-controller.out" 2>"$tmp/ov-controller.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "overnight controller success exit status was $status, expected 0"
+[[ -f "$ov_state/state.json" ]] || fail "overnight controller did not write state.json"
+grep -q '"status": "complete"' "$ov_state/state.json" || fail "overnight controller did not complete"
+grep -q '"last_verify_status": "skipped"' "$ov_state/state.json" || fail "overnight controller skipped verify state missing"
+grep -q 'commits are worker responsibility' "$ov_state/state.json" || fail "overnight commit policy missing from state"
+grep -q 'iteration-counter subjects such as Autonomous MVP loop iteration N are rejected' "$ov_state/state.json" || fail "overnight iteration-counter commit policy missing from state"
+if git log -20 --format=%s | grep -Eq '^Autonomous MVP loop iteration [0-9]+$'; then
+  fail "recent commit subjects must be meaningful, not Autonomous MVP loop iteration N"
+fi
+./scripts/overnight-report.sh --state-dir "$ov_state" >"$tmp/ov-report.out" 2>"$tmp/ov-report.err"
+[[ -f "$ov_state/morning-report.txt" ]] || fail "overnight report artifact missing"
+grep -q '^Overnight report$' "$tmp/ov-report.out" || fail "overnight report header missing"
+
+# Hanging worker times out; watchdog detects stale live worker and can terminate recorded process.
+ov_hang="$tmp/overnight-hang"
+mkdir -p "$ov_hang"
+set +e
+OVERNIGHT_WORKER_CMD='sleep 30' ./scripts/overnight-controller.sh \
+  --state-dir "$ov_hang" --expected-branch "$(git rev-parse --abbrev-ref HEAD)" \
+  --max-iterations 1 --iteration-timeout 1 --skip-verify >"$tmp/ov-hang.out" 2>"$tmp/ov-hang.err"
+status=$?
+set -e
+[[ "$status" -eq 124 ]] || fail "overnight hanging worker exit status was $status, expected 124"
+grep -q '"status": "timeout"' "$ov_hang/state.json" || fail "overnight timeout state missing"
+
+sleep 30 &
+fake_worker=$!
+old_ts="2000-01-01T00:00:00Z"
+python3 - "$ov_hang/state.json" "$fake_worker" <<'PY'
+import json, sys
+p, pid = sys.argv[1], sys.argv[2]
+d = json.load(open(p))
+d.update({"updated_at":"2000-01-01T00:00:00Z","status":"running","phase":"worker_running","worker_pid":pid})
+json.dump(d, open(p, 'w'))
+PY
+set +e
+./scripts/overnight-watchdog.sh --state-dir "$ov_hang" --mutex-dir "$ov_hang/mutex" --stale-seconds 1 --cleanup >"$tmp/ov-watchdog-clean.out" 2>"$tmp/ov-watchdog-clean.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "overnight watchdog cleanup exit status was $status, expected 2"
+grep -q 'CRITICAL worker appears stuck' "$ov_hang/watchdog-findings.txt" || fail "watchdog did not detect stuck worker"
+grep -q 'cleanup=sent_TERM_to_worker' "$ov_hang/watchdog-findings.txt" || fail "watchdog did not record cleanup"
+wait "$fake_worker" 2>/dev/null || true
+
+# Stale mutex release safe path only releases matching overnight holder.
+ov_mutex_state="$tmp/overnight-mutex"
+ov_mutex_dir="$ov_mutex_state/mutex"
+mkdir -p "$ov_mutex_state" "$ov_mutex_dir"
+cat > "$ov_mutex_state/state.json" <<'JSON'
+{"run_id":"overnight-test","started_at":"2000-01-01T00:00:00Z","updated_at":"2000-01-01T00:00:00Z","phase":"worker_running","status":"running","pid":999999,"worker_pid":"","iteration":1,"branch":"test","repo":"repo","expected_next_action":"test","last_commit":"","last_verify_status":"unknown"}
+JSON
+cat > "$ov_mutex_dir/holder.json" <<'JSON'
+{"holder_id":"overnight-test","started_at":"2000-01-01T00:00:00Z","updated_at":"2000-01-01T00:00:00Z"}
+JSON
+set +e
+./scripts/overnight-watchdog.sh --state-dir "$ov_mutex_state" --mutex-dir "$ov_mutex_dir" --stale-seconds 1 --cleanup --release-mutex >"$tmp/ov-watchdog-mutex.out" 2>"$tmp/ov-watchdog-mutex.err"
+status=$?
+set -e
+[[ "$status" -ge 1 ]] || fail "overnight watchdog stale mutex should warn/critical"
+[[ ! -d "$ov_mutex_dir" ]] || fail "watchdog should release matching stale mutex when explicitly requested"
+grep -q 'mutex_action=released' "$ov_mutex_state/watchdog-findings.txt" || fail "watchdog did not record mutex release"
 
 log "memory size check smoke tests"
 msc_tmp="$tmp/memory_size_check"

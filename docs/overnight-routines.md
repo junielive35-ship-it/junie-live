@@ -14,7 +14,13 @@ The overnight setup is split into three cron-backed roles:
 2. **Watchdog** — runs independently during and after the controller window to detect stuck agents, stale opencode workers, stale mutex holders, missing progress, and broken routine state. It may stop a stuck worker, preserve logs, mark work blocked, and release or transfer the mutex only according to the mutex contract.
 3. **Morning report** — summarizes what happened overnight: work attempted, backlog changes, commits/PRs, verification results, blockers, cleanup actions, and recommended next decisions.
 
-These roles may be implemented by one script or several scripts, but their responsibilities must remain explicit and independently verifiable.
+These roles are implemented locally by:
+
+- `scripts/overnight-controller.sh`
+- `scripts/overnight-watchdog.sh`
+- `scripts/overnight-report.sh`
+
+They are intentionally plain shell scripts so cron can run them without an interactive terminal or model tooling. Cron initialization/wiring is handled separately; these scripts are the local foundation.
 
 ## Expected state and log files
 
@@ -27,6 +33,8 @@ Routine state must live under the initialized OpenClaw workspace, not in the rep
 - morning report artifacts or links.
 
 Logs should be durable enough to debug a failed overnight run and should include command invocations, worker/session identifiers, verification output, commit hashes, PR links when present, timeout reasons, and cleanup actions. Logs and state are operational artifacts of the initialized workspace, not source files in the Junie Live repo.
+
+The scripts default to `$HOME/.openclaw/workspace-junie-live/.openclaw/state/overnight` and accept `--state-dir`/`OVERNIGHT_STATE_DIR` for tests or alternate initialized workspaces.
 
 ## Stuck detection requirements
 
