@@ -19,6 +19,7 @@ bash -n scripts/next-action.sh
 bash -n scripts/task-acquire.sh
 bash -n scripts/task-release.sh
 bash -n scripts/mutex-release-stale.sh
+bash -n scripts/drive.sh
 bash -n scripts/hypothesis-generate.sh
 log "local markdown links"
 while IFS= read -r file; do
