@@ -7,7 +7,8 @@ workspace="${HOME:-$ROOT}/.openclaw/workspace-junie-live"
 state_dir=""
 expected_branch="${OVERNIGHT_EXPECTED_BRANCH:-junie/autonomous-mvp-loop}"
 max_iterations="${OVERNIGHT_MAX_ITERATIONS:-99}"
-iteration_timeout="${OVERNIGHT_ITERATION_TIMEOUT_SECONDS:-900}"
+iteration_timeout="${OVERNIGHT_ITERATION_TIMEOUT_SECONDS:-7200}"
+fix_retries="${AUTONOMOUS_FIX_RETRIES:-7}"
 duration=""
 hours=""
 dry_run=false
@@ -50,6 +51,7 @@ while [[ $# -gt 0 ]]; do
     --expected-branch) expected_branch="$2"; shift 2 ;;
     --max-iterations) max_iterations="$2"; shift 2 ;;
     --iteration-timeout) iteration_timeout="$2"; shift 2 ;;
+    --fix-retries) fix_retries="$2"; shift 2 ;;
     --worker-cmd) worker_cmd="$2"; shift 2 ;;
     --background) background=true; shift ;;
     --dry-run) dry_run=true; shift ;;
@@ -139,6 +141,7 @@ cmd=("$repo/scripts/overnight-controller.sh"
   --expected-branch "$expected_branch"
   --max-iterations "$max_iterations"
   --iteration-timeout "$iteration_timeout"
+  --fix-retries "$fix_retries"
   --end-epoch "$end_epoch")
 if [[ -n "$worker_cmd" ]]; then
   cmd+=(--worker-cmd "$worker_cmd")

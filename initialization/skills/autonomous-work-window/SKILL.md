@@ -79,3 +79,5 @@ Logs/report: <location if known>
 - Do not run on `main`.
 - Do not use ad hoc background loops or manual long-running shell scripts instead of the standard wrapper.
 - Keep the command project-agnostic; do not hard-code repo paths, branch names, or project-specific backlog items in this skill.
+
+Autonomous windows: default --fix-retries 7 / AUTONOMOUS_FIX_RETRIES; verification failures get bounded fix attempts. Exhaustion blocks, releases mutex, preserves diff/status, cleans workspace. Hard timeout default 7200s.
