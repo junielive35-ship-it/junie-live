@@ -608,6 +608,8 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive relcomp exit status was $status, expected 0"
 grep -q '^action=start_backlog_item$' "$tmp/relcomp-drive.out" || fail "drive should loop to start_backlog_item after release + hypotheses"
+grep -q '^summary=.*released completed task' "$tmp/relcomp-drive.out" || fail "drive relcomp summary missing release"
+grep -q 'generated hypothesis' "$tmp/relcomp-drive.out" || fail "drive relcomp summary missing hypothesis generation"
 # Mutex was re-acquired for the generated hypothesis
 [[ -d "$relcomp_drive_mutex" ]] || fail "drive should acquire mutex for the new hypothesis"
 [[ -f "$relcomp_drive_mutex/holder.json" ]] || fail "drive hyp holder.json missing"
@@ -1230,6 +1232,7 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "idle drive exit status was $status, expected 0"
 grep -q '^action=idle$' "$tmp/drive-idle.out" || fail "idle action not found"
+grep -q '^summary=' "$tmp/drive-idle.out" || fail "idle drive missing summary"
 
 # Empty backlog + free mutex + no recent hypotheses -> generate_hypotheses,
 # then loop continues to acquire the hypothesis as a backlog item
@@ -1241,6 +1244,9 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive hyp->acquire exit status was $status, expected 0"
 grep -q '^action=start_backlog_item$' "$tmp/drive-hyp.out" || fail "drive hyp should loop to start_backlog_item"
+grep -q '^summary=' "$tmp/drive-hyp.out" || fail "drive hyp missing summary"
+grep -q 'generated' "$tmp/drive-hyp.out" || fail "drive hyp summary missing generation"
+grep -q 'acquired' "$tmp/drive-hyp.out" || fail "drive hyp summary missing acquisition"
 [[ -f "$drive_hyp_state/last_generated" ]] || fail "drive hyp should write last_generated"
 # Verify the hypothesis was created and acquired
 hyp_items=$(find "$drive_backlog/items/" -name '*.json' 2>/dev/null)
@@ -1267,6 +1273,7 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "held mutex drive exit status was $status, expected 0"
 grep -q '^action=wait_for_mutex$' "$tmp/drive-held.out" || fail "wait_for_mutex action not found"
+grep -q '^summary=' "$tmp/drive-held.out" || fail "held mutex drive missing summary"
 
 # Queued item + free mutex -> start_backlog_item (acquires task + mutex)
 drive_start_bl="$drive_tmp/bl_start"
@@ -1278,6 +1285,7 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "start backlog item drive exit status was $status, expected 0"
 grep -q '^action=start_backlog_item$' "$tmp/drive-start.out" || fail "start_backlog_item action not found"
+grep -q '^summary=.*acquired backlog item' "$tmp/drive-start.out" || fail "start_backlog_item summary missing acquisition"
 [[ -d "$drive_tmp/mutex_start" ]] || fail "mutex was not acquired"
 [[ -f "$drive_tmp/mutex_start/holder.json" ]] || fail "holder.json not written"
 
@@ -1296,6 +1304,7 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "stale mutex drive exit status was $status, expected 0"
 grep -q '^action=start_backlog_item$' "$tmp/drive-stale.out" || fail "stale mutex drive should loop to start_backlog_item"
+grep -q 'released stale mutex' "$tmp/drive-stale.out" || fail "stale mutex summary missing release"
 [[ -d "$drive_stale_mutex" ]] || fail "stale mutex drive should acquire mutex after cleanup"
 
 # Broken mutex -> mutex-release-stale.sh, then loop continues to acquire task
@@ -1311,6 +1320,7 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "broken mutex drive exit status was $status, expected 0"
 grep -q '^action=start_backlog_item$' "$tmp/drive-broken.out" || fail "broken mutex drive should loop to start_backlog_item"
+grep -q 'removed broken mutex' "$tmp/drive-broken.out" || fail "broken mutex summary missing removal"
 [[ -d "$drive_broken_mutex" ]] || fail "broken mutex drive should acquire mutex after cleanup"
 
 # Stale in_progress item + free mutex -> backlog hygiene auto-resets to queued,
@@ -1331,6 +1341,7 @@ status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "drive stale ip exit status was $status, expected 0"
 grep -q '^action=start_backlog_item$' "$tmp/drive-stale-ip.out" || fail "drive stale ip action not start_backlog_item"
+grep -q '^summary=.*reset' "$tmp/drive-stale-ip.out" || fail "drive stale ip summary missing reset"
 [[ -d "$drive_stale_ip/mutex" ]] || fail "drive stale ip mutex should be acquired"
 [[ -f "$drive_stale_ip/mutex/holder.json" ]] || fail "drive stale ip holder.json should exist"
 s=$(grep '"status"' "$drive_stale_ip_bl/items/$stale_ip_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')

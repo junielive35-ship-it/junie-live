@@ -39,19 +39,35 @@ backlog_has_queued_source() {
 max_iterations=10
 iteration=0
 loop_action=""
+summary_parts=()
+
+add_summary() { summary_parts+=("$1"); }
+
+hygiene_out=$(mktemp)
+"$ROOT/scripts/backlog-hygiene.sh" \
+  --stale-minutes "$stale_minutes" \
+  --archive-days 7 \
+  >"$hygiene_out" 2>/dev/null || true
+
+rh() { grep "^${1}=" "$hygiene_out" 2>/dev/null | sed 's/^[^=]*=//' || true; }
+ha=$(rh archived); hr=$(rh reset_in_progress); hs=$(rh stale_queued)
+[[ "${ha:-0}" -gt 0 ]] && add_summary "archived ${ha} backlog items"
+[[ "${hr:-0}" -gt 0 ]] && add_summary "reset ${hr} stale in-progress items"
+[[ "${hs:-0}" -gt 0 ]] && add_summary "${hs} stale queued items"
+rm -f "$hygiene_out"
+
+rescore_out=$(mktemp)
+"$ROOT/scripts/backlog-rescore.sh" \
+  --backlog-dir "$backlog_dir" \
+  --max-boost 20 \
+  >"$rescore_out" 2>/dev/null || true
+
+rc=$(grep '^rescored=' "$rescore_out" 2>/dev/null | sed 's/^rescored=//' || true)
+[[ "${rc:-0}" -gt 0 ]] && add_summary "rescored ${rc} items"
+rm -f "$rescore_out"
 
 while [[ $iteration -lt $max_iterations ]]; do
   iteration=$((iteration + 1))
-
-  "$ROOT/scripts/backlog-hygiene.sh" \
-    --stale-minutes "$stale_minutes" \
-    --archive-days 7 \
-    2>/dev/null || true
-
-  "$ROOT/scripts/backlog-rescore.sh" \
-    --backlog-dir "$backlog_dir" \
-    --max-boost 20 \
-    2>/dev/null || true
 
   na_out=$(mktemp)
 
@@ -78,17 +94,34 @@ while [[ $iteration -lt $max_iterations ]]; do
 
   case "$action" in
     fix_mutex|release_stale_mutex)
+      mrs_out=$(mktemp)
       "$ROOT/scripts/mutex-release-stale.sh" \
         --mutex-dir "$mutex_dir" --backlog-dir "$backlog_dir" \
-        --stale-minutes "$stale_minutes"
+        --stale-minutes "$stale_minutes" >"$mrs_out" 2>/dev/null || true
+      mrs_action=$(grep '^action=' "$mrs_out" 2>/dev/null | sed 's/^action=//') || true
+      mrs_holder=$(grep '^holder_id=' "$mrs_out" 2>/dev/null | sed 's/^holder_id=//') || true
+      case "$mrs_action" in
+        released) add_summary "released stale mutex (was: ${mrs_holder:-unknown})" ;;
+        removed) add_summary "removed broken mutex" ;;
+      esac
+      rm -f "$mrs_out"
       _cont=true ;;
     release_completed_task)
+      tr_out=$(mktemp)
       BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
-        "$ROOT/scripts/task-release.sh"
+        "$ROOT/scripts/task-release.sh" >"$tr_out" 2>/dev/null || true
+      tr_id=$(grep '^task_id=' "$tr_out" 2>/dev/null | sed 's/^task_id=//') || true
+      tr_status=$(grep '^new_status=' "$tr_out" 2>/dev/null | sed 's/^new_status=//') || true
+      [[ -n "$tr_id" ]] && add_summary "released completed task ${tr_id} (status=${tr_status:-done})"
+      rm -f "$tr_out"
       _cont=true ;;
     check_stale_in_progress)
+      cs_out=$(mktemp)
       BACKLOG_DIR="$backlog_dir" "$ROOT/scripts/backlog-hygiene.sh" \
-        --stale-minutes "$stale_minutes" 2>/dev/null || true
+        --stale-minutes "$stale_minutes" >"$cs_out" 2>/dev/null || true
+      csr=$(grep '^reset_in_progress=' "$cs_out" 2>/dev/null | sed 's/^reset_in_progress=//') || true
+      [[ "${csr:-0}" -gt 0 ]] && add_summary "reset ${csr} stale in-progress items"
+      rm -f "$cs_out"
       _cont=true ;;
     start_backlog_item)
       acquire_out=$(mktemp)
@@ -99,6 +132,9 @@ while [[ $iteration -lt $max_iterations ]]; do
       if [[ "$acquire_mutex" == "ACQUIRED" ]]; then
         mutex="ACQUIRED"
         backlog_in_progress=1
+        acquire_id=$(grep '^id=' "$acquire_out" 2>/dev/null | sed 's/^id=//') || true
+        acquire_title=$(grep '^title=' "$acquire_out" 2>/dev/null | sed 's/^title=//') || true
+        add_summary "acquired backlog item ${acquire_id} (${acquire_title})"
       fi
       rm -f "$acquire_out" ;;
     investigate_critical|address_failing_ci|address_stale_prs)
@@ -108,6 +144,9 @@ while [[ $iteration -lt $max_iterations ]]; do
       cat "$fup_out"
       fup_updated=$(grep '^updated=' "$fup_out" | sed 's/^updated=//')
       fup_commented=$(grep '^commented=' "$fup_out" | sed 's/^commented=//')
+      fup_details=$(grep '^details=' "$fup_out" 2>/dev/null | sed 's/^details=//') || true
+      [[ "${fup_updated:-0}" -gt 0 ]] && add_summary "rebased ${fup_updated} stale PR(s)"
+      [[ "${fup_commented:-0}" -gt 0 ]] && add_summary "commented on ${fup_commented} stale PR(s)"
 
       rpt=$(mktemp)
       BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" REPO="$repo" \
@@ -154,12 +193,16 @@ while [[ $iteration -lt $max_iterations ]]; do
         desc="Automated trigger: hypothesis generation interval elapsed. All nominal — review for latent improvement opportunities."
       fi
 
+      hg_out=$(mktemp)
       HYPOTHESIS_STATE_DIR="$hypothesis_state_dir" \
         "$ROOT/scripts/hypothesis-generate.sh" \
         --title "$title" \
         --desc "$desc" \
         --source "system" \
-        --priority 50 2>/dev/null || true
+        --priority 50 >"$hg_out" 2>/dev/null || true
+      hg_id=$(cat "$hg_out" 2>/dev/null || true)
+      [[ -n "$hg_id" ]] && add_summary "generated hypothesis ${hg_id}"
+      rm -f "$hg_out"
       _cont=true ;;
     idle|wait_for_mutex)
       ;;
@@ -181,8 +224,23 @@ if [[ -z "$loop_action" ]]; then
   loop_action="${action:-idle}"
 fi
 
+summary_line=""
+if [[ "${#summary_parts[@]}" -gt 0 ]]; then
+  IFS='; ' summary_line="${summary_parts[*]}"
+  unset IFS
+fi
+if [[ -z "$summary_line" ]]; then
+  case "$loop_action" in
+    idle) summary_line="All nominal" ;;
+    wait_for_mutex) summary_line="Waiting for mutex release" ;;
+    start_backlog_item) summary_line="Acquired backlog item" ;;
+    *) summary_line="${reason:-No changes}" ;;
+  esac
+fi
+
 printf 'action=%s\n' "$loop_action"
 printf 'reason=%s\n' "${reason:-}"
+printf 'summary=%s\n' "$summary_line"
 printf 'mutex=%s\n' "${mutex:-UNKNOWN}"
 printf 'backlog_queued=%s\n' "${backlog_queued:-0}"
 printf 'backlog_in_progress=%s\n' "${backlog_in_progress:-0}"
