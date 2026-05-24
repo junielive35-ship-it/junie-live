@@ -14,6 +14,9 @@ verify_cmd="${AUTONOMOUS_VERIFY_CMD:-./scripts/verify.sh}"
 end_epoch="${OVERNIGHT_END_EPOCH:-}"
 dry_run=false
 skip_verify=false
+continue_on_local_failure=false
+max_local_failures="${AUTONOMOUS_MAX_LOCAL_FAILURES:-0}"
+local_failures=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,6 +30,8 @@ while [[ $# -gt 0 ]]; do
     --end-epoch) end_epoch="$2"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
     --skip-verify) skip_verify=true; shift ;;
+    --continue-on-local-failure) continue_on_local_failure=true; shift ;;
+    --max-local-failures) max_local_failures="$2"; shift 2 ;;
     *) printf 'Unknown: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
@@ -62,13 +67,34 @@ write_state() {
   "last_commit": "$(json_escape "$last_commit")",
   "last_verify_status": "$(json_escape "$last_verify")",
   "fix_retries": $fix_retries,
+  "continue_on_local_failure": $continue_on_local_failure,
+  "max_local_failures": $max_local_failures,
+  "local_failures": $local_failures,
   "commit_policy": "commits are worker responsibility; iteration-counter subjects such as Autonomous MVP loop iteration N are rejected by verify"
 }
 JSON
 }
 
 run_verify(){ local out="$1"; : >"$out"; if $skip_verify || $dry_run; then echo skipped >>"$out"; return 0; fi; set +e; bash -c "$verify_cmd" >>"$out" 2>&1; local vs=$?; git diff --check >>"$out" 2>&1; local ds=$?; set -e; [[ $vs -eq 0 && $ds -eq 0 ]]; }
-block_task(){ BACKLOG_DIR="${BACKLOG_DIR:-$ROOT/state/backlog}" MUTEX_DIR="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}" "$ROOT/scripts/task-release.sh" --status blocked >>"$log_file" 2>&1 || true; "$cleanup_cmd" --repo "$repo" --state-dir "$state_dir/cleanup" --reason "$1" >>"$log_file" 2>&1 || true; }
+block_task(){
+  BACKLOG_DIR="${BACKLOG_DIR:-$ROOT/state/backlog}" MUTEX_DIR="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}" REFLECTIONS_DIR="${REFLECTIONS_DIR:-${BACKLOG_DIR:-$ROOT/state/backlog}/../reflections}" "$ROOT/scripts/task-release.sh" --status blocked >>"$log_file" 2>&1 || true
+  "$cleanup_cmd" --repo "$repo" --state-dir "$state_dir/cleanup" --reason "$1" >>"$log_file" 2>&1
+}
+repo_dirty(){ git -C "$repo" status --porcelain --untracked-files=all | grep -q .; }
+handle_local_failure(){
+  local phase="$1" exit_status="$2" reason="$3" lastv="${4:-$last_verify}"
+  if ! $continue_on_local_failure; then
+    local status="failed"; [[ "$phase" == "worker_timeout" ]] && status="timeout"
+    write_state "$phase" "$status" "$reason; task blocked and workspace cleaned" "" "$lastv"; block_task "$reason"; exit "$exit_status"
+  fi
+  local_failures=$((local_failures + 1))
+  write_state task_blocked_continue running "$reason; block task, clean workspace, maybe continue" "" "$lastv"
+  log "task_blocked_continue local_failures=$local_failures max_local_failures=$max_local_failures reason=$reason"
+  if ! block_task "$reason"; then write_state cleanup_failed failed "cleanup failed after local task failure; stop immediately" "" "$lastv"; log "cleanup_failed reason=$reason"; exit 1; fi
+  if repo_dirty; then write_state cleanup_failed failed "cleanup left dirty workspace after local task failure; stop immediately" "" "$lastv"; log "cleanup_failed dirty remains reason=$reason"; exit 1; fi
+  if [[ "$local_failures" -gt "$max_local_failures" ]]; then write_state too_many_local_failures failed "local failure budget exceeded after blocking task" "" "$lastv"; log "too_many_local_failures local_failures=$local_failures max_local_failures=$max_local_failures"; exit 1; fi
+  write_state task_blocked_continue running "blocked failed task and cleaned workspace; continue next iteration" "" "$lastv"; return 0
+}
 log() { printf '[%s] %s\n' "$(now)" "$*" | tee -a "$log_file"; }
 
 cd "$repo"
@@ -110,14 +136,12 @@ while [[ "$iteration" -lt "$max_iterations" ]]; do
   fi
   if [[ "$worker_status" -eq 124 || "$worker_status" -eq 137 ]]; then
     log "worker timed out with status=$worker_status"
-    write_state worker_timeout timeout "watchdog should inspect and preserve logs" "" "$last_verify"
-    block_task "worker timeout status=$worker_status"
-    exit 124
+    handle_local_failure worker_timeout 124 "worker timeout status=$worker_status" "$last_verify"
+    continue
   elif [[ "$worker_status" -ne 0 ]]; then
     log "worker failed with status=$worker_status"
-    write_state worker_failed failed "inspect worker log" "" "$last_verify"
-    block_task "worker failed status=$worker_status"
-    exit "$worker_status"
+    handle_local_failure worker_failed "$worker_status" "worker failed status=$worker_status" "$last_verify"
+    continue
   fi
 
   write_state verifying running "run verification gates" "" "$last_verify"
@@ -132,7 +156,7 @@ while [[ "$iteration" -lt "$max_iterations" ]]; do
       run_verify "$verify_log" && { last_verify="passed_after_fix_$attempt"; fixed=true; break; }
       last_verify="failed_after_fix_$attempt"
     done
-    [[ "$fixed" == true ]] || { write_state verify_failed failed "fix budget exhausted; task blocked and workspace cleaned" "" "$last_verify"; block_task "verification failed after $fix_retries fix attempts"; exit 1; }
+    [[ "$fixed" == true ]] || { handle_local_failure verify_failed 1 "verification failed after $fix_retries fix attempts" "$last_verify"; continue; }
   fi
   write_state iteration_complete running "continue until max iterations or end time" "" "$last_verify"
 done

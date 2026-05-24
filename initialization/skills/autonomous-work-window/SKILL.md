@@ -81,3 +81,7 @@ Logs/report: <location if known>
 - Keep the command project-agnostic; do not hard-code repo paths, branch names, or project-specific backlog items in this skill.
 
 Autonomous windows: default --fix-retries 7 / AUTONOMOUS_FIX_RETRIES; verification failures get bounded fix attempts. Exhaustion blocks, releases mutex, preserves diff/status, cleans workspace. Hard timeout default 7200s.
+
+## Local task failures
+
+The wrapper defaults to continuing after safe local task failures with `--continue-on-local-failure --max-local-failures 3`. If a worker fails, times out, or exhausts verification fix retries, the controller blocks/releases that task, preserves cleanup evidence, cleans the repo, and continues until the failure budget is exceeded. Report `cleanup_failed` or `too_many_local_failures` as blockers instead of claiming the window succeeded.
