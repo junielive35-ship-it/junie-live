@@ -1847,6 +1847,39 @@ mkdir -p "$wd_idle"
 grep -q '^watchdog_status=idle$' "$tmp/wd-idle.out" || fail "watchdog must treat missing controller state as idle"
 grep -q '^mutex_status=free$' "$tmp/wd-idle.out" || fail "watchdog idle state must report free mutex"
 
+log "watchdog backlog stuck in_progress detection"
+wd_stuck="$tmp/watchdog-stuck"
+wd_stuck_bl="$wd_stuck/backlog"
+mkdir -p "$wd_stuck_bl/items" "$wd_stuck/state"
+
+# Create a terminal (complete) controller state so no active owner exists.
+cat >"$wd_stuck/state/state.json" <<'JSON'
+{"run_id":"wd-stuck-test","started_at":"2000-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z","phase":"complete","status":"complete","pid":999999,"worker_pid":"","iteration":1,"branch":"test","repo":"repo","expected_next_action":"done","last_commit":"","last_verify_status":"skipped"}
+JSON
+
+# Add a stale in_progress backlog item (orphaned because controller is terminal).
+ts_old_wd="2000-01-01T00:00:00Z"
+cat >"$wd_stuck_bl/items/stuck-item-1.json" <<JSON
+{"id":"stuck-item-1","title":"Orphaned task","type":"task","status":"in_progress","priority":50,"created_at":"${ts_old_wd}","updated_at":"${ts_old_wd}"}
+JSON
+
+set +e
+./scripts/overnight-watchdog.sh --state-dir "$wd_stuck/state" --mutex-dir "$wd_stuck/nomutex" --backlog-dir "$wd_stuck_bl" --stale-seconds 1 >"$tmp/wd-stuck.out" 2>"$tmp/wd-stuck.err"
+wd_stuck_status=$?
+set -e
+[[ "$wd_stuck_status" -ge 1 ]] || fail "watchdog should warn about stuck in_progress backlog item"
+grep -q 'WARNING backlog item stuck in_progress without active owner: stuck-item-1' "$wd_stuck/state/watchdog-findings.txt" || fail "watchdog findings must report stuck backlog item id"
+grep -q '^backlog_stuck_in_progress=1$' "$wd_stuck/state/watchdog-findings.txt" || fail "watchdog must report backlog_stuck_in_progress count"
+
+# Active (non-terminal) controller should NOT flag the in_progress item as orphaned.
+cat >"$wd_stuck/state/state.json" <<'JSON'
+{"run_id":"wd-active-test","started_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z","phase":"worker_running","status":"running","pid":999999,"worker_pid":"","iteration":1,"branch":"test","repo":"repo","expected_next_action":"worker should finish","last_commit":"","last_verify_status":"unknown"}
+JSON
+set +e
+./scripts/overnight-watchdog.sh --state-dir "$wd_stuck/state" --mutex-dir "$wd_stuck/nomutex" --backlog-dir "$wd_stuck_bl" --stale-seconds 1 >"$tmp/wd-active.out" 2>"$tmp/wd-active.err"
+set -e
+grep -q '^backlog_stuck_in_progress=0$' "$wd_stuck/state/watchdog-findings.txt" || fail "watchdog should not flag in_progress items when controller is active"
+
 log "overnight routine smoke tests"
 ov_tmp="$tmp/overnight"
 ov_state="$ov_tmp/state"
