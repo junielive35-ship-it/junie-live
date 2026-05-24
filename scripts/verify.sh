@@ -21,6 +21,7 @@ bash -n scripts/task-release.sh
 bash -n scripts/mutex-release-stale.sh
 bash -n scripts/drive.sh
 bash -n scripts/hypothesis-generate.sh
+bash -n scripts/pr-follow-up.sh
 bash -n scripts/reflect.sh
 log "local markdown links"
 while IFS= read -r file; do
@@ -781,6 +782,115 @@ set -e
 [[ "$status" -eq 1 ]] || fail "stale pr exit status was $status, expected 1"
 grep -q '^stale_prs=1$' "$tmp/pr-stale.out" || fail "stale pr count wrong"
 grep -q 'PR #77 stale' "$tmp/pr-stale.out" || fail "stale pr not in details"
+
+log "pr follow-up smoke tests"
+fup_tmp="$tmp/pr_followup"
+mkdir -p "$fup_tmp"
+
+# gh not available (default PATH has no gh) -> no-op
+set +e
+PATH="$tmp/bin:$PATH" ./scripts/pr-follow-up.sh --repo "$fup_tmp" >"$tmp/fup-nogh.out" 2>"$tmp/fup-nogh.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "fup no gh exit status was $status, expected 0"
+grep -q '^updated=0$' "$tmp/fup-nogh.out" || fail "fup no gh updated should be 0"
+grep -q '^commented=0$' "$tmp/fup-nogh.out" || fail "fup no gh commented should be 0"
+
+# gh stub with stale PR and passing CI -> update-branch called
+cat > "$tmp/bin/gh" <<'GH_STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_STUB_LOG:?}"
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  printf '77\tStale PR\tstale-branch\t2000-01-01T00:00:00Z\t2000-01-01T00:00:00Z\tMERGEABLE\tauthor\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "view" ]]; then
+  printf '{"statusCheckRollup":[{"conclusion":"SUCCESS","status":"COMPLETED"}]}\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "update-branch" ]]; then
+  exit 0
+fi
+exit 0
+GH_STUB
+chmod +x "$tmp/bin/gh"
+gh_log="$tmp/gh_fup.log"
+: > "$gh_log"
+
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-follow-up.sh --repo "$fup_tmp" --stale-hours 1 >"$tmp/fup-stale-success.out" 2>"$tmp/fup-stale-success.err"
+grep -q '^updated=1$' "$tmp/fup-stale-success.out" || fail "fup stale+success should update 1"
+grep -q '^commented=0$' "$tmp/fup-stale-success.out" || fail "fup stale+success should not comment"
+grep -q 'update-branch.*77' "$gh_log" || fail "fup stale+success should call gh pr update-branch"
+
+# gh stub with stale PR and failing CI -> comment
+cat > "$tmp/bin/gh" <<'GH_STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_STUB_LOG:?}"
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  printf '99\tFailing PR\tfailing-branch\t2000-01-01T00:00:00Z\t2000-01-01T00:00:00Z\tMERGEABLE\tauthor\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "view" ]]; then
+  printf '{"statusCheckRollup":[{"conclusion":"FAILURE","status":"COMPLETED"}]}\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "comment" ]]; then
+  exit 0
+fi
+exit 0
+GH_STUB
+chmod +x "$tmp/bin/gh"
+: > "$gh_log"
+
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-follow-up.sh --repo "$fup_tmp" --stale-hours 1 >"$tmp/fup-stale-failing.out" 2>"$tmp/fup-stale-failing.err"
+grep -q '^updated=0$' "$tmp/fup-stale-failing.out" || fail "fup stale+failing should not update"
+grep -q '^commented=1$' "$tmp/fup-stale-failing.out" || fail "fup stale+failing should comment 1"
+grep -q 'comment.*99' "$gh_log" || fail "fup stale+failing should call gh pr comment"
+
+# gh stub with healthy PR (not stale) -> no action
+cat > "$tmp/bin/gh" <<'GH_STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_STUB_LOG:?}"
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  printf '42\tHealthy PR\tmain\t2026-05-24T10:00:00Z\t2026-05-24T10:00:00Z\tMERGEABLE\tauthor\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "view" ]]; then
+  printf '{"statusCheckRollup":[{"conclusion":"SUCCESS","status":"COMPLETED"}]}\n'
+  exit 0
+fi
+exit 0
+GH_STUB
+chmod +x "$tmp/bin/gh"
+: > "$gh_log"
+
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-follow-up.sh --repo "$fup_tmp" --stale-hours 24 >"$tmp/fup-healthy.out" 2>"$tmp/fup-healthy.err"
+grep -q '^updated=0$' "$tmp/fup-healthy.out" || fail "fup healthy should not update"
+grep -q '^commented=0$' "$tmp/fup-healthy.out" || fail "fup healthy should not comment"
+grep -q 'No PR follow-up needed' "$tmp/fup-healthy.out" || fail "fup healthy should say no action needed"
+
+# dry-run on stale PR -> WOULD but no actual gh calls
+cat > "$tmp/bin/gh" <<'GH_STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GH_STUB_LOG:?}"
+if [[ "$1" == "pr" && "$2" == "list" ]]; then
+  printf '55\tStale PR\tdry-branch\t2000-01-01T00:00:00Z\t2000-01-01T00:00:00Z\tMERGEABLE\tauthor\n'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "view" ]]; then
+  printf '{"statusCheckRollup":[{"conclusion":"SUCCESS","status":"COMPLETED"}]}\n'
+  exit 0
+fi
+exit 0
+GH_STUB
+chmod +x "$tmp/bin/gh"
+: > "$gh_log"
+
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-follow-up.sh --repo "$fup_tmp" --stale-hours 1 --dry-run >"$tmp/fup-dry.out" 2>"$tmp/fup-dry.err"
+grep -q '^updated=0$' "$tmp/fup-dry.out" || fail "fup dry-run updated should be 0"
+grep -q '^actions=0$' "$tmp/fup-dry.out" || fail "fup dry-run actions should be 0"
+grep -q 'WOULD rebase' "$tmp/fup-dry.out" || fail "fup dry-run should show WOULD"
+grep -q 'update-branch' "$gh_log" && fail "fup dry-run should not call gh pr update-branch" || true
 
 log "report smoke tests"
 report_tmp="$tmp/report"
