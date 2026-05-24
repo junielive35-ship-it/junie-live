@@ -1073,4 +1073,24 @@ set -e
 grep -q '^action=fix_mutex$' "$tmp/drive-broken.out" || fail "fix_mutex action not found"
 [[ ! -d "$drive_broken_mutex" ]] || fail "broken mutex dir should be removed"
 
+# Stale in_progress item + free mutex -> check_stale_in_progress, resets item to queued
+drive_stale_ip="$tmp/drive_stale_ip"
+drive_stale_ip_bl="$drive_stale_ip/backlog"
+mkdir -p "$drive_stale_ip_bl/items"
+BACKLOG_DIR="$drive_stale_ip_bl" ./scripts/backlog.sh add --type task --title "Orphaned task" --priority 60 >/dev/null
+stale_ip_id=$(BACKLOG_DIR="$drive_stale_ip_bl" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$stale_ip_id" ]] || fail "drive stale ip add failed"
+sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "in_progress"/' "$drive_stale_ip_bl/items/$stale_ip_id.json"
+sed -i 's/"updated_at"[[:space:]]*:[[:space:]]*"[^"]*"/"updated_at": "2000-01-01T00:00:00Z"/' "$drive_stale_ip_bl/items/$stale_ip_id.json"
+sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "2000-01-01T00:00:00Z"/' "$drive_stale_ip_bl/items/$stale_ip_id.json"
+set +e
+BACKLOG_DIR="$drive_stale_ip_bl" MUTEX_DIR="$drive_stale_ip/mutex" \
+  ./scripts/drive.sh --stale-minutes 1 >"$tmp/drive-stale-ip.out" 2>"$tmp/drive-stale-ip.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "drive stale ip exit status was $status, expected 0"
+grep -q '^action=check_stale_in_progress$' "$tmp/drive-stale-ip.out" || fail "drive stale ip action not check_stale_in_progress"
+s=$(grep '"status"' "$drive_stale_ip_bl/items/$stale_ip_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "queued" ]] || fail "drive stale ip should reset to queued, got $s"
+
 log "all checks passed"
