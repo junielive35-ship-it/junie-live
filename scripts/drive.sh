@@ -244,10 +244,10 @@ while [[ $iteration -lt $max_iterations ]]; do
       if [[ "${#ctx_parts[@]}" -gt 0 ]]; then
         ctx_str=$(IFS=', '; printf '%s' "${ctx_parts[*]}")
         title="System health review: ${ctx_str}"
-        desc="Automated trigger: hypothesis generation interval elapsed. Current signals: ${ctx_str}."
+        desc="Automated trigger: empty backlog during autonomous work. Inspect and fix the smallest verifiable implementation-status/autonomous-loop gap related to these signals: ${ctx_str}. Avoid v2 analytics, deploy, PR, or external actions."
       else
-        title="Periodic system health review"
-        desc="Automated trigger: hypothesis generation interval elapsed. All nominal — review for latent improvement opportunities."
+        title="Close one small autonomous-loop implementation gap"
+        desc="Automated trigger: empty backlog during autonomous work. Compare implementation-status.md with the current scripts/docs and make one useful, small, verifiable improvement in the autonomous ownership loop. Prefer implementation-status or autonomous-loop gaps; avoid v2 analytics, deploy, PR, or external actions."
       fi
 
       hg_out=$(mktemp)
@@ -255,8 +255,8 @@ while [[ $iteration -lt $max_iterations ]]; do
         "$ROOT/scripts/hypothesis-generate.sh" \
         --title "$title" \
         --desc "$desc" \
-        --source "system" \
-        --priority 50 >"$hg_out" 2>/dev/null || true
+        --source "system:autonomous-empty-backlog" \
+        --priority 60 >"$hg_out" 2>/dev/null || true
       hg_id=$(cat "$hg_out" 2>/dev/null || true)
       [[ -n "$hg_id" ]] && add_summary "generated hypothesis ${hg_id}"
       rm -f "$hg_out"

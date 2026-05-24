@@ -201,7 +201,7 @@ if '--prompt-file' in argv:
     fail('default opencode argv must not use unsupported --prompt-file')
 if not argv or argv[0] != 'run':
     fail(f'default opencode argv must start with run, got {argv!r}')
-for flag, expected in [('--model', 'anthropic/claude-opus-4-6'), ('--variant', 'low'), ('--agent', 'build')]:
+for flag, expected in [('--model', 'claude-opus-4-6'), ('--variant', 'low'), ('--agent', 'build')]:
     if flag not in argv:
         fail(f'missing {flag} in default opencode argv: {argv!r}')
     value = argv[argv.index(flag) + 1] if argv.index(flag) + 1 < len(argv) else None
@@ -1499,7 +1499,8 @@ set -e
 grep -q '^action=generate_hypotheses$' "$tmp/na-hyp-gen.out" || fail "empty next-action action not generate_hypotheses"
 grep -q '^mutex=FREE' "$tmp/na-hyp-gen.out" || fail "empty next-action mutex not FREE"
 
-# Empty backlog + free mutex + recent last_generated -> idle
+# Empty backlog + free mutex + recent last_generated -> idle for normal cadence,
+# but autonomous solver runs still generate useful work instead of idling.
 na_hyp_state="$na_tmp/hypothesis"
 mkdir -p "$na_hyp_state"
 date -u +%s > "$na_hyp_state/last_generated"
@@ -1510,6 +1511,12 @@ set -e
 [[ "$status" -eq 0 ]] || fail "idle next-action exit status was $status, expected 0"
 grep -q '^action=idle$' "$tmp/na-idle.out" || fail "idle next-action action not idle"
 grep -q '^mutex=FREE' "$tmp/na-idle.out" || fail "idle next-action mutex not FREE"
+set +e
+AUTONOMOUS_SOLVER_RUN=true HYPOTHESIS_STATE_DIR="$na_hyp_state" BACKLOG_DIR="$na_tmp" MUTEX_DIR="$na_mutex_free" ./scripts/next-action.sh >"$tmp/na-solver-hyp.out" 2>"$tmp/na-solver-hyp.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "solver hyp next-action exit status was $status, expected 0"
+grep -q '^action=generate_hypotheses$' "$tmp/na-solver-hyp.out" || fail "solver empty next-action should generate hypotheses despite recent timestamp"
 
 # Free mutex + queued item -> start_backlog_item
 na_backlog="$na_tmp/with_item"
@@ -1634,7 +1641,8 @@ drive_tmp="$tmp/drive"
 drive_backlog="$drive_tmp/backlog"
 drive_hyp_state="$drive_tmp/hyp_state"
 
-# Empty backlog + free mutex + recent hypotheses -> idle
+# Empty backlog + free mutex + recent hypotheses -> idle for normal cadence,
+# but solver mode generates and executes a fresh small task.
 mkdir -p "$drive_backlog/items" "$drive_hyp_state"
 date -u +%s > "$drive_hyp_state/last_generated"
 set +e
@@ -1645,6 +1653,16 @@ set -e
 [[ "$status" -eq 0 ]] || fail "idle drive exit status was $status, expected 0"
 grep -q '^action=idle$' "$tmp/drive-idle.out" || fail "idle action not found"
 grep -q '^summary=' "$tmp/drive-idle.out" || fail "idle drive missing summary"
+set +e
+AUTONOMOUS_SOLVER_RUN=true HYPOTHESIS_STATE_DIR="$drive_hyp_state" BACKLOG_DIR="$drive_backlog" MUTEX_DIR="$drive_tmp/mutex_solver" AUTONOMOUS_WORKER_CMD='printf solver-hyp-ok' AUTONOMOUS_WORKER_STATE_DIR="$drive_tmp/solver-worker-state" \
+  ./scripts/drive.sh >"$tmp/drive-solver-hyp.out" 2>"$tmp/drive-solver-hyp.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "solver drive hyp exit status was $status, expected 0"
+grep -q '^action=completed_backlog_item$' "$tmp/drive-solver-hyp.out" || fail "solver drive should complete generated backlog item"
+grep -q 'system:autonomous-empty-backlog' "$drive_backlog/items/"*.json || fail "solver generated item should use autonomous empty-backlog source"
+rm -rf "$drive_backlog" "$drive_hyp_state"
+mkdir -p "$drive_backlog/items" "$drive_hyp_state"
 
 # Empty backlog + free mutex + no recent hypotheses -> generate_hypotheses,
 # then loop continues to acquire the hypothesis as a backlog item
