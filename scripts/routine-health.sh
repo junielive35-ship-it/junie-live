@@ -50,6 +50,9 @@ fi
 # ---- Backlog state ----
 total_items=0
 total_queued=0
+queued_hypothesis=0
+queued_task=0
+queued_fix=0
 total_in_progress=0
 total_completed=0
 stale_in_progress=0
@@ -70,9 +73,16 @@ if [[ -d "$items_dir" ]]; then
     priority="${priority:-0}"
     id=$(grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' "$f" 2>/dev/null | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
 
+    f_type=$(grep -o '"type"[[:space:]]*:[[:space:]]*"[^"]*"' "$f" 2>/dev/null | head -1 | sed 's/.*"type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+
     case "$status" in
       queued)
         total_queued=$((total_queued + 1))
+        case "$f_type" in
+          hypothesis) queued_hypothesis=$((queued_hypothesis + 1)) ;;
+          task)       queued_task=$((queued_task + 1)) ;;
+          fix)        queued_fix=$((queued_fix + 1)) ;;
+        esac
         if [[ -n "$id" && "$priority" -gt "$best_priority" ]]; then
           best_priority="$priority"
           next_id="$id"
@@ -124,6 +134,9 @@ printf 'mutex_status=%s\n' "$mutex_status"
 printf 'mutex_age_minutes=%s\n' "$mutex_age_minutes"
 printf 'backlog_total_items=%s\n' "$total_items"
 printf 'backlog_queued=%s\n' "$total_queued"
+printf 'backlog_queued_hypothesis=%s\n' "$queued_hypothesis"
+printf 'backlog_queued_task=%s\n' "$queued_task"
+printf 'backlog_queued_fix=%s\n' "$queued_fix"
 printf 'backlog_in_progress=%s\n' "$total_in_progress"
 printf 'backlog_stale_in_progress=%s\n' "$stale_in_progress"
 printf 'backlog_stale_queued=%s\n' "$stale_queued"
