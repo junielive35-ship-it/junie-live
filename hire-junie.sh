@@ -21,6 +21,20 @@ Options:
   --seed-dir DIR              Junie seed dir. Default: ./initialization
   --model MODEL               OpenClaw model id. Default: openrouter/openai/gpt-5.5
   --no-restart                Configure everything but do not restart Gateway.
+  --no-overnight-crons        Do not generate overnight cron artifacts.
+  --overnight-disabled        Generate overnight cron artifacts disabled.
+  --overnight-controller-schedule CRON
+                              Default: 0 1 * * *
+  --overnight-watchdog-schedule CRON
+                              Default: */15 * * * *
+  --overnight-report-schedule CRON
+                              Default: 0 8 * * *
+  --overnight-worker-timeout-seconds SECONDS
+                              Default: 900
+  --overnight-stale-seconds SECONDS
+                              Default: 1800
+  --overnight-max-iterations N
+                              Default: 1
   --help                      Show this help.
 
 By default this script backs up and replaces existing Junie state, then reseeds
@@ -54,6 +68,14 @@ WORKSPACE="$HOME/.openclaw/workspace-junie-live"
 SEED_DIR="./initialization"
 MODEL="openrouter/openai/gpt-5.5"
 RESTART=1
+INSTALL_OVERNIGHT_CRONS=1
+OVERNIGHT_DISABLED=0
+OVERNIGHT_CONTROLLER_SCHEDULE="0 1 * * *"
+OVERNIGHT_WATCHDOG_SCHEDULE="*/15 * * * *"
+OVERNIGHT_REPORT_SCHEDULE="0 8 * * *"
+OVERNIGHT_WORKER_TIMEOUT_SECONDS="900"
+OVERNIGHT_STALE_SECONDS="1800"
+OVERNIGHT_MAX_ITERATIONS="1"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -71,6 +93,22 @@ while [[ $# -gt 0 ]]; do
       need_value "$1" "${2:-}"; MODEL="$2"; shift 2 ;;
     --no-restart)
       RESTART=0; shift ;;
+    --no-overnight-crons)
+      INSTALL_OVERNIGHT_CRONS=0; shift ;;
+    --overnight-disabled)
+      OVERNIGHT_DISABLED=1; shift ;;
+    --overnight-controller-schedule)
+      need_value "$1" "${2:-}"; OVERNIGHT_CONTROLLER_SCHEDULE="$2"; shift 2 ;;
+    --overnight-watchdog-schedule)
+      need_value "$1" "${2:-}"; OVERNIGHT_WATCHDOG_SCHEDULE="$2"; shift 2 ;;
+    --overnight-report-schedule)
+      need_value "$1" "${2:-}"; OVERNIGHT_REPORT_SCHEDULE="$2"; shift 2 ;;
+    --overnight-worker-timeout-seconds)
+      need_value "$1" "${2:-}"; OVERNIGHT_WORKER_TIMEOUT_SECONDS="$2"; shift 2 ;;
+    --overnight-stale-seconds)
+      need_value "$1" "${2:-}"; OVERNIGHT_STALE_SECONDS="$2"; shift 2 ;;
+    --overnight-max-iterations)
+      need_value "$1" "${2:-}"; OVERNIGHT_MAX_ITERATIONS="$2"; shift 2 ;;
     --help|-h)
       usage; exit 0 ;;
     *)
@@ -121,6 +159,23 @@ cp -a "$SEED_DIR/." "$WORKSPACE/"
 if [[ -e "$WORKSPACE/BOOTSTRAP.md" ]]; then
   err "copied workspace unexpectedly contains BOOTSTRAP.md: $WORKSPACE/BOOTSTRAP.md"
   exit 1
+fi
+
+if [[ "$INSTALL_OVERNIGHT_CRONS" -eq 1 ]]; then
+  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  cron_args=(
+    --workspace "$WORKSPACE"
+    --repo "$repo_root"
+    --agent-id "$AGENT_ID"
+    --controller-schedule "$OVERNIGHT_CONTROLLER_SCHEDULE"
+    --watchdog-schedule "$OVERNIGHT_WATCHDOG_SCHEDULE"
+    --morning-report-schedule "$OVERNIGHT_REPORT_SCHEDULE"
+    --worker-timeout-seconds "$OVERNIGHT_WORKER_TIMEOUT_SECONDS"
+    --stale-seconds "$OVERNIGHT_STALE_SECONDS"
+    --max-iterations "$OVERNIGHT_MAX_ITERATIONS"
+  )
+  [[ "$OVERNIGHT_DISABLED" -eq 0 ]] || cron_args+=(--disabled)
+  "$repo_root/scripts/install-overnight-crons.sh" "${cron_args[@]}"
 fi
 
 openclaw agents add "$AGENT_ID" \
@@ -178,5 +233,8 @@ log "Agent:            $AGENT_ID"
 log "Workspace:        $WORKSPACE"
 log "Telegram account: $TELEGRAM_ACCOUNT"
 log "Allowed admin id: $ADMIN_TELEGRAM_ID"
+if [[ "$INSTALL_OVERNIGHT_CRONS" -eq 1 ]]; then
+  log "Overnight crons:  $WORKSPACE/.openclaw/cron/overnight-routines.json"
+fi
 log ""
 log "Next: open the Junie bot in Telegram and send /start."

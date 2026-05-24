@@ -88,7 +88,7 @@ Responsibilities:
 
 ## Scheduled / continuous routines
 
-The product/technical contract for stable out-of-box overnight cron work is defined in [`docs/overnight-routines.md`](docs/overnight-routines.md). Scheduled routines should preserve that controller/watchdog/morning-report contract even when implemented by smaller scripts.
+The product/technical contract for stable out-of-box overnight cron work is defined in [`docs/overnight-routines.md`](docs/overnight-routines.md). Scheduled routines should preserve that controller/watchdog/morning-report contract even when implemented by smaller scripts. New instances get installable workspace-local cron artifacts during `hire-junie.sh` initialization: `.openclaw/cron/overnight-routines.json` and `.openclaw/cron/overnight-routines.crontab`. These definitions run non-interactive shell commands with explicit repo, state, and log paths; enabling/importing them is an admin/deployment step, not a Telegram UX requirement.
 
 ### 6. Code mutex status check
 

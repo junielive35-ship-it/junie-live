@@ -20,7 +20,12 @@ These roles are implemented locally by:
 - `scripts/overnight-watchdog.sh`
 - `scripts/overnight-report.sh`
 
-They are intentionally plain shell scripts so cron can run them without an interactive terminal or model tooling. Cron initialization/wiring is handled separately; these scripts are the local foundation.
+They are intentionally plain shell scripts so cron can run them without an interactive terminal or model tooling. `hire-junie.sh` now calls `scripts/install-overnight-crons.sh` during workspace creation, so every newly hired Junie instance receives local installable cron artifacts out of the box:
+
+- `.openclaw/cron/overnight-routines.json` — structured job definitions for the controller, watchdog, and morning report;
+- `.openclaw/cron/overnight-routines.crontab` — equivalent host-cron lines for administrators/installers that use system cron.
+
+The helper writes only workspace-local artifacts. It does not mutate a real crontab or the OpenClaw cron registry during verification. Schedules and timeouts are configurable from `hire-junie.sh`, and `--no-overnight-crons` or `--overnight-disabled` can be used when an administrator wants to opt out or review before enabling.
 
 ## Expected state and log files
 
@@ -32,9 +37,9 @@ Routine state must live under the initialized OpenClaw workspace, not in the rep
 - watchdog findings and cleanup decisions;
 - morning report artifacts or links.
 
-Logs should be durable enough to debug a failed overnight run and should include command invocations, worker/session identifiers, verification output, commit hashes, PR links when present, timeout reasons, and cleanup actions. Logs and state are operational artifacts of the initialized workspace, not source files in the Junie Live repo.
+Logs should be durable enough to debug a failed overnight run and should include command invocations, worker/session identifiers, verification output, commit hashes, PR links when present, timeout reasons, and cleanup actions. Logs and state are operational artifacts of the initialized workspace, not source files in the Junie Live repo. Generated cron definitions explicitly set the repository path, workspace state directory, logs directory, target branch, timeout values, and non-interactive environment. Commands use `/usr/bin/env bash` from a predictable repo cwd and write reports/logs to workspace-local paths instead of relying on an interactive terminal.
 
-The scripts default to `$HOME/.openclaw/workspace-junie-live/.openclaw/state/overnight` and accept `--state-dir`/`OVERNIGHT_STATE_DIR` for tests or alternate initialized workspaces.
+The scripts default to `$HOME/.openclaw/workspace-junie-live/.openclaw/state/overnight` and accept `--state-dir`/`OVERNIGHT_STATE_DIR` for tests or alternate initialized workspaces. Installed definitions use the initialized workspace's `.openclaw/state/overnight` and `.openclaw/logs/overnight` paths explicitly.
 
 ## Stuck detection requirements
 
