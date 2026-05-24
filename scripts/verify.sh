@@ -15,31 +15,13 @@ fi
 
 log "bash syntax"
 bash -n hire-junie.sh
-bash -n scripts/code-mutex-status.sh
-bash -n scripts/runtime-paths.sh
-bash -n scripts/check-repo-hygiene.sh
-bash -n scripts/backlog.sh
-bash -n scripts/routine-health.sh
-bash -n scripts/backlog-hygiene.sh
-bash -n scripts/pr-status.sh
-bash -n scripts/report.sh
-bash -n scripts/next-action.sh
-bash -n scripts/task-acquire.sh
-bash -n scripts/task-release.sh
-bash -n scripts/mutex-release-stale.sh
-bash -n scripts/mutex-touch.sh
-bash -n scripts/drive.sh
-bash -n scripts/run-backlog-worker.sh
-bash -n scripts/hypothesis-generate.sh
-bash -n scripts/pr-follow-up.sh
-bash -n scripts/reflect.sh
-bash -n scripts/memory-size-check.sh
-bash -n scripts/backlog-rescore.sh
-bash -n scripts/overnight-controller.sh
-bash -n scripts/overnight-watchdog.sh
-bash -n scripts/overnight-report.sh
-bash -n scripts/install-overnight-crons.sh
-bash -n scripts/start-autonomous-window.sh
+script_count=0
+while IFS= read -r script; do
+  [[ -f "$script" ]] || continue
+  bash -n "$script" || fail "bash syntax error in $script"
+  script_count=$((script_count + 1))
+done < <(find scripts -maxdepth 1 -name '*.sh' -type f | sort)
+[[ "$script_count" -ge 25 ]] || fail "expected at least 25 bash scripts in scripts/, found $script_count (were scripts removed?)"
 
 log "python syntax"
 python3 -m py_compile scripts/check-markdown-tables.py
