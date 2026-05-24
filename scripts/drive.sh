@@ -57,8 +57,22 @@ BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" REPO="$repo" \
 read_val() { grep "^${1}=" "$na_out" 2>/dev/null | sed 's/^[^=]*=//' || true; }
 
 action=$(read_val action)
+mutex=$(read_val mutex)
+backlog_queued=$(read_val backlog_queued)
+backlog_in_progress=$(read_val backlog_in_progress)
+backlog_next=$(read_val backlog_next)
+pr_failing=$(read_val pr_failing)
+pr_stale=$(read_val pr_stale)
+overall_status=$(read_val overall_status)
 
 printf 'action=%s\n' "$action"
+printf 'mutex=%s\n' "${mutex:-UNKNOWN}"
+printf 'backlog_queued=%s\n' "${backlog_queued:-0}"
+printf 'backlog_in_progress=%s\n' "${backlog_in_progress:-0}"
+printf 'backlog_next=%s\n' "${backlog_next:-none}"
+printf 'pr_failing=%s\n' "${pr_failing:-0}"
+printf 'pr_stale=%s\n' "${pr_stale:-0}"
+printf 'health=%s\n' "${overall_status:-UNKNOWN}"
 
 case "$action" in
   idle|wait_for_mutex)
