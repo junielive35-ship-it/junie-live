@@ -24,6 +24,7 @@ bash -n scripts/drive.sh
 bash -n scripts/hypothesis-generate.sh
 bash -n scripts/pr-follow-up.sh
 bash -n scripts/reflect.sh
+bash -n scripts/memory-size-check.sh
 bash -n scripts/backlog-rescore.sh
 log "local markdown links"
 while IFS= read -r file; do
@@ -1322,5 +1323,78 @@ grep -q '^action=start_backlog_item$' "$tmp/drive-stale-ip.out" || fail "drive s
 [[ -f "$drive_stale_ip/mutex/holder.json" ]] || fail "drive stale ip holder.json should exist"
 s=$(grep '"status"' "$drive_stale_ip_bl/items/$stale_ip_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "in_progress" ]] || fail "drive stale ip should re-acquire to in_progress, got $s"
+
+log "memory size check smoke tests"
+msc_tmp="$tmp/memory_size_check"
+mkdir -p "$msc_tmp"
+
+# No MEMORY.md file -> exists=false, status=OK, exit 0
+set +e
+./scripts/memory-size-check.sh --file "$msc_tmp/nonexistent.md" >"$tmp/msc-no-file.out" 2>"$tmp/msc-no-file.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "no-file exit status was $status, expected 0"
+grep -q '^exists=false$' "$tmp/msc-no-file.out" || fail "no-file should report exists=false"
+grep -q '^status=OK$' "$tmp/msc-no-file.out" || fail "no-file should report status=OK"
+
+# Small MEMORY.md file -> within budget, exit 0
+printf '# MEMORY.md\n\nSmall file\n' > "$msc_tmp/small.md"
+set +e
+./scripts/memory-size-check.sh --file "$msc_tmp/small.md" --max-lines 100 --max-bytes 10000 >"$tmp/msc-small.out" 2>"$tmp/msc-small.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "small file exit status was $status, expected 0"
+grep -q '^exists=true$' "$tmp/msc-small.out" || fail "small file should report exists=true"
+grep -q '^status=OK$' "$tmp/msc-small.out" || fail "small file should report status=OK"
+
+# Large MEMORY.md file -> OVER_LIMIT, exit 2
+msc_bl="$msc_tmp/backlog"
+python3 -c "for _ in range(600): print('line')" > "$msc_tmp/large.md"
+set +e
+BACKLOG_DIR="$msc_bl" ./scripts/memory-size-check.sh --file "$msc_tmp/large.md" --max-lines 500 --max-bytes 1000000 >"$tmp/msc-large.out" 2>"$tmp/msc-large.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "large file exit status was $status, expected 2"
+grep -q '^status=OVER_LIMIT$' "$tmp/msc-large.out" || fail "large file should report OVER_LIMIT"
+grep -q '^over_lines=true$' "$tmp/msc-large.out" || fail "large file should report over_lines=true"
+grep -q '^candidate_created=true$' "$tmp/msc-large.out" || fail "large file should create fix candidate"
+[[ -n "$(find "$msc_bl/items/" -name '*.json' 2>/dev/null | head -1)" ]] || fail "large file should create backlog item"
+
+# Dry-run on large file -> candidate_created=false, no backlog item
+msc_bl2="$msc_tmp/backlog2"
+set +e
+BACKLOG_DIR="$msc_bl2" ./scripts/memory-size-check.sh --file "$msc_tmp/large.md" --max-lines 500 --max-bytes 1000000 --dry-run >"$tmp/msc-dry.out" 2>"$tmp/msc-dry.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "dry-run exit status was $status, expected 2"
+grep -q '^candidate_created=false$' "$tmp/msc-dry.out" || fail "dry-run should not create candidate"
+[[ -z "$(find "$msc_bl2/items/" -name '*.json' 2>/dev/null)" ]] || fail "dry-run should not create backlog files"
+
+# Over bytes only
+python3 -c "print('x' * 50000)" > "$msc_tmp/big.md"
+set +e
+./scripts/memory-size-check.sh --file "$msc_tmp/big.md" --max-lines 1000 --max-bytes 1000 --backlog-dir "$msc_bl" >"$tmp/msc-bytes.out" 2>"$tmp/msc-bytes.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "over bytes exit status was $status, expected 2"
+grep -q '^over_lines=false$' "$tmp/msc-bytes.out" || fail "over bytes should not be over lines"
+grep -q '^over_bytes=true$' "$tmp/msc-bytes.out" || fail "over bytes should be over bytes"
+
+# Duplicate candidate check: second call should not create another backlog item
+msc_bl3="$msc_tmp/backlog3"
+mkdir -p "$msc_bl3/items"
+items_before=$(find "$msc_bl3/items/" -name '*.json' 2>/dev/null | wc -l)
+set +e
+BACKLOG_DIR="$msc_bl3" ./scripts/memory-size-check.sh --file "$msc_tmp/large.md" --max-lines 500 --max-bytes 1000000 >"$tmp/msc-dup1.out" 2>"$tmp/msc-dup1.err"
+status=$?
+set -e
+items_after1=$(find "$msc_bl3/items/" -name '*.json' 2>/dev/null | wc -l)
+[[ "$items_after1" -gt "$items_before" ]] || fail "first call should create candidate"
+set +e
+BACKLOG_DIR="$msc_bl3" ./scripts/memory-size-check.sh --file "$msc_tmp/large.md" --max-lines 500 --max-bytes 1000000 >"$tmp/msc-dup2.out" 2>"$tmp/msc-dup2.err"
+status=$?
+set -e
+items_after2=$(find "$msc_bl3/items/" -name '*.json' 2>/dev/null | wc -l)
+[[ "$items_after2" -eq "$items_after1" ]] || fail "second call should not create duplicate candidate"
 
 log "all checks passed"
