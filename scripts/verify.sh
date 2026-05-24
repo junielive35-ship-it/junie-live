@@ -11,6 +11,7 @@ log "bash syntax"
 bash -n hire-junie.sh
 bash -n scripts/code-mutex-status.sh
 bash -n scripts/backlog.sh
+bash -n scripts/routine-health.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -168,5 +169,92 @@ grep -q "id=$acq_id1" "$tmp/bl-acq2.out" || fail "second acquire output missing 
 
 BACKLOG_DIR="$acq_backlog" ./scripts/backlog.sh acquire >"$tmp/bl-acq3.out"
 [[ ! -s "$tmp/bl-acq3.out" ]] || fail "third acquire should produce no output when all items claimed"
+
+log "routine health smoke tests"
+health_tmp="$tmp/routine_health"
+rh_backlog="$health_tmp/backlog"
+rh_mutex="$health_tmp/mutex"
+rh_mutex_empty="$health_tmp/mutex_empty"
+mkdir -p "$rh_backlog/items"
+
+# Empty backlog + free (nonexistent) mutex -> OK
+set +e
+BACKLOG_DIR="$rh_backlog" MUTEX_DIR="$rh_mutex_empty" ./scripts/routine-health.sh >"$tmp/rh-ok.out" 2>"$tmp/rh-ok.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "empty health exit status was $status, expected 0"
+grep -q '^status=OK$' "$tmp/rh-ok.out" || fail "empty health status not OK"
+grep -q '^mutex_status=FREE$' "$tmp/rh-ok.out" || fail "empty health mutex not FREE"
+grep -q '^details=All nominal$' "$tmp/rh-ok.out" || fail "empty health details not nominal"
+
+# Held mutex + items -> OK
+mkdir -p "$rh_mutex"
+for i in 1 2; do
+  BACKLOG_DIR="$rh_backlog" ./scripts/backlog.sh add --type task --title "Task $i" --priority $((i * 10)) >/dev/null
+done
+cat > "$rh_mutex/holder.json" <<'JSON'
+{
+  "holder_id": "active-worker",
+  "reason": "routine health worker smoke test",
+  "started_at": "2999-01-01T00:00:00Z",
+  "updated_at": "2999-01-01T00:02:00Z",
+  "expected_next_action": "finish smoke test"
+}
+JSON
+set +e
+BACKLOG_DIR="$rh_backlog" MUTEX_DIR="$rh_mutex" ./scripts/routine-health.sh >"$tmp/rh-held.out" 2>"$tmp/rh-held.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "held health exit status was $status, expected 0"
+grep -q '^status=OK$' "$tmp/rh-held.out" || fail "held health status not OK"
+grep -q '^mutex_status=HELD$' "$tmp/rh-held.out" || fail "held health mutex not HELD"
+grep -q 'backlog_queued=2' "$tmp/rh-held.out" || fail "held health backlog queue count wrong"
+grep -q 'backlog_next=' "$tmp/rh-held.out" || fail "held health backlog next missing"
+
+# Stale in_progress item -> WARNING
+BACKLOG_DIR="$rh_backlog" ./scripts/backlog.sh acquire >"$tmp/rh-acq2.out"
+acq_id=$(grep '^id=' "$tmp/rh-acq2.out" | sed 's/^id=//')
+ts_old="2000-01-01T00:00:00Z"
+sed -i 's/"updated_at"[[:space:]]*:[[:space:]]*"[^"]*"/"updated_at": "'"$ts_old"'"/' "$rh_backlog/items/$acq_id.json"
+sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "'"$ts_old"'"/' "$rh_backlog/items/$acq_id.json"
+rm -f "$rh_mutex/holder.json"
+rmdir "$rh_mutex"
+set +e
+BACKLOG_DIR="$rh_backlog" MUTEX_DIR="$rh_mutex" ./scripts/routine-health.sh --stale-minutes 1 >"$tmp/rh-stale-ip.out" 2>"$tmp/rh-stale-ip.err"
+status=$?
+set -e
+[[ "$status" -eq 1 ]] || fail "stale in_progress exit status was $status, expected 1"
+grep -q '^status=WARNING$' "$tmp/rh-stale-ip.out" || fail "stale in_progress status not WARNING"
+grep -q 'backlog_stale_in_progress=1' "$tmp/rh-stale-ip.out" || fail "stale in_progress count wrong"
+grep -q 'stale in-progress' "$tmp/rh-stale-ip.out" || fail "stale in_progress not in details"
+
+# Stale mutex -> CRITICAL
+mkdir -p "$rh_mutex"
+cat > "$rh_mutex/holder.json" <<'JSON'
+{
+  "holder_id": "dead-worker",
+  "reason": "verify stale mutex detection",
+  "started_at": "2000-01-01T00:00:00Z",
+  "updated_at": "2000-01-01T00:05:00Z"
+}
+JSON
+set +e
+BACKLOG_DIR="$rh_backlog" MUTEX_DIR="$rh_mutex" ./scripts/routine-health.sh --stale-minutes 1 >"$tmp/rh-stale-mutex.out" 2>"$tmp/rh-stale-mutex.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "stale mutex exit status was $status, expected 2"
+grep -q '^status=CRITICAL$' "$tmp/rh-stale-mutex.out" || fail "stale mutex status not CRITICAL"
+grep -q '^mutex_status=STALE$' "$tmp/rh-stale-mutex.out" || fail "stale mutex not reported as STALE"
+grep -q 'Mutex STALE' "$tmp/rh-stale-mutex.out" || fail "stale mutex not in details"
+
+# Broken mutex -> CRITICAL
+printf 'not json\n' > "$rh_mutex/holder.json"
+set +e
+BACKLOG_DIR="$rh_backlog" MUTEX_DIR="$rh_mutex" ./scripts/routine-health.sh >"$tmp/rh-broken.out" 2>"$tmp/rh-broken.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "broken mutex exit status was $status, expected 2"
+grep -q '^status=CRITICAL$' "$tmp/rh-broken.out" || fail "broken mutex status not CRITICAL"
+grep -q 'Mutex BROKEN' "$tmp/rh-broken.out" || fail "broken mutex not in details"
 
 log "all checks passed"
