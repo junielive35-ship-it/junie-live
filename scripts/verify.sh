@@ -201,7 +201,7 @@ if '--prompt-file' in argv:
     fail('default opencode argv must not use unsupported --prompt-file')
 if not argv or argv[0] != 'run':
     fail(f'default opencode argv must start with run, got {argv!r}')
-for flag, expected in [('--model', 'claude-opus-4-6'), ('--variant', 'low'), ('--agent', 'build')]:
+for flag, expected in [('--model', 'anthropic/claude-opus-4.5'), ('--variant', 'low'), ('--agent', 'build')]:
     if flag not in argv:
         fail(f'missing {flag} in default opencode argv: {argv!r}')
     value = argv[argv.index(flag) + 1] if argv.index(flag) + 1 < len(argv) else None
@@ -248,6 +248,31 @@ if 'HOME dot-opencode fallback must work when PATH lacks opencode.' not in argv[
     print('ERROR: fallback opencode prompt content missing', file=sys.stderr)
     sys.exit(1)
 PY
+
+cat > "$opencode_tmp/bin/opencode-fail" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "auth" && "${2:-}" == "list" ]]; then
+  printf 'openrouter sk-or-v1-secret-that-must-not-leak\n'
+  exit 0
+fi
+printf 'Error: Model not found: %s. Did you mean: anthropic/claude-opus-4.5?\n' "${3:-unknown}" >&2
+exit 1
+STUB
+chmod +x "$opencode_tmp/bin/opencode-fail"
+fail_status=0
+PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" AUTONOMOUS_OPENCODE_BIN="$opencode_tmp/bin/opencode-fail" \
+  ./scripts/run-backlog-worker.sh --repo "$ROOT" --backlog-dir "$opencode_tmp/backlog" --state-dir "$opencode_tmp/state-fail" \
+    --item-id test-opencode-fail --item-type test --item-title 'Verify model diagnostic' \
+    --item-description 'Model-not-found should block with actionable diagnostics.' >"$opencode_tmp/out-fail.txt" 2>&1 || fail_status=$?
+[[ "$fail_status" -eq 2 ]] || fail "model-not-found should exit 2 as blocked, got $fail_status"
+grep -q '^worker_status=blocked$' "$opencode_tmp/out-fail.txt" || fail "model-not-found must report blocked"
+grep -q '^reason=opencode model/provider configuration failed before work started$' "$opencode_tmp/out-fail.txt" || fail "model-not-found reason missing"
+grep -q 'OpenRouter' "$opencode_tmp/out-fail.txt" || fail "diagnostic should mention OpenRouter syntax"
+grep -q 'opencode_config_diagnostics_begin' "$opencode_tmp/out-fail.txt" || fail "config diagnostics missing"
+grep -q 'openrouter_key_file_present=' "$opencode_tmp/out-fail.txt" || fail "OpenRouter key presence diagnostic missing"
+! grep -q 'sk-or-v1-secret-that-must-not-leak' "$opencode_tmp/out-fail.txt" || fail "diagnostics leaked OpenRouter key"
+grep -q '<masked>' "$opencode_tmp/out-fail.txt" || fail "diagnostics should mask auth output secrets"
 
 log "repo hygiene preflight"
 ./scripts/check-repo-hygiene.sh >/dev/null
