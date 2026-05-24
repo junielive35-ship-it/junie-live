@@ -1437,6 +1437,13 @@ fi
 ./scripts/overnight-report.sh --state-dir "$ov_state" >"$tmp/ov-report.out" 2>"$tmp/ov-report.err"
 [[ -f "$ov_state/morning-report.txt" ]] || fail "overnight report artifact missing"
 grep -q '^Overnight report$' "$tmp/ov-report.out" || fail "overnight report header missing"
+set +e
+./scripts/overnight-watchdog.sh --state-dir "$ov_state" --mutex-dir "$ov_tmp/no-mutex" --stale-seconds 999999 >"$tmp/ov-watchdog-complete.out" 2>"$tmp/ov-watchdog-complete.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "overnight watchdog completed run exit status was $status, expected 0"
+! grep -q 'WARNING controller pid not alive' "$ov_state/watchdog-findings.txt" || fail "watchdog should not warn about exited completed controller"
+grep -q 'controller_pid_check=skipped_terminal_status' "$ov_state/watchdog-findings.txt" || fail "watchdog should skip controller pid check for terminal completed status"
 
 # Hanging worker times out; watchdog detects stale live worker and can terminate recorded process.
 ov_hang="$tmp/overnight-hang"

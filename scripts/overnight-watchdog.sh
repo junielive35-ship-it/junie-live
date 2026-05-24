@@ -30,6 +30,12 @@ now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 field() { local f="$1" k="$2"; grep -o '"'"$k"'"[[:space:]]*:[[:space:]]*"[^"]*"' "$f" 2>/dev/null | head -1 | sed 's/.*"'"$k"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true; }
 numfield() { local f="$1" k="$2"; grep -o '"'"$k"'"[[:space:]]*:[[:space:]]*[0-9]*' "$f" 2>/dev/null | head -1 | sed 's/.*"'"$k"'"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/' || true; }
 say() { printf '%s\n' "$*" | tee -a "$findings"; }
+is_terminal_status() {
+  case "$1" in
+    complete|failed|timeout) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 state_file="$state_dir/state.json"
 status=0
@@ -46,6 +52,17 @@ updated_at=$(field "$state_file" updated_at)
 pid=$(numfield "$state_file" pid)
 worker_pid=$(field "$state_file" worker_pid)
 say "run_id=${run_id:-unknown} phase=${phase:-unknown} status=${run_status:-unknown}"
+terminal=false
+if is_terminal_status "${run_status:-}"; then
+  terminal=true
+  say "terminal_status=true"
+  if [[ "$run_status" != "complete" ]]; then
+    say "WARNING terminal controller status is $run_status"
+    status=1
+  fi
+else
+  say "terminal_status=false"
+fi
 
 age=999999
 if [[ -n "$updated_at" ]]; then
@@ -53,20 +70,26 @@ if [[ -n "$updated_at" ]]; then
   age=$(( $(date +%s) - ts ))
 fi
 say "state_age_seconds=$age"
-if [[ "$age" -gt "$stale_seconds" && "$run_status" != "complete" ]]; then
+if [[ "$age" -gt "$stale_seconds" && "$terminal" != true ]]; then
   say "WARNING stale controller progress"
   status=1
 fi
 
-if [[ -n "$pid" && "$pid" != "0" ]]; then
-  if kill -0 "$pid" 2>/dev/null; then say "controller_pid_alive=true"; else say "WARNING controller pid not alive: $pid"; status=1; fi
+if [[ "$terminal" == true ]]; then
+  say "controller_pid_check=skipped_terminal_status"
 else
-  say "WARNING controller pid missing"
-  status=1
+  if [[ -n "$pid" && "$pid" != "0" ]]; then
+    if kill -0 "$pid" 2>/dev/null; then say "controller_pid_alive=true"; else say "WARNING controller pid not alive: $pid"; status=1; fi
+  else
+    say "WARNING controller pid missing"
+    status=1
+  fi
 fi
 
 if [[ -n "$worker_pid" ]]; then
-  if kill -0 "$worker_pid" 2>/dev/null; then
+  if [[ "$terminal" == true ]]; then
+    say "worker_pid_check=skipped_terminal_status pid=$worker_pid"
+  elif kill -0 "$worker_pid" 2>/dev/null; then
     say "worker_pid_alive=true pid=$worker_pid"
     if [[ "$age" -gt "$stale_seconds" ]]; then
       say "CRITICAL worker appears stuck pid=$worker_pid"
