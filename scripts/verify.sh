@@ -9,6 +9,7 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 log "bash syntax"
 bash -n hire-junie.sh
+bash -n scripts/code-mutex-status.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -61,5 +62,56 @@ set -e
 grep -q 'missing required --admin-telegram-id' "$tmp/fail.err" || fail "missing admin id error not found"
 [[ ! -e "$tmp/home2/.openclaw" ]] || fail "missing admin id path mutated HOME"
 [[ ! -s "$tmp/fail.log" ]] || fail "missing admin id path called openclaw"
+
+log "code mutex status smoke tests"
+mutex="$tmp/code_mutex"
+set +e
+./scripts/code-mutex-status.sh --mutex-dir "$mutex" --repo "$tmp/repo" >"$tmp/mutex-free.out" 2>"$tmp/mutex-free.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "free mutex exit status was $status, expected 0"
+grep -q '^FREE code mutex$' "$tmp/mutex-free.out" || fail "free mutex status not reported"
+
+mkdir -p "$mutex"
+cat > "$mutex/holder.json" <<'JSON'
+{
+  "holder_id": "test-holder",
+  "reason": "verify fresh mutex",
+  "started_at": "2999-01-01T00:00:00Z",
+  "updated_at": "2999-01-01T00:05:00Z",
+  "expected_next_action": "finish smoke test"
+}
+JSON
+set +e
+./scripts/code-mutex-status.sh --mutex-dir "$mutex" --repo "$tmp/repo" --stale-minutes 120 >"$tmp/mutex-held.out" 2>"$tmp/mutex-held.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "held mutex exit status was $status, expected 0"
+grep -q '^HELD code mutex$' "$tmp/mutex-held.out" || fail "held mutex status not reported"
+grep -q '^holder_id=test-holder$' "$tmp/mutex-held.out" || fail "holder id not reported"
+grep -q '^expected_next_action=finish smoke test$' "$tmp/mutex-held.out" || fail "expected next action not reported"
+
+cat > "$mutex/holder.json" <<'JSON'
+{
+  "holder_id": "old-holder",
+  "reason": "verify stale mutex",
+  "started_at": "2000-01-01T00:00:00Z",
+  "updated_at": "2000-01-01T00:05:00Z"
+}
+JSON
+set +e
+./scripts/code-mutex-status.sh --mutex-dir "$mutex" --repo "$tmp/repo" --stale-minutes 1 >"$tmp/mutex-stale.out" 2>"$tmp/mutex-stale.err"
+status=$?
+set -e
+[[ "$status" -eq 1 ]] || fail "stale mutex exit status was $status, expected 1"
+grep -q '^STALE code mutex$' "$tmp/mutex-stale.out" || fail "stale mutex status not reported"
+
+printf '{not json\n' > "$mutex/holder.json"
+set +e
+./scripts/code-mutex-status.sh --mutex-dir "$mutex" --repo "$tmp/repo" >"$tmp/mutex-broken.out" 2>"$tmp/mutex-broken.err"
+status=$?
+set -e
+[[ "$status" -eq 2 ]] || fail "broken mutex exit status was $status, expected 2"
+grep -q '^BROKEN code mutex$' "$tmp/mutex-broken.out" || fail "broken mutex status not reported"
 
 log "all checks passed"
