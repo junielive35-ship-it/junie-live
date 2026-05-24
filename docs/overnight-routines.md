@@ -46,7 +46,7 @@ Routine state must live under the initialized OpenClaw workspace, not in the rep
 
 Logs should be durable enough to debug a failed overnight run and should include command invocations, worker/session identifiers, verification output, commit hashes, PR links when present, timeout reasons, and cleanup actions. Logs and state are operational artifacts of the initialized workspace, not source files in the Junie Live repo. Generated cron definitions explicitly set the repository path, workspace state directory, logs directory, target branch, timeout values, and non-interactive environment. Commands use `/usr/bin/env bash` from a predictable repo cwd and write reports/logs to workspace-local paths instead of relying on an interactive terminal.
 
-The scripts default to `$HOME/.openclaw/workspace-junie-live/.openclaw/state/overnight` and accept `--state-dir`/`OVERNIGHT_STATE_DIR` for tests or alternate initialized workspaces. Installed definitions use the initialized workspace's `.openclaw/state/overnight` and `.openclaw/logs/overnight` paths explicitly.
+The scripts default runtime state to `${JUNIE_WORKSPACE:-$HOME/.openclaw/workspace-junie-live}/.openclaw/state/...` and accept explicit env/CLI overrides such as `--state-dir`/`OVERNIGHT_STATE_DIR`, `BACKLOG_DIR`, `MUTEX_DIR`, `REFLECTIONS_DIR`, and `HYPOTHESIS_STATE_DIR` for tests or alternate initialized workspaces. Installed definitions use the initialized workspace's `.openclaw/state/overnight` and `.openclaw/logs/overnight` paths explicitly; no script should default operational state to the repo root.
 
 ## Stuck detection requirements
 
@@ -81,7 +81,7 @@ Mutex release must be explicit. Broken or stale mutex state must be reported rat
 
 Autonomous commits must use meaningful subjects that describe the change. Iteration-counter subjects such as `Autonomous MVP loop iteration 7` are rejected as policy because they hide intent from reviewers and future routine reports.
 
-The Junie Live repo must not contain initialized workspace trash or root workspace artifacts such as root `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`, `IDENTITY.md`, `HEARTBEAT.md`, or root `.openclaw/` state. Those belong in an initialized OpenClaw workspace or in `initialization/` seed files as appropriate.
+The Junie Live repo must not contain initialized workspace trash or root workspace artifacts such as root `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`, `IDENTITY.md`, `HEARTBEAT.md`, root `.openclaw/`, or root `state/`. Those belong in an initialized OpenClaw workspace or in `initialization/` seed files as appropriate. Never run OpenClaw workspace bootstrap with the repository root as the workspace; initialize/use a separate workspace such as `$HOME/.openclaw/workspace-junie-live`.
 
 The repo must also not hide such artifacts with `.git/info/exclude`. Local exclude masking makes verification lie: unwanted workspace trash can remain in the repo while appearing clean. Verification must fail if root workspace artifacts exist or if `.git/info/exclude` masks them.
 

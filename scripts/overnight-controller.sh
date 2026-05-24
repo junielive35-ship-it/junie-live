@@ -2,8 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/runtime-paths.sh
+source "$ROOT/scripts/runtime-paths.sh"
 repo="$ROOT"
-state_dir="${OVERNIGHT_STATE_DIR:-${HOME:-$ROOT}/.openclaw/workspace-junie-live/.openclaw/state/overnight}"
+state_dir="${OVERNIGHT_STATE_DIR:-$(junie_overnight_state_dir_default)}"
 worker_cmd="${OVERNIGHT_WORKER_CMD:-$ROOT/scripts/drive.sh}"
 expected_branch="${OVERNIGHT_EXPECTED_BRANCH:-junie/autonomous-mvp-loop}"
 max_iterations="${OVERNIGHT_MAX_ITERATIONS:-1}"
@@ -77,7 +79,7 @@ JSON
 
 run_verify(){ local out="$1"; : >"$out"; if $skip_verify || $dry_run; then echo skipped >>"$out"; return 0; fi; set +e; bash -c "$verify_cmd" >>"$out" 2>&1; local vs=$?; git diff --check >>"$out" 2>&1; local ds=$?; set -e; [[ $vs -eq 0 && $ds -eq 0 ]]; }
 block_task(){
-  BACKLOG_DIR="${BACKLOG_DIR:-$ROOT/state/backlog}" MUTEX_DIR="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}" REFLECTIONS_DIR="${REFLECTIONS_DIR:-${BACKLOG_DIR:-$ROOT/state/backlog}/../reflections}" "$ROOT/scripts/task-release.sh" --status blocked >>"$log_file" 2>&1 || true
+  BACKLOG_DIR="${BACKLOG_DIR:-$(junie_backlog_dir_default)}" MUTEX_DIR="${MUTEX_DIR:-$(junie_mutex_dir_default)}" REFLECTIONS_DIR="${REFLECTIONS_DIR:-$(junie_reflections_dir_default)}" "$ROOT/scripts/task-release.sh" --status blocked >>"$log_file" 2>&1 || true
   "$cleanup_cmd" --repo "$repo" --state-dir "$state_dir/cleanup" --reason "$1" >>"$log_file" 2>&1
 }
 repo_dirty(){ git -C "$repo" status --porcelain --untracked-files=all | grep -q .; }

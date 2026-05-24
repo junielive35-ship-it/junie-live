@@ -2,9 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/runtime-paths.sh
+source "$ROOT/scripts/runtime-paths.sh"
 
-backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
-mutex_dir="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}"
+backlog_dir="${BACKLOG_DIR:-$(junie_backlog_dir_default)}"
+mutex_dir="${MUTEX_DIR:-$(junie_mutex_dir_default)}"
 repo="${REPO:-$ROOT}"
 stale_minutes=60
 stale_hours=24

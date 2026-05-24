@@ -2,10 +2,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/runtime-paths.sh
+source "$ROOT/scripts/runtime-paths.sh"
 max_lines=500
 max_bytes=32768
 dry_run=false
-backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
+backlog_dir="${BACKLOG_DIR:-$(junie_backlog_dir_default)}"
 file="$ROOT/MEMORY.md"
 
 while [[ $# -gt 0 ]]; do

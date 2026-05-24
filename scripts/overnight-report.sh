@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-state_dir="${OVERNIGHT_STATE_DIR:-${HOME:-$ROOT}/.openclaw/workspace-junie-live/.openclaw/state/overnight}"
+# shellcheck source=scripts/runtime-paths.sh
+source "$ROOT/scripts/runtime-paths.sh"
+state_dir="${OVERNIGHT_STATE_DIR:-$(junie_overnight_state_dir_default)}"
 repo="$ROOT"
 format=human
 while [[ $# -gt 0 ]]; do

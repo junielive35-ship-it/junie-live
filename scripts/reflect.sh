@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/runtime-paths.sh
+source "$ROOT/scripts/runtime-paths.sh"
 task_id="${1:-}"
 new_status="${2:-done}"
 notes=""
@@ -15,8 +17,8 @@ done
 
 [[ -z "$task_id" ]] && exit 0
 
-backlog_dir="${BACKLOG_DIR:-$ROOT/state/backlog}"
-reflections_dir="${REFLECTIONS_DIR:-$ROOT/state/reflections}"
+backlog_dir="${BACKLOG_DIR:-$(junie_backlog_dir_default)}"
+reflections_dir="${REFLECTIONS_DIR:-$(junie_reflections_dir_default)}"
 mkdir -p "$reflections_dir"
 
 item_file="$backlog_dir/archive/$task_id.json"
