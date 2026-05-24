@@ -7,7 +7,10 @@ state_dir="${OVERNIGHT_STATE_DIR:-${HOME:-$ROOT}/.openclaw/workspace-junie-live/
 worker_cmd="${OVERNIGHT_WORKER_CMD:-$ROOT/scripts/drive.sh}"
 expected_branch="${OVERNIGHT_EXPECTED_BRANCH:-junie/autonomous-mvp-loop}"
 max_iterations="${OVERNIGHT_MAX_ITERATIONS:-1}"
-iteration_timeout="${OVERNIGHT_ITERATION_TIMEOUT_SECONDS:-900}"
+iteration_timeout="${OVERNIGHT_ITERATION_TIMEOUT_SECONDS:-7200}"
+fix_retries="${AUTONOMOUS_FIX_RETRIES:-7}"
+cleanup_cmd="${AUTONOMOUS_CLEANUP_CMD:-$ROOT/scripts/cleanup-failed-task.sh}"
+verify_cmd="${AUTONOMOUS_VERIFY_CMD:-./scripts/verify.sh}"
 end_epoch="${OVERNIGHT_END_EPOCH:-}"
 dry_run=false
 skip_verify=false
@@ -19,6 +22,8 @@ while [[ $# -gt 0 ]]; do
     --expected-branch) expected_branch="$2"; shift 2 ;;
     --max-iterations) max_iterations="$2"; shift 2 ;;
     --iteration-timeout) iteration_timeout="$2"; shift 2 ;;
+    --fix-retries) fix_retries="$2"; shift 2 ;;
+    --verify-cmd) verify_cmd="$2"; shift 2 ;;
     --end-epoch) end_epoch="$2"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
     --skip-verify) skip_verify=true; shift ;;
@@ -31,6 +36,8 @@ run_id="overnight-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 state_file="$state_dir/state.json"
 log_file="$state_dir/logs/controller-$run_id.log"
 worker_log="$state_dir/logs/worker-$run_id.log"
+fix_log="$state_dir/logs/fix-$run_id.log"
+verify_log="$state_dir/logs/verify-$run_id.log"
 
 json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -54,11 +61,14 @@ write_state() {
   "expected_next_action": "$(json_escape "$expected")",
   "last_commit": "$(json_escape "$last_commit")",
   "last_verify_status": "$(json_escape "$last_verify")",
+  "fix_retries": $fix_retries,
   "commit_policy": "commits are worker responsibility; iteration-counter subjects such as Autonomous MVP loop iteration N are rejected by verify"
 }
 JSON
 }
 
+run_verify(){ local out="$1"; : >"$out"; if $skip_verify || $dry_run; then echo skipped >>"$out"; return 0; fi; set +e; bash -c "$verify_cmd" >>"$out" 2>&1; local vs=$?; git diff --check >>"$out" 2>&1; local ds=$?; set -e; [[ $vs -eq 0 && $ds -eq 0 ]]; }
+block_task(){ BACKLOG_DIR="${BACKLOG_DIR:-$ROOT/state/backlog}" MUTEX_DIR="${MUTEX_DIR:-$ROOT/.openclaw/state/code_mutex}" "$ROOT/scripts/task-release.sh" --status blocked >>"$log_file" 2>&1 || true; "$cleanup_cmd" --repo "$repo" --state-dir "$state_dir/cleanup" --reason "$1" >>"$log_file" 2>&1 || true; }
 log() { printf '[%s] %s\n' "$(now)" "$*" | tee -a "$log_file"; }
 
 cd "$repo"
@@ -85,7 +95,7 @@ while [[ "$iteration" -lt "$max_iterations" ]]; do
   fi
   iteration=$((iteration + 1))
   write_state worker_starting running "run timeout-wrapped worker command"
-  log "iteration=$iteration worker_cmd=$worker_cmd timeout=${iteration_timeout}s"
+  log "iteration=$iteration worker_cmd=$worker_cmd timeout=${iteration_timeout}s fix_retries=$fix_retries"
   if $dry_run; then
     printf 'dry_run worker skipped\n' >>"$worker_log"
     worker_status=0
@@ -101,31 +111,28 @@ while [[ "$iteration" -lt "$max_iterations" ]]; do
   if [[ "$worker_status" -eq 124 || "$worker_status" -eq 137 ]]; then
     log "worker timed out with status=$worker_status"
     write_state worker_timeout timeout "watchdog should inspect and preserve logs" "" "$last_verify"
+    block_task "worker timeout status=$worker_status"
     exit 124
   elif [[ "$worker_status" -ne 0 ]]; then
     log "worker failed with status=$worker_status"
     write_state worker_failed failed "inspect worker log" "" "$last_verify"
+    block_task "worker failed status=$worker_status"
     exit "$worker_status"
   fi
 
   write_state verifying running "run verification gates" "" "$last_verify"
-  if $skip_verify || $dry_run; then
-    last_verify="skipped"
-    log "verification skipped"
+  if run_verify "$verify_log"; then
+    if $skip_verify || $dry_run; then last_verify="skipped"; log "verification skipped"; else last_verify="passed"; fi
   else
-    set +e
-    ./scripts/verify.sh >>"$log_file" 2>&1
-    verify_status=$?
-    git diff --check >>"$log_file" 2>&1
-    diff_status=$?
-    set -e
-    if [[ "$verify_status" -eq 0 && "$diff_status" -eq 0 ]]; then
-      last_verify="passed"
-    else
-      last_verify="failed:verify=$verify_status,diff=$diff_status"
-      write_state verify_failed failed "fix verification failures" "" "$last_verify"
-      exit 1
-    fi
+    last_verify="failed"; attempt=0; fixed=false
+    while [[ "$attempt" -lt "$fix_retries" ]]; do
+      attempt=$((attempt+1)); write_state fix_running running "fix verification failure attempt $attempt/$fix_retries" "" "$last_verify"
+      set +e; AUTONOMOUS_FIX_ATTEMPT="$attempt" AUTONOMOUS_VERIFY_LOG="$verify_log" timeout --foreground --kill-after=5s "$iteration_timeout" bash -c "$worker_cmd" <"$verify_log" >>"$fix_log" 2>&1; fs=$?; set -e
+      [[ "$fs" -eq 124 || "$fs" -eq 137 ]] && break
+      run_verify "$verify_log" && { last_verify="passed_after_fix_$attempt"; fixed=true; break; }
+      last_verify="failed_after_fix_$attempt"
+    done
+    [[ "$fixed" == true ]] || { write_state verify_failed failed "fix budget exhausted; task blocked and workspace cleaned" "" "$last_verify"; block_task "verification failed after $fix_retries fix attempts"; exit 1; }
   fi
   write_state iteration_complete running "continue until max iterations or end time" "" "$last_verify"
 done

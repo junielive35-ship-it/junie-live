@@ -111,3 +111,5 @@ The morning report must include:
 - Running multiple code-changing workers in parallel in one repo.
 - Hiding generated workspace artifacts through `.git/info/exclude`.
 - Defining exact cron times; schedules are project-dependent configuration.
+
+Autonomous verification failures retry through worker boundary up to AUTONOMOUS_FIX_RETRIES/--fix-retries (default 7). Exhaustion blocks the task, releases mutex, preserves status/diff, and cleans workspace. Hard timeout default is 7200s safety net.

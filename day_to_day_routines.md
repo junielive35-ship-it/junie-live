@@ -230,3 +230,5 @@ Require explicit approval:
 - anything that changes product behavior, team workflow, or agent authority.
 
 If unsure, treat the change as major or create a change candidate and ask.
+
+Autonomous windows retry verification failures up to 7 fixes, then block, release mutex, preserve diff/status, and clean failed workspace. Hard timeout default: 7200s.
