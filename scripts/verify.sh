@@ -39,6 +39,35 @@ while IFS= read -r file; do
   done < <(grep -oE '\[[^]]+\]\([^)]+\)' "$file" | sed -E 's/^.*\(([^)]+)\)$/\1/' || true)
 done < <(find . -path './.git' -prune -o -name '*.md' -type f -print)
 
+
+log "overnight routines contract"
+contract="docs/overnight-routines.md"
+[[ -f "$contract" ]] || fail "missing overnight routines contract: $contract"
+grep -qi 'controller' "$contract" || fail "overnight contract must mention controller role"
+grep -qi 'watchdog' "$contract" || fail "overnight contract must mention watchdog role"
+grep -qi 'morning report' "$contract" || fail "overnight contract must mention morning report role"
+grep -qi 'meaningful subjects' "$contract" || fail "overnight contract must require meaningful commit subjects"
+grep -qi 'Iteration-counter subjects' "$contract" || fail "overnight contract must reject iteration-counter commit subjects as policy"
+grep -qi 'Autonomous MVP loop iteration' "$contract" || fail "overnight contract must name the rejected iteration-counter pattern"
+grep -qi '\.git/info/exclude' "$contract" || fail "overnight contract must mention .git/info/exclude masking"
+grep -qi 'workspace trash' "$contract" || fail "overnight contract must mention workspace trash"
+
+log "repo workspace artifact hygiene"
+workspace_artifacts=(AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw)
+for artifact in "${workspace_artifacts[@]}"; do
+  [[ ! -e "$artifact" ]] || fail "root workspace artifact must not exist in repo: $artifact"
+done
+if [[ -f .git/info/exclude ]]; then
+  for artifact in "${workspace_artifacts[@]}"; do
+    if grep -Ev '^[[:space:]]*(#|$)' .git/info/exclude | grep -Fxq "$artifact"; then
+      fail ".git/info/exclude must not mask root workspace artifact: $artifact"
+    fi
+    if grep -Ev '^[[:space:]]*(#|$)' .git/info/exclude | grep -Fxq "/$artifact"; then
+      fail ".git/info/exclude must not mask root workspace artifact: /$artifact"
+    fi
+  done
+fi
+
 log "hire-junie smoke tests"
 tmp="$(mktemp -d)"
 cleanup() {

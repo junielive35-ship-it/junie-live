@@ -88,6 +88,8 @@ Responsibilities:
 
 ## Scheduled / continuous routines
 
+The product/technical contract for stable out-of-box overnight cron work is defined in [`docs/overnight-routines.md`](docs/overnight-routines.md). Scheduled routines should preserve that controller/watchdog/morning-report contract even when implemented by smaller scripts.
+
 ### 6. Code mutex status check
 
 Regular scheduled operation. It is not merely triggered by new queued code work.
