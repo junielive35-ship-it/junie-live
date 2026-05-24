@@ -18,6 +18,7 @@ bash -n scripts/report.sh
 bash -n scripts/next-action.sh
 bash -n scripts/task-acquire.sh
 bash -n scripts/task-release.sh
+bash -n scripts/mutex-release-stale.sh
 log "local markdown links"
 while IFS= read -r file; do
   while IFS= read -r target; do
@@ -411,6 +412,151 @@ s=$(grep '"status"' "$ta_backlog/items/$task_id.json" | sed 's/.*"status"[[:spac
 BACKLOG_DIR="$ta_backlog" MUTEX_DIR="$ta_mutex" ./scripts/task-release.sh >"$tmp/ta-free-release.out" 2>"$tmp/ta-free-release.err"
 grep -q '^released=false$' "$tmp/ta-free-release.out" || fail "task-release free mutex should report released=false"
 grep -q 'mutex already free' "$tmp/ta-free-release.out" || fail "task-release free mutex should explain"
+
+log "mutex release stale smoke tests"
+mrs_tmp="$tmp/mutex_release_stale"
+mrs_mutex="$mrs_tmp/mutex"
+mrs_backlog="$mrs_tmp/backlog"
+mkdir -p "$mrs_backlog/items" "$mrs_backlog/archive"
+
+# Free mutex -> FREE, exit 0
+set +e
+MUTEX_DIR="$mrs_mutex/nonexistent" BACKLOG_DIR="$mrs_backlog" ./scripts/mutex-release-stale.sh >"$tmp/mrs-free.out" 2>"$tmp/mrs-free.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "free mutex exit status was $status, expected 0"
+grep -q '^status=FREE$' "$tmp/mrs-free.out" || fail "free mutex status not FREE"
+grep -q '^action=none$' "$tmp/mrs-free.out" || fail "free mutex action not none"
+
+# Broken mutex (no holder.json) -> BROKEN, exit 0
+mkdir -p "$mrs_mutex/noholder"
+set +e
+MUTEX_DIR="$mrs_mutex/noholder" BACKLOG_DIR="$mrs_backlog" ./scripts/mutex-release-stale.sh >"$tmp/mrs-broken.out" 2>"$tmp/mrs-broken.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "broken mutex exit status was $status, expected 0"
+grep -q '^status=BROKEN$' "$tmp/mrs-broken.out" || fail "broken mutex status not BROKEN"
+grep -q '^action=removed$' "$tmp/mrs-broken.out" || fail "broken mutex action not removed"
+[[ ! -d "$mrs_mutex/noholder" ]] || fail "broken mutex dir should be removed"
+
+# Broken mutex dry run -> WOULD_REMOVE
+mkdir -p "$mrs_mutex/drybroken"
+set +e
+MUTEX_DIR="$mrs_mutex/drybroken" BACKLOG_DIR="$mrs_backlog" ./scripts/mutex-release-stale.sh --dry-run >"$tmp/mrs-drybroken.out" 2>"$tmp/mrs-drybroken.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "broken mutex dry-run exit status was $status, expected 0"
+grep -q '^action=WOULD_REMOVE$' "$tmp/mrs-drybroken.out" || fail "broken mutex dry-run action not WOULD_REMOVE"
+[[ -d "$mrs_mutex/drybroken" ]] || fail "broken mutex dry-run should not remove dir"
+
+# Broken mutex (no holder_id in json) -> BROKEN, exit 0
+mkdir -p "$mrs_mutex/noid"
+printf '{"invalid": true}\n' > "$mrs_mutex/noid/holder.json"
+set +e
+MUTEX_DIR="$mrs_mutex/noid" BACKLOG_DIR="$mrs_backlog" ./scripts/mutex-release-stale.sh >"$tmp/mrs-noid.out" 2>"$tmp/mrs-noid.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "no-id mutex exit status was $status, expected 0"
+grep -q '^status=BROKEN$' "$tmp/mrs-noid.out" || fail "no-id mutex status not BROKEN"
+grep -q '^action=removed$' "$tmp/mrs-noid.out" || fail "no-id mutex action not removed"
+[[ ! -d "$mrs_mutex/noid" ]] || fail "no-id mutex dir should be removed"
+
+# Held mutex (not stale) -> HELD, exit 1
+mkdir -p "$mrs_mutex/held"
+cat > "$mrs_mutex/held/holder.json" <<'JSON'
+{
+  "holder_id": "active-worker",
+  "reason": "held mutex test",
+  "started_at": "2999-01-01T00:00:00Z",
+  "updated_at": "2999-01-01T00:02:00Z"
+}
+JSON
+set +e
+MUTEX_DIR="$mrs_mutex/held" BACKLOG_DIR="$mrs_backlog" ./scripts/mutex-release-stale.sh --stale-minutes 120 >"$tmp/mrs-held.out" 2>"$tmp/mrs-held.err"
+status=$?
+set -e
+[[ "$status" -eq 1 ]] || fail "held mutex exit status was $status, expected 1"
+grep -q '^status=HELD$' "$tmp/mrs-held.out" || fail "held mutex status not HELD"
+grep -q '^action=none$' "$tmp/mrs-held.out" || fail "held mutex action not none"
+grep -q '^holder_id=active-worker$' "$tmp/mrs-held.out" || fail "held mutex holder_id not reported"
+[[ -d "$mrs_mutex/held" ]] || fail "held mutex dir should not be removed"
+
+# Stale mutex (no associated backlog item) -> STALE, action=released
+mkdir -p "$mrs_mutex/stale"
+cat > "$mrs_mutex/stale/holder.json" <<'JSON'
+{
+  "holder_id": "dead-worker",
+  "reason": "stale mutex test",
+  "started_at": "2000-01-01T00:00:00Z",
+  "updated_at": "2000-01-01T00:05:00Z"
+}
+JSON
+set +e
+MUTEX_DIR="$mrs_mutex/stale" BACKLOG_DIR="$mrs_backlog" ./scripts/mutex-release-stale.sh --stale-minutes 1 >"$tmp/mrs-stale.out" 2>"$tmp/mrs-stale.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "stale mutex exit status was $status, expected 0"
+grep -q '^status=STALE$' "$tmp/mrs-stale.out" || fail "stale mutex status not STALE"
+grep -q '^action=released$' "$tmp/mrs-stale.out" || fail "stale mutex action not released"
+grep -q '^holder_id=dead-worker$' "$tmp/mrs-stale.out" || fail "stale mutex holder_id not reported"
+[[ ! -d "$mrs_mutex/stale" ]] || fail "stale mutex dir should be removed"
+
+# Stale mutex with associated backlog in_progress item -> resets to queued
+mkdir -p "$mrs_mutex/withitem"
+cat > "$mrs_mutex/withitem/holder.json" <<'JSON'
+{
+  "holder_id": "dead-worker-2",
+  "task_id": "task-stale-test",
+  "reason": "stale mutex with backlog item",
+  "started_at": "2000-01-01T00:00:00Z",
+  "updated_at": "2000-01-01T00:05:00Z"
+}
+JSON
+ts_old="2000-01-01T00:00:00Z"
+cat > "$mrs_backlog/items/task-stale-test.json" <<JSON
+{
+  "id": "task-stale-test",
+  "title": "Stale task",
+  "status": "in_progress",
+  "priority": 50,
+  "created_at": "${ts_old}",
+  "updated_at": "${ts_old}"
+}
+JSON
+set +e
+MUTEX_DIR="$mrs_mutex/withitem" BACKLOG_DIR="$mrs_backlog" ./scripts/mutex-release-stale.sh --stale-minutes 1 >"$tmp/mrs-withitem.out" 2>"$tmp/mrs-withitem.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "stale with item exit status was $status, expected 0"
+grep -q '^status=STALE$' "$tmp/mrs-withitem.out" || fail "stale with item status not STALE"
+grep -q '^action=released$' "$tmp/mrs-withitem.out" || fail "stale with item action not released"
+grep -q '^task_id=task-stale-test$' "$tmp/mrs-withitem.out" || fail "stale with item task_id not output"
+grep -q '^task_reset_to=queued$' "$tmp/mrs-withitem.out" || fail "stale with item should reset to queued"
+s=$(grep '"status"' "$mrs_backlog/items/task-stale-test.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "queued" ]] || fail "stale with item status should be queued, got $s"
+[[ ! -d "$mrs_mutex/withitem" ]] || fail "stale with item mutex dir should be removed"
+
+# Stale mutex dry run -> WOULD_RELEASE, mutex NOT removed
+mkdir -p "$mrs_mutex/drystale"
+cat > "$mrs_mutex/drystale/holder.json" <<'JSON'
+{
+  "holder_id": "dry-worker",
+  "task_id": "task-dry-test",
+  "reason": "dry run test",
+  "started_at": "2000-01-01T00:00:00Z",
+  "updated_at": "2000-01-01T00:05:00Z"
+}
+JSON
+set +e
+MUTEX_DIR="$mrs_mutex/drystale" BACKLOG_DIR="$mrs_backlog" ./scripts/mutex-release-stale.sh --stale-minutes 1 --dry-run >"$tmp/mrs-drystale.out" 2>"$tmp/mrs-drystale.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "stale dry-run exit status was $status, expected 0"
+grep -q '^action=WOULD_RELEASE$' "$tmp/mrs-drystale.out" || fail "stale dry-run action not WOULD_RELEASE"
+grep -q '^task_id=task-dry-test$' "$tmp/mrs-drystale.out" || fail "stale dry-run task_id not output"
+[[ -d "$mrs_mutex/drystale" ]] || fail "stale dry-run should not remove mutex"
+s=$(grep '"status"' "$mrs_backlog/items/task-stale-test.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+[[ "$s" == "queued" ]] || fail "stale dry-run should not change status"
 
 log "pr status smoke tests"
 pr_tmp="$tmp/pr_status"
