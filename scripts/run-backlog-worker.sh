@@ -10,7 +10,7 @@ state_dir="${AUTONOMOUS_WORKER_STATE_DIR:-$(junie_autonomous_worker_state_dir_de
 worker_cmd_template="${AUTONOMOUS_WORKER_CMD:-}"
 timeout_seconds="${AUTONOMOUS_WORKER_TIMEOUT_SECONDS:-0}"
 opencode_bin="${AUTONOMOUS_OPENCODE_BIN:-}"
-opencode_model="${AUTONOMOUS_OPENCODE_MODEL:-claude-opus-4-6}"
+opencode_model="${AUTONOMOUS_OPENCODE_MODEL:-anthropic/claude-opus-4.5}"
 opencode_variant="${AUTONOMOUS_OPENCODE_VARIANT:-low}"
 opencode_agent="${AUTONOMOUS_OPENCODE_AGENT:-build}"
 item_id=""
@@ -61,6 +61,37 @@ Constraints:
 - If blocked, leave a clear blocker in output and do not claim success.
 PROMPT
 
+
+mask_secret_line() {
+  sed -E 's/(sk-or-v1-[A-Za-z0-9_-]+)/<masked>/g; s/(apiKey|apikey|api_key|key|token|authorization|Bearer)[^,}[:space:]]*/\1=<masked>/Ig'
+}
+
+opencode_config_diagnostics() {
+  printf 'opencode_config_diagnostics_begin\n'
+  printf 'opencode_config_files='
+  local found=0 f
+  for f in "${HOME:-}/.config/opencode/config.json" "${HOME:-}/.config/opencode/opencode.json" "${HOME:-}/.config/opencode/opencode.jsonc" "${HOME:-}/.opencode/opencode.json" "${HOME:-}/.opencode/opencode.jsonc"; do
+    if [[ -f "$f" ]]; then
+      [[ "$found" -eq 0 ]] || printf ','
+      printf '%s' "$f"
+      found=1
+    fi
+  done
+  [[ "$found" -eq 1 ]] || printf 'none'
+  printf '\n'
+  printf 'openrouter_key_file_present=%s\n' "$([[ -f "${HOME:-}/openrouter.key" ]] && printf yes || printf no)"
+  printf 'openrouter_env_present=%s\n' "$([[ -n "${OPENROUTER_API_KEY:-}" ]] && printf yes || printf no)"
+  if "$opencode_bin" auth list >/tmp/junie-opencode-auth-$$.txt 2>&1; then
+    printf 'opencode_auth_list='
+    tr '\n' ' ' </tmp/junie-opencode-auth-$$.txt | mask_secret_line
+    printf '\n'
+  else
+    printf 'opencode_auth_list=unavailable\n'
+  fi
+  rm -f /tmp/junie-opencode-auth-$$.txt
+  printf 'opencode_config_diagnostics_end\n'
+}
+
 use_default_opencode=false
 if [[ -z "$worker_cmd_template" ]]; then
   if [[ -n "$opencode_bin" ]]; then
@@ -98,6 +129,9 @@ export AUTONOMOUS_OPENCODE_VARIANT="$opencode_variant"
 export AUTONOMOUS_OPENCODE_AGENT="$opencode_agent"
 
 printf 'worker_status=running\nitem_id=%s\nprompt_file=%s\nlog_file=%s\n' "$item_id" "$prompt_file" "$log_file"
+if [[ "$use_default_opencode" == true ]]; then
+  printf 'opencode_bin=%s\nopencode_model=%s\nopencode_variant=%s\nopencode_agent=%s\n' "$opencode_bin" "$opencode_model" "$opencode_variant" "$opencode_agent"
+fi
 
 set +e
 if [[ "$use_default_opencode" == true ]]; then
@@ -119,6 +153,16 @@ set -e
 if [[ "$status" -eq 0 ]]; then
   printf 'worker_status=success\nitem_id=%s\nlog_file=%s\n' "$item_id" "$log_file"
   exit 0
+fi
+
+if [[ "$use_default_opencode" == true ]] && grep -Eiq 'model not found|invalid model|provider.*not found|unknown provider|models? (is|are) invalid' "$log_file"; then
+  printf 'worker_status=blocked\n'
+  printf 'item_id=%s\nexit_status=%s\nlog_file=%s\n' "$item_id" "$status" "$log_file"
+  printf 'reason=opencode model/provider configuration failed before work started\n'
+  printf 'opencode_model=%s\nopencode_variant=%s\nopencode_agent=%s\n' "$opencode_model" "$opencode_variant" "$opencode_agent"
+  printf 'diagnostic=opencode requires a configured provider/model. With OpenRouter, OpenCode reports model names without the openrouter/ prefix in suggestions (for example anthropic/claude-opus-4.5), while the OpenRouter provider/credential must be configured separately. Allowed production providers are OpenAI GPT-5.2+, Anthropic Sonnet/Opus 4.6+, or Google Gemini 3.1 Pro+. Run: %q models and %q auth list; then set AUTONOMOUS_OPENCODE_MODEL to an available allowed model.\n' "$opencode_bin" "$opencode_bin"
+  opencode_config_diagnostics
+  exit 2
 fi
 
 printf 'worker_status=failed\nitem_id=%s\nexit_status=%s\nlog_file=%s\n' "$item_id" "$status" "$log_file"
