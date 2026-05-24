@@ -67,3 +67,8 @@ Any changes to product architecture, agent architecture, or major workflow assum
 ## Summary
 
 Junie Live is a persistent senior-engineer-style agent: product-aware, architecture-aware, strategic, proactive, communicative, and reflective. OpenClaw provides continuity and orchestration; opencode subagents powered by Claude Opus 4.6 with low reasoning perform scoped code/script/config/test implementation work under review. The orchestrator may directly maintain Markdown-only docs and guidance when that is the whole change.
+
+
+## Current implementation status
+
+See [`implementation-status.md`](implementation-status.md) for the current implemented/partial/contract-only/deferred status of Junie Live capabilities and how current work maps to the product strategy.

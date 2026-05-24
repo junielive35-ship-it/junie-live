@@ -60,32 +60,37 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - important constraints;
    - known risks and unknowns;
    - current task/backlog/PR state, if discoverable.
-4. Extract cross-cutting invariants and bypass risks from target project docs, user/team instructions, and existing workflow rules:
+4. Build a current-status model before normal work:
+   - distinguish implemented behavior, partial implementation, contract-only/aspirational docs, deferred work, and unknowns;
+   - connect current work to the project strategy and active hypotheses;
+   - record where future humans/agents can verify that status, such as an implementation-status document, roadmap, issue tracker, backlog, tests, or project docs;
+   - if project docs describe capabilities that are not implemented, label them clearly instead of treating the docs as current reality.
+5. Extract cross-cutting invariants and bypass risks from target project docs, user/team instructions, and existing workflow rules:
    - identify rules that should apply across future features, triggers, entrypoints, or operational paths, not only the scenario that originally described them;
    - name the shared loop or protocol that preserves each invariant, such as an implementation acceptance loop with worker/delegation/review/fix/acceptance for code-changing work;
    - identify bypass risks where a future entrypoint could invoke implementation workers through an ad hoc path that skips the shared loop;
    - record concise guardrails in the appropriate `MEMORY.md`, `TOOLS.md`, `docs/`, checklist, or operating protocol during initialization.
-5. Check for contradictions:
+6. Check for contradictions:
    - between user/team instructions and existing project docs;
    - between strategy, architecture, implementation, and workflow rules;
    - between inferred cross-cutting invariants and proposed project routines;
    - between this seed guidance and the target environment.
-6. If a contradiction blocks safe initialization:
+7. If a contradiction blocks safe initialization:
    - stop changing files;
    - explain the contradiction clearly;
    - ask the most relevant person to resolve it.
-7. If initialization can proceed, update:
+8. If initialization can proceed, update:
    - `MEMORY.md` with compact always-on strategy;
    - `TOOLS.md` with local operational references;
    - relevant `docs/` files with detailed project knowledge;
    - `HEARTBEAT.md` with a short project-specific recurring checklist, only if useful.
-8. During initialization, configure the project-specific code mutex context:
+9. During initialization, configure the project-specific code mutex context:
    - identify the owned repository or feature-area scope protected by the mutex;
    - ensure `.openclaw/state/` can exist in the initialized OpenClaw workspace;
    - record the administrator/owner escalation path for held or stale mutex decisions in `TOOLS.md`;
    - add a lightweight mutex status check to `HEARTBEAT.md` or project routines only if active code work or queued code work makes it useful.
-9. Check `MEMORY.md` size after editing it. If it is too large or close to the configured budget, move details into `docs/` and keep only the strategic core in `MEMORY.md`.
-10. Decide whether initialization is complete:
+10. Check `MEMORY.md` size after editing it. If it is too large or close to the configured budget, move details into `docs/` and keep only the strategic core in `MEMORY.md`.
+11. Decide whether initialization is complete:
    - required inputs are captured or safely inferred;
    - no blocking contradiction remains;
    - owner operating preferences, durable product principles, and autonomous/proactive ownership model are recorded;
@@ -94,13 +99,13 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - cross-cutting invariants, bypass risks, and guardrails are recorded where future work will see them;
    - the mutex scope and escalation path are configured;
    - remaining unknowns are non-blocking and recorded.
-11. Send a short completion summary:
+12. Send a short completion summary:
    - what project/area you own;
    - what mutex scope and escalation path you configured;
    - what changed at a high level;
    - unresolved non-blocking unknowns;
    - assumptions that may need future attention.
-12. Delete this file or move it to an archive location so it will not keep the workspace in initialization mode.
+13. Delete this file or move it to an archive location so it will not keep the workspace in initialization mode.
 
 ## What not to do during initialization
 
