@@ -23,7 +23,11 @@ Options:
   --no-restart                Configure everything but do not restart Gateway.
   --no-overnight-crons        Do not install or generate overnight cron artifacts.
   --overnight-artifacts-only  Generate audit/fallback artifacts but do not install OpenClaw cron jobs.
-  --overnight-disabled        Generate/install overnight cron jobs disabled.
+  --overnight-disabled        Generate/install all overnight cron jobs disabled.
+  --overnight-enable-controller
+                              Enable scheduled controller cron (requires non-main branch).
+  --overnight-enable-morning-report
+                              Enable scheduled morning-report cron. Deprecated; prefer on-demand reports.
   --overnight-controller-schedule CRON
                               Default: 0 1 * * *
   --overnight-watchdog-schedule CRON
@@ -72,6 +76,8 @@ RESTART=1
 INSTALL_OVERNIGHT_CRONS=1
 OVERNIGHT_DISABLED=0
 OVERNIGHT_ARTIFACTS_ONLY=0
+OVERNIGHT_ENABLE_CONTROLLER=0
+OVERNIGHT_ENABLE_MORNING_REPORT=0
 OVERNIGHT_CONTROLLER_SCHEDULE="0 1 * * *"
 OVERNIGHT_WATCHDOG_SCHEDULE="*/15 * * * *"
 OVERNIGHT_REPORT_SCHEDULE="0 8 * * *"
@@ -101,6 +107,10 @@ while [[ $# -gt 0 ]]; do
       OVERNIGHT_ARTIFACTS_ONLY=1; shift ;;
     --overnight-disabled)
       OVERNIGHT_DISABLED=1; shift ;;
+    --overnight-enable-controller)
+      OVERNIGHT_ENABLE_CONTROLLER=1; shift ;;
+    --overnight-enable-morning-report)
+      OVERNIGHT_ENABLE_MORNING_REPORT=1; shift ;;
     --overnight-controller-schedule)
       need_value "$1" "${2:-}"; OVERNIGHT_CONTROLLER_SCHEDULE="$2"; shift 2 ;;
     --overnight-watchdog-schedule)
@@ -184,6 +194,8 @@ if [[ "$INSTALL_OVERNIGHT_CRONS" -eq 1 ]]; then
     --max-iterations "$OVERNIGHT_MAX_ITERATIONS"
   )
   [[ "$OVERNIGHT_DISABLED" -eq 0 ]] || cron_args+=(--disabled)
+  [[ "$OVERNIGHT_ENABLE_CONTROLLER" -eq 0 ]] || cron_args+=(--enable-controller)
+  [[ "$OVERNIGHT_ENABLE_MORNING_REPORT" -eq 0 ]] || cron_args+=(--enable-morning-report)
   [[ "$OVERNIGHT_ARTIFACTS_ONLY" -eq 0 ]] || cron_args+=(--artifacts-only)
   "$repo_root/scripts/install-overnight-crons.sh" "${cron_args[@]}"
 fi

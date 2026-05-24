@@ -16,6 +16,7 @@ verify_cmd="${AUTONOMOUS_VERIFY_CMD:-./scripts/verify.sh}"
 end_epoch="${OVERNIGHT_END_EPOCH:-}"
 dry_run=false
 skip_verify=false
+allow_main_for_tests=false
 continue_on_local_failure=false
 max_local_failures="${AUTONOMOUS_MAX_LOCAL_FAILURES:-0}"
 local_failures=0
@@ -33,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) dry_run=true; shift ;;
     --skip-verify) skip_verify=true; shift ;;
     --continue-on-local-failure) continue_on_local_failure=true; shift ;;
+    --allow-main-for-tests) allow_main_for_tests=true; shift ;;
     --max-local-failures) max_local_failures="$2"; shift 2 ;;
     *) printf 'Unknown: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -101,7 +103,7 @@ log() { printf '[%s] %s\n' "$(now)" "$*" | tee -a "$log_file"; }
 
 cd "$repo"
 branch=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$branch" == "main" ]]; then
+if [[ "$branch" == "main" && "$allow_main_for_tests" != true ]]; then
   printf 'Refusing to run overnight controller on main\n' >&2
   exit 2
 fi
@@ -163,5 +165,5 @@ while [[ "$iteration" -lt "$max_iterations" ]]; do
   write_state iteration_complete running "continue until max iterations or end time" "" "$last_verify"
 done
 
-write_state complete complete "run morning report" "" "$last_verify"
+write_state complete complete "run report on demand or scheduled if explicitly enabled" "" "$last_verify"
 log "complete iterations=$iteration last_verify=$last_verify"
