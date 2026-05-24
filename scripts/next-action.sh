@@ -117,6 +117,8 @@ printf 'mutex=%s\n' "${mutex:-UNKNOWN}"
 printf 'backlog_queued=%s\n' "${backlog_queued:-0}"
 printf 'backlog_in_progress=%s\n' "${backlog_ip:-0}"
 printf 'backlog_next=%s\n' "${backlog_next:-none}"
+printf 'pr_failing=%s\n' "${pr_failing:-0}"
+printf 'pr_stale=%s\n' "${pr_stale:-0}"
 printf 'overall_status=%s\n' "${overall_status:-UNKNOWN}"
 
 case "$action" in
