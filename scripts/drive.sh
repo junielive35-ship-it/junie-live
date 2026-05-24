@@ -48,6 +48,9 @@ case "$action" in
   start_backlog_item)
     BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
       "$ROOT/scripts/task-acquire.sh" ;;
+  release_completed_task)
+    BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
+      "$ROOT/scripts/task-release.sh" ;;
   investigate_critical|address_failing_ci|address_stale_prs|check_stale_in_progress)
     BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" REPO="$repo" \
       "$ROOT/scripts/report.sh" \
