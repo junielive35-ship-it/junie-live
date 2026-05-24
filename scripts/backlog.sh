@@ -31,6 +31,7 @@ Commands:
           [--source <source>] [--priority <n>]
   list    [--status <status>] [--type <type>]
   next
+  acquire
   update  <id> --status <status> [--priority <n>]
   archive
 USAGE
@@ -112,11 +113,43 @@ EOF
       fi
     done
 
+    if     [[ -z "$best_id" ]]; then
+      exit 0
+    fi
+
+    f="$items_dir/$best_id.json"
+    for field in id type title description status priority source created_at updated_at; do
+      val=$(read_field "$f" "$field")
+      printf '%s=%s\n' "$field" "$val"
+    done
+    ;;
+
+  acquire)
+    best_id=""; best_priority=-1
+    for f in "$items_dir"/*.json; do
+      [[ -f "$f" ]] || continue
+      s=$(read_field "$f" "status")
+      [[ "$s" != "queued" ]] && continue
+      p=$(read_field "$f" "priority")
+      p="${p:-0}"
+      if [[ "$p" -gt "$best_priority" ]]; then
+        best_priority="$p"
+        best_id=$(read_field "$f" "id")
+      fi
+    done
+
     if [[ -z "$best_id" ]]; then
       exit 0
     fi
 
     f="$items_dir/$best_id.json"
+    s=$(read_field "$f" "status")
+    [[ "$s" != "queued" ]] && exit 1
+
+    sed -i 's/"status"[[:space:]]*:[[:space:]]*"[^"]*"/"status": "in_progress"/' "$f"
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    sed -i 's/"updated_at"[[:space:]]*:[[:space:]]*"[^"]*"/"updated_at": "'"$ts"'"/' "$f"
+
     for field in id type title description status priority source created_at updated_at; do
       val=$(read_field "$f" "$field")
       printf '%s=%s\n' "$field" "$val"
