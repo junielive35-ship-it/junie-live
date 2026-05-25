@@ -1973,6 +1973,47 @@ grep -q '^action=completed_backlog_item$' "$tmp/drive-stale-ip.out" || fail "dri
 s=$(grep '"status"' "$drive_stale_ip_bl/items/$stale_ip_id.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "done" ]] || fail "drive stale ip should complete to done, got $s"
 
+# Blocked hypothesis cap: when too many autonomous blocked items exist,
+# drive should go idle instead of generating yet another hypothesis.
+drive_cap="$tmp/drive_blocked_cap"
+drive_cap_bl="$drive_cap/backlog"
+drive_cap_hyp="$drive_cap/hyp_state"
+mkdir -p "$drive_cap_bl/items" "$drive_cap_hyp"
+for cap_i in 1 2 3; do
+  cap_id=$(BACKLOG_DIR="$drive_cap_bl" ./scripts/backlog.sh add --type hypothesis \
+    --title "Blocked hyp $cap_i" --source "system:autonomous-empty-backlog" --priority 60)
+  BACKLOG_DIR="$drive_cap_bl" ./scripts/backlog.sh update "$cap_id" --status blocked >/dev/null
+done
+set +e
+AUTONOMOUS_SOLVER_RUN=true HYPOTHESIS_STATE_DIR="$drive_cap_hyp" BACKLOG_DIR="$drive_cap_bl" MUTEX_DIR="$drive_cap/mutex" AUTONOMOUS_WORKER_CMD='printf should-not-run' AUTONOMOUS_WORKER_STATE_DIR="$drive_cap/worker-state" \
+  ./scripts/drive.sh >"$tmp/drive-cap.out" 2>"$tmp/drive-cap.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "blocked hypothesis cap drive exit status was $status, expected 0"
+grep -q '^action=idle$' "$tmp/drive-cap.out" || fail "drive should idle when blocked hypothesis cap reached"
+grep -q 'skipped hypothesis generation' "$tmp/drive-cap.out" || fail "drive should report skipped hypothesis generation in summary"
+# Verify no new item was created (still exactly the 3 blocked items)
+cap_queued=$( (find "$drive_cap_bl/items/" -name '*.json' -exec grep -l '"status"[[:space:]]*:[[:space:]]*"queued"' {} + 2>/dev/null || true) | wc -l | tr -d ' ')
+[[ "$cap_queued" -eq 0 ]] || fail "drive should not generate new hypothesis when cap reached; found $cap_queued queued items"
+
+# Below cap (2 blocked) should still generate and execute a hypothesis
+drive_undercap="$tmp/drive_under_cap"
+drive_undercap_bl="$drive_undercap/backlog"
+drive_undercap_hyp="$drive_undercap/hyp_state"
+mkdir -p "$drive_undercap_bl/items" "$drive_undercap_hyp"
+for cap_i in 1 2; do
+  cap_id=$(BACKLOG_DIR="$drive_undercap_bl" ./scripts/backlog.sh add --type hypothesis \
+    --title "Blocked hyp $cap_i" --source "system:autonomous-empty-backlog" --priority 60)
+  BACKLOG_DIR="$drive_undercap_bl" ./scripts/backlog.sh update "$cap_id" --status blocked >/dev/null
+done
+set +e
+AUTONOMOUS_SOLVER_RUN=true HYPOTHESIS_STATE_DIR="$drive_undercap_hyp" BACKLOG_DIR="$drive_undercap_bl" MUTEX_DIR="$drive_undercap/mutex" AUTONOMOUS_WORKER_CMD='printf ok' AUTONOMOUS_WORKER_STATE_DIR="$drive_undercap/worker-state" \
+  ./scripts/drive.sh >"$tmp/drive-undercap.out" 2>"$tmp/drive-undercap.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "under-cap drive exit status was $status, expected 0"
+grep -q '^action=completed_backlog_item$' "$tmp/drive-undercap.out" || fail "drive should still generate and complete when under blocked hypothesis cap"
+
 log "watchdog idle smoke test"
 wd_idle="$tmp/watchdog-idle"
 mkdir -p "$wd_idle"

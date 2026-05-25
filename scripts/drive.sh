@@ -42,6 +42,19 @@ backlog_has_queued_source() {
   return 1
 }
 
+# Count blocked items from a given source to cap runaway hypothesis generation.
+blocked_hypothesis_cap=3
+backlog_count_blocked_source() {
+  local source="$1" count=0
+  for f in "$backlog_dir/items"/*.json; do
+    [[ -f "$f" ]] || continue
+    s=$(grep -o '"source"[[:space:]]*:[[:space:]]*"[^"]*"' "$f" 2>/dev/null | head -1 | sed 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+    st=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$f" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+    [[ "$s" == "$source" && "$st" == "blocked" ]] && count=$((count + 1))
+  done
+  printf '%s' "$count"
+}
+
 # Autonomous loop: repeatedly process cleanup actions until a terminal
 # action (idle, wait_for_mutex, start_backlog_item, etc.) is reached.
 max_iterations=10
@@ -233,6 +246,18 @@ while [[ $iteration -lt $max_iterations ]]; do
       rm -f "$rpt" "$fup_out"
       _cont=true ;;
     generate_hypotheses)
+      # Cap: stop generating hypotheses when too many from the same source are
+      # already blocked.  This breaks the feedback loop where blocked items
+      # trigger WARNING, which spawns another hypothesis, which fails and
+      # becomes blocked, keeping health at WARNING indefinitely.
+      _blocked_auto=$(backlog_count_blocked_source "system:autonomous-empty-backlog")
+      if [[ "$_blocked_auto" -ge "$blocked_hypothesis_cap" ]]; then
+        add_summary "skipped hypothesis generation: ${_blocked_auto} blocked autonomous items (cap=${blocked_hypothesis_cap})"
+        rm -f "$na_out"
+        loop_action="idle"
+        break
+      fi
+
       pr_failing=$(read_val pr_failing)
       pr_stale=$(read_val pr_stale)
       backlog_queued=$(read_val backlog_queued)
