@@ -986,6 +986,32 @@ grep -q 'Contains.*quotes.*backslashes' "$refl_dir/${refl_special_id}.json" || f
 s=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$refl_dir/${refl_special_id}.json" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "blocked" ]] || fail "reflect special status should be blocked, got $s"
 
+# reflect.sh with --duration -> stores duration_seconds in JSON
+BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh add --type task --title "Reflect duration" --priority 15 >/dev/null
+refl_dur_id=$(BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$refl_dur_id" ]] || fail "reflect duration add failed"
+BACKLOG_DIR="$refl_backlog" REFLECTIONS_DIR="$refl_dir" ./scripts/reflect.sh "$refl_dur_id" done \
+  --duration 42 >/dev/null
+[[ -f "$refl_dir/${refl_dur_id}.json" ]] || fail "reflect duration should create reflection file"
+grep -q '"duration_seconds": 42' "$refl_dir/${refl_dur_id}.json" || fail "reflect duration should store duration_seconds field"
+
+# reflect.sh without --duration should not have duration_seconds field
+BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh add --type task --title "Reflect no duration" --priority 10 >/dev/null
+refl_no_dur_id=$(BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$refl_no_dur_id" ]] || fail "reflect no-duration add failed"
+BACKLOG_DIR="$refl_backlog" REFLECTIONS_DIR="$refl_dir" ./scripts/reflect.sh "$refl_no_dur_id" done >/dev/null
+grep -q '"duration_seconds"' "$refl_dir/${refl_no_dur_id}.json" && fail "reflect no-duration should not have duration_seconds field" || true
+
+# reflect.sh with both --duration and --notes
+BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh add --type hypothesis --title "Reflect both" --priority 5 >/dev/null
+refl_both_id=$(BACKLOG_DIR="$refl_backlog" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+[[ -n "$refl_both_id" ]] || fail "reflect both add failed"
+BACKLOG_DIR="$refl_backlog" REFLECTIONS_DIR="$refl_dir" ./scripts/reflect.sh "$refl_both_id" done \
+  --duration 99 --notes "timed outcome" >/dev/null
+grep -q '"duration_seconds": 99' "$refl_dir/${refl_both_id}.json" || fail "reflect both should store duration_seconds"
+grep -q '"notes"' "$refl_dir/${refl_both_id}.json" || fail "reflect both should store notes"
+grep -q 'timed outcome' "$refl_dir/${refl_both_id}.json" || fail "reflect both should store notes content"
+
 # task-release integration with reflection
 refl_ta_tmp="$tmp/refl_task_acquire"
 refl_ta_backlog="$refl_ta_tmp/backlog"
@@ -1006,6 +1032,7 @@ grep -q '^released=true$' "$tmp/refl-tr-out" || fail "release-reflect should rep
 [[ -f "$refl_dir2/${refl_ta_id}.json" ]] || fail "release-reflect should create reflection file"
 t=$(grep -o '"task_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$refl_dir2/${refl_ta_id}.json" | sed 's/.*"task_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$t" == "$refl_ta_id" ]] || fail "release-reflect reflection wrong task_id"
+grep -q '"duration_seconds":' "$refl_dir2/${refl_ta_id}.json" || fail "release-reflect should include duration_seconds from holder.json started_at"
 
 # task-release --notes passes notes through to reflection
 refl_notes_ta_tmp="$tmp/refl_notes_ta"
