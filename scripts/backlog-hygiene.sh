@@ -61,7 +61,7 @@ for f in "$items_dir"/*.json; do
   fi
 
   case "$status" in
-    done|archived|cancelled)
+    done|archived|cancelled|blocked)
       if [[ "$created_epoch" -gt 0 ]]; then
         age_days=$(( (now_epoch - created_epoch) / 86400 ))
         if [[ "$age_days" -ge "$archive_days" ]]; then
