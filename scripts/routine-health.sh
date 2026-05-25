@@ -57,6 +57,7 @@ queued_task=0
 queued_fix=0
 total_in_progress=0
 total_completed=0
+total_blocked=0
 stale_in_progress=0
 stale_queued=0
 next_id=""
@@ -111,6 +112,9 @@ if [[ -d "$items_dir" ]]; then
           fi
         fi
         ;;
+      blocked)
+        total_blocked=$((total_blocked + 1))
+        ;;
       done|archived|cancelled)
         total_completed=$((total_completed + 1))
         ;;
@@ -125,6 +129,8 @@ if [[ "$mutex_status" == "STALE" || "$mutex_status" == "BROKEN" ]]; then
 elif [[ "$stale_in_progress" -gt 0 ]]; then
   health="WARNING"
 elif [[ "$total_in_progress" -gt 0 && "$mutex_status" == "FREE" ]]; then
+  health="WARNING"
+elif [[ "$total_blocked" -gt 3 ]]; then
   health="WARNING"
 elif [[ "$stale_queued" -gt 3 ]]; then
   health="WARNING"
@@ -143,6 +149,7 @@ printf 'backlog_in_progress=%s\n' "$total_in_progress"
 printf 'backlog_stale_in_progress=%s\n' "$stale_in_progress"
 printf 'backlog_stale_queued=%s\n' "$stale_queued"
 printf 'backlog_completed=%s\n' "$total_completed"
+printf 'backlog_blocked=%s\n' "$total_blocked"
 printf 'backlog_next=%s\n' "${next_id:-none}"
 
 details=""
@@ -155,6 +162,9 @@ elif [[ "$mutex_status" == "BROKEN" ]]; then
 fi
 if [[ "$stale_in_progress" -gt 0 ]]; then
   details="${details}, ${stale_in_progress} stale in-progress"
+fi
+if [[ "$total_blocked" -gt 0 ]]; then
+  details="${details}, ${total_blocked} blocked"
 fi
 if [[ "$stale_queued" -gt 0 ]]; then
   details="${details}, ${stale_queued} stale queued"

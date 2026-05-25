@@ -45,6 +45,7 @@ rh_backlog_queued_task=$(read_val "$rh_out" backlog_queued_task) || rh_backlog_q
 rh_backlog_queued_fix=$(read_val "$rh_out" backlog_queued_fix) || rh_backlog_queued_fix="0"
 rh_backlog_ip=$(read_val "$rh_out" backlog_in_progress) || rh_backlog_ip="0"
 rh_backlog_completed=$(read_val "$rh_out" backlog_completed) || rh_backlog_completed="0"
+rh_backlog_blocked=$(read_val "$rh_out" backlog_blocked) || rh_backlog_blocked="0"
 rh_backlog_next=$(read_val "$rh_out" backlog_next) || rh_backlog_next="none"
 
 mutex_holder_id=""
@@ -78,8 +79,10 @@ if [[ "$rh_backlog_total" -gt 0 ]]; then
   summary="${summary}, backlog=${rh_backlog_total} (${rh_backlog_queued} queued"
   [[ "$rh_backlog_queued_hyp" -gt 0 ]] && summary="${summary}, ${rh_backlog_queued_hyp} hypotheses"
   [[ "$rh_backlog_queued_task" -gt 0 ]] && summary="${summary}, ${rh_backlog_queued_task} tasks"
-  [[ "$rh_backlog_queued_fix" -gt 0 ]] && summary="${summary}, ${rh_backlog_queued_fix} fixes"
-  summary="${summary}, ${rh_backlog_ip} in_progress, ${rh_backlog_completed} completed)"
+    [[ "$rh_backlog_queued_fix" -gt 0 ]] && summary="${summary}, ${rh_backlog_queued_fix} fixes"
+    summary="${summary}, ${rh_backlog_ip} in_progress, ${rh_backlog_completed} completed"
+    [[ "$rh_backlog_blocked" -gt 0 ]] && summary="${summary}, ${rh_backlog_blocked} blocked"
+    summary="${summary})"
 else
   summary="${summary}, backlog=empty"
 fi
@@ -105,6 +108,7 @@ printf 'backlog_queued_task=%s\n' "$rh_backlog_queued_task"
 printf 'backlog_queued_fix=%s\n' "$rh_backlog_queued_fix"
 printf 'backlog_in_progress=%s\n' "$rh_backlog_ip"
 printf 'backlog_completed=%s\n' "$rh_backlog_completed"
+printf 'backlog_blocked=%s\n' "$rh_backlog_blocked"
 printf 'backlog_next=%s\n' "$rh_backlog_next"
 printf 'mutex_holder_id=%s\n' "${mutex_holder_id:-}"
 printf 'mutex_task_id=%s\n' "${mutex_task_id:-}"

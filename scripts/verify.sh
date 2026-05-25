@@ -667,6 +667,7 @@ grep -q '^details=All nominal$' "$tmp/rh-ok.out" || fail "empty health details n
 grep -q '^backlog_queued_hypothesis=0$' "$tmp/rh-ok.out" || fail "empty health hyp count wrong"
 grep -q '^backlog_queued_task=0$' "$tmp/rh-ok.out" || fail "empty health task count wrong"
 grep -q '^backlog_queued_fix=0$' "$tmp/rh-ok.out" || fail "empty health fix count wrong"
+grep -q '^backlog_blocked=0$' "$tmp/rh-ok.out" || fail "empty health blocked count wrong"
 
 # Held mutex + items -> OK
 mkdir -p "$rh_mutex"
@@ -737,6 +738,22 @@ set -e
 [[ "$status" -eq 2 ]] || fail "broken mutex exit status was $status, expected 2"
 grep -q '^status=CRITICAL$' "$tmp/rh-broken.out" || fail "broken mutex status not CRITICAL"
 grep -q 'Mutex BROKEN' "$tmp/rh-broken.out" || fail "broken mutex not in details"
+
+# Blocked backlog items -> counted separately from completed
+rh_blocked_bl="$health_tmp/blocked_backlog"
+mkdir -p "$rh_blocked_bl/items"
+BACKLOG_DIR="$rh_blocked_bl" ./scripts/backlog.sh add --type task --title "Blocked task" --priority 30 >/dev/null
+rh_blocked_id=$(BACKLOG_DIR="$rh_blocked_bl" ./scripts/backlog.sh next | grep '^id=' | sed 's/^id=//')
+BACKLOG_DIR="$rh_blocked_bl" ./scripts/backlog.sh update "$rh_blocked_id" --status blocked >/dev/null
+BACKLOG_DIR="$rh_blocked_bl" ./scripts/backlog.sh add --type task --title "Queued task" --priority 50 >/dev/null
+set +e
+BACKLOG_DIR="$rh_blocked_bl" MUTEX_DIR="$health_tmp/nomutex" ./scripts/routine-health.sh >"$tmp/rh-blocked.out" 2>"$tmp/rh-blocked.err"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || fail "blocked health exit status was $status, expected 0"
+grep -q '^backlog_blocked=1$' "$tmp/rh-blocked.out" || fail "blocked health backlog_blocked should be 1"
+grep -q '^backlog_queued=1$' "$tmp/rh-blocked.out" || fail "blocked health backlog_queued should be 1"
+grep -q '^backlog_completed=0$' "$tmp/rh-blocked.out" || fail "blocked health backlog_completed should be 0"
 
 log "backlog hygiene smoke tests"
 hygiene_tmp="$tmp/backlog_hygiene"
@@ -1555,6 +1572,7 @@ grep -q '^backlog_completed=0$' "$tmp/report-empty.out" || fail "empty report ba
 grep -q '^backlog_queued_hypothesis=0$' "$tmp/report-empty.out" || fail "empty report hyp count not 0"
 grep -q '^backlog_queued_task=0$' "$tmp/report-empty.out" || fail "empty report task count not 0"
 grep -q '^backlog_queued_fix=0$' "$tmp/report-empty.out" || fail "empty report fix count not 0"
+grep -q '^backlog_blocked=0$' "$tmp/report-empty.out" || fail "empty report blocked count not 0"
 grep -q '^mutex_holder_id=$' "$tmp/report-empty.out" || fail "empty report mutex_holder_id should be empty"
 grep -q '^mutex_task_id=$' "$tmp/report-empty.out" || fail "empty report mutex_task_id should be empty"
 grep -q '^pr_check_available=false$' "$tmp/report-empty.out" || fail "empty report pr check not false"
@@ -1977,12 +1995,14 @@ fi
 grep -q '^Overnight report$' "$tmp/ov-report.out" || fail "overnight report header missing"
 grep -q '^Backlog:' "$tmp/ov-report.out" || fail "overnight report must include backlog summary"
 grep -q 'queued' "$tmp/ov-report.out" || fail "overnight report backlog line must include queued count"
+grep -q 'blocked' "$tmp/ov-report.out" || fail "overnight report backlog line must include blocked count"
 grep -q '^Commits in window:' "$tmp/ov-report.out" || fail "overnight report must include commits-in-window count"
 ./scripts/overnight-report.sh --state-dir "$ov_state" --format kv >"$tmp/ov-report-kv.out" 2>"$tmp/ov-report-kv.err"
 grep -q '^backlog_total=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_total"
 grep -q '^backlog_queued=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_queued"
 grep -q '^backlog_in_progress=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_in_progress"
 grep -q '^backlog_completed=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_completed"
+grep -q '^backlog_blocked=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include backlog_blocked"
 grep -q '^commits_in_window=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include commits_in_window"
 grep -q '^local_failures=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include local_failures"
 grep -q '^routine_summary=' "$tmp/ov-report-kv.out" || fail "overnight report kv must include routine_summary"

@@ -34,13 +34,14 @@ diff_check="not_run"
 if git -C "$repo" diff --check >/tmp/overnight-report-diff-check.$$ 2>&1; then diff_check=passed; else diff_check=failed; fi
 rm -f /tmp/overnight-report-diff-check.$$
 routine_summary="unavailable"
-backlog_queued=0; backlog_in_progress=0; backlog_completed=0; backlog_total=0
+backlog_queued=0; backlog_in_progress=0; backlog_completed=0; backlog_blocked=0; backlog_total=0
 if [[ -x "$ROOT/scripts/report.sh" ]]; then
   rpt_out=$("$ROOT/scripts/report.sh" --repo "$repo" 2>/dev/null || true)
   routine_summary=$(printf '%s\n' "$rpt_out" | grep '^summary=' | sed 's/^summary=//' || true)
   backlog_queued=$(printf '%s\n' "$rpt_out" | grep '^backlog_queued=' | sed 's/^backlog_queued=//' || true)
   backlog_in_progress=$(printf '%s\n' "$rpt_out" | grep '^backlog_in_progress=' | sed 's/^backlog_in_progress=//' || true)
   backlog_completed=$(printf '%s\n' "$rpt_out" | grep '^backlog_completed=' | sed 's/^backlog_completed=//' || true)
+  backlog_blocked=$(printf '%s\n' "$rpt_out" | grep '^backlog_blocked=' | sed 's/^backlog_blocked=//' || true)
   backlog_total=$(printf '%s\n' "$rpt_out" | grep '^backlog_total=' | sed 's/^backlog_total=//' || true)
 fi
 watchdog="not_run"
@@ -64,7 +65,7 @@ fi
 {
 if [[ "$format" == "kv" ]]; then
   printf 'run_id=%s\nstatus=%s\nphase=%s\niterations=%s\nbranch=%s\ndirty_files=%s\nlast_verify_status=%s\ndiff_check=%s\nlast_commit=%s\n' "$run_id" "$status" "$phase" "${iter:-0}" "$branch" "$dirty" "$verify" "$diff_check" "$last_commit"
-  printf 'backlog_total=%s\nbacklog_queued=%s\nbacklog_in_progress=%s\nbacklog_completed=%s\n' "${backlog_total:-0}" "${backlog_queued:-0}" "${backlog_in_progress:-0}" "${backlog_completed:-0}"
+  printf 'backlog_total=%s\nbacklog_queued=%s\nbacklog_in_progress=%s\nbacklog_completed=%s\nbacklog_blocked=%s\n' "${backlog_total:-0}" "${backlog_queued:-0}" "${backlog_in_progress:-0}" "${backlog_completed:-0}" "${backlog_blocked:-0}"
   printf 'commits_in_window=%s\n' "${commits_in_window:-0}"
   printf 'local_failures=%s\n' "${local_failures:-0}"
   printf 'routine_summary=%s\n' "${routine_summary:-unavailable}"
@@ -77,7 +78,7 @@ else
   printf 'Repo: %s on %s, dirty files=%s\n' "$repo" "$branch" "$dirty"
   printf 'Last commit: %s\n' "$last_commit"
   printf 'Verification: %s; git diff --check: %s\n' "$verify" "$diff_check"
-  printf 'Backlog: %s total (%s queued, %s in progress, %s completed)\n' "${backlog_total:-0}" "${backlog_queued:-0}" "${backlog_in_progress:-0}" "${backlog_completed:-0}"
+  printf 'Backlog: %s total (%s queued, %s in progress, %s completed, %s blocked)\n' "${backlog_total:-0}" "${backlog_queued:-0}" "${backlog_in_progress:-0}" "${backlog_completed:-0}" "${backlog_blocked:-0}"
   printf 'Commits in window: %s\n' "${commits_in_window:-0}"
   if [[ -n "$commits_list" ]]; then
     printf '%s\n' "$commits_list" | while IFS= read -r cline; do
