@@ -535,6 +535,13 @@ grep -q '^worker_status=failed$' "$fail_tmp/drive.out" || fail "drive must repor
 fail_item=$(ls "$fail_backlog/items"/*.json | head -1)
 s=$(grep '"status"' "$fail_item" | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$s" == "blocked" ]] || fail "failed worker item should be blocked, got $s"
+# drive.sh should create reflection with outcome notes on worker failure
+fail_refl_dir="$fail_backlog/../reflections"
+fail_item_id=$(basename "$fail_item" .json)
+[[ -f "$fail_refl_dir/${fail_item_id}.json" ]] || fail "drive failure should create reflection file"
+grep -q '"notes"' "$fail_refl_dir/${fail_item_id}.json" || fail "drive failure reflection should contain notes"
+grep -q 'worker_status=failed' "$fail_refl_dir/${fail_item_id}.json" || fail "drive failure reflection notes should contain worker_status"
+grep -q 'exit_status=17' "$fail_refl_dir/${fail_item_id}.json" || fail "drive failure reflection notes should contain exit_status"
 
 log "code mutex status smoke tests"
 mutex="$tmp/code_mutex"
@@ -999,6 +1006,42 @@ grep -q '^released=true$' "$tmp/refl-tr-out" || fail "release-reflect should rep
 [[ -f "$refl_dir2/${refl_ta_id}.json" ]] || fail "release-reflect should create reflection file"
 t=$(grep -o '"task_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$refl_dir2/${refl_ta_id}.json" | sed 's/.*"task_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 [[ "$t" == "$refl_ta_id" ]] || fail "release-reflect reflection wrong task_id"
+
+# task-release --notes passes notes through to reflection
+refl_notes_ta_tmp="$tmp/refl_notes_ta"
+refl_notes_ta_backlog="$refl_notes_ta_tmp/backlog"
+refl_notes_ta_mutex="$refl_notes_ta_tmp/mutex"
+refl_notes_ta_reflections="$refl_notes_ta_tmp/reflections"
+mkdir -p "$refl_notes_ta_backlog/items"
+
+BACKLOG_DIR="$refl_notes_ta_backlog" ./scripts/backlog.sh add --type task --title "Release with notes" --priority 60 >/dev/null
+BACKLOG_DIR="$refl_notes_ta_backlog" MUTEX_DIR="$refl_notes_ta_mutex" ./scripts/task-acquire.sh >"$tmp/refl-notes-ta-acq.out" 2>/dev/null
+refl_notes_ta_id=$(grep '^id=' "$tmp/refl-notes-ta-acq.out" | sed 's/^id=//')
+[[ -n "$refl_notes_ta_id" ]] || fail "release-notes acquire failed"
+
+BACKLOG_DIR="$refl_notes_ta_backlog" MUTEX_DIR="$refl_notes_ta_mutex" REFLECTIONS_DIR="$refl_notes_ta_reflections" \
+  ./scripts/task-release.sh --status done --notes "worker_status=success; item=${refl_notes_ta_id}" >"$tmp/refl-notes-ta-rel.out" 2>/dev/null
+grep -q '^released=true$' "$tmp/refl-notes-ta-rel.out" || fail "release-notes should report released=true"
+[[ -f "$refl_notes_ta_reflections/${refl_notes_ta_id}.json" ]] || fail "release-notes should create reflection file"
+grep -q '"notes"' "$refl_notes_ta_reflections/${refl_notes_ta_id}.json" || fail "release-notes reflection should contain notes field"
+grep -q 'worker_status=success' "$refl_notes_ta_reflections/${refl_notes_ta_id}.json" || fail "release-notes reflection should contain outcome data"
+
+# task-release without --notes should not produce notes in reflection
+refl_nonotes_ta_tmp="$tmp/refl_nonotes_ta"
+refl_nonotes_ta_backlog="$refl_nonotes_ta_tmp/backlog"
+refl_nonotes_ta_mutex="$refl_nonotes_ta_tmp/mutex"
+refl_nonotes_ta_reflections="$refl_nonotes_ta_tmp/reflections"
+mkdir -p "$refl_nonotes_ta_backlog/items"
+
+BACKLOG_DIR="$refl_nonotes_ta_backlog" ./scripts/backlog.sh add --type task --title "Release no notes" --priority 60 >/dev/null
+BACKLOG_DIR="$refl_nonotes_ta_backlog" MUTEX_DIR="$refl_nonotes_ta_mutex" ./scripts/task-acquire.sh >"$tmp/refl-nonotes-ta-acq.out" 2>/dev/null
+refl_nonotes_ta_id=$(grep '^id=' "$tmp/refl-nonotes-ta-acq.out" | sed 's/^id=//')
+[[ -n "$refl_nonotes_ta_id" ]] || fail "release-nonotes acquire failed"
+
+BACKLOG_DIR="$refl_nonotes_ta_backlog" MUTEX_DIR="$refl_nonotes_ta_mutex" REFLECTIONS_DIR="$refl_nonotes_ta_reflections" \
+  ./scripts/task-release.sh --status done >"$tmp/refl-nonotes-ta-rel.out" 2>/dev/null
+[[ -f "$refl_nonotes_ta_reflections/${refl_nonotes_ta_id}.json" ]] || fail "release-nonotes should create reflection file"
+grep -q '"notes"' "$refl_nonotes_ta_reflections/${refl_nonotes_ta_id}.json" && fail "release-nonotes reflection should not contain notes field" || true
 
 # next-action release_completed_task detection
 relcomp_tmp="$tmp/release_completed"
