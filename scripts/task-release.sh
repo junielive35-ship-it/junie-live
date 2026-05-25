@@ -47,10 +47,23 @@ if [[ -n "$task_id" ]]; then
   esac
 fi
 
+# Compute task duration from holder.json started_at before removing mutex
+duration=""
+started_at=$(grep -o '"started_at"[[:space:]]*:[[:space:]]*"[^"]*"' "$holder_json" 2>/dev/null | head -1 | sed 's/.*"started_at"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+if [[ -n "$started_at" ]]; then
+  start_epoch=$(date -d "$started_at" +%s 2>/dev/null || echo "")
+  if [[ -n "$start_epoch" && "$start_epoch" -gt 0 ]]; then
+    now_epoch=$(date +%s)
+    duration=$((now_epoch - start_epoch))
+    [[ "$duration" -lt 0 ]] && duration=0
+  fi
+fi
+
 rm -rf "$mutex_dir"
 
 reflect_args=("${task_id:-}" "$new_status")
 [[ -n "$notes" ]] && reflect_args+=(--notes "$notes")
+[[ -n "$duration" ]] && reflect_args+=(--duration "$duration")
 REFLECTIONS_DIR="${REFLECTIONS_DIR:-$backlog_dir/../reflections}" "$ROOT/scripts/reflect.sh" "${reflect_args[@]}" 2>/dev/null || true
 
 printf 'released=true\n'

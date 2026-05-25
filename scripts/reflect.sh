@@ -7,10 +7,12 @@ source "$ROOT/scripts/runtime-paths.sh"
 task_id="${1:-}"
 new_status="${2:-done}"
 notes=""
+duration=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --notes) notes="$2"; shift 2 ;;
+    --duration) duration="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -49,6 +51,6 @@ cat > "$reflections_dir/${task_id}.json" <<EOF
   "type": "$(escape_json "$type")",
   "title": "$(escape_json "$title")",
   "status": "$(escape_json "$new_status")",
-  "reflected_at": "$ts"$(if [[ -n "$notes" ]]; then printf ',\n  "notes": "%s"' "$(escape_json "$notes")"; fi)
+  "reflected_at": "$ts"$(if [[ -n "$duration" ]]; then printf ',\n  "duration_seconds": %s' "$duration"; fi)$(if [[ -n "$notes" ]]; then printf ',\n  "notes": "%s"' "$(escape_json "$notes")"; fi)
 }
 EOF
