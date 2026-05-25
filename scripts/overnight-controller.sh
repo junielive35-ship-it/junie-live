@@ -81,7 +81,7 @@ JSON
 
 run_verify(){ local out="$1"; : >"$out"; if $skip_verify || $dry_run; then echo skipped >>"$out"; return 0; fi; set +e; bash -c "$verify_cmd" >>"$out" 2>&1; local vs=$?; git diff --check >>"$out" 2>&1; local ds=$?; set -e; [[ $vs -eq 0 && $ds -eq 0 ]]; }
 block_task(){
-  BACKLOG_DIR="${BACKLOG_DIR:-$(junie_backlog_dir_default)}" MUTEX_DIR="${MUTEX_DIR:-$(junie_mutex_dir_default)}" REFLECTIONS_DIR="${REFLECTIONS_DIR:-$(junie_reflections_dir_default)}" "$ROOT/scripts/task-release.sh" --status blocked >>"$log_file" 2>&1 || true
+  BACKLOG_DIR="${BACKLOG_DIR:-$(junie_backlog_dir_default)}" MUTEX_DIR="${MUTEX_DIR:-$(junie_mutex_dir_default)}" REFLECTIONS_DIR="${REFLECTIONS_DIR:-$(junie_reflections_dir_default)}" "$ROOT/scripts/task-release.sh" --status blocked --notes "$1" >>"$log_file" 2>&1 || true
   "$cleanup_cmd" --repo "$repo" --state-dir "$state_dir/cleanup" --reason "$1" >>"$log_file" 2>&1
 }
 repo_dirty(){ git -C "$repo" status --porcelain --untracked-files=all | grep -q .; }

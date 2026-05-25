@@ -173,7 +173,8 @@ while [[ $iteration -lt $max_iterations ]]; do
         if [[ "$worker_status" -eq 0 ]]; then
           rel_out=$(mktemp)
           BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
-            "$ROOT/scripts/task-release.sh" --status done >"$rel_out" 2>/dev/null || true
+            "$ROOT/scripts/task-release.sh" --status done \
+            --notes "worker_status=success; item=${acquire_id}" >"$rel_out" 2>/dev/null || true
           cat "$rel_out"
           add_summary "completed backlog item ${acquire_id}"
           rm -f "$rel_out" "$worker_out" "$acquire_out"
@@ -184,7 +185,8 @@ while [[ $iteration -lt $max_iterations ]]; do
         fi
 
         BACKLOG_DIR="$backlog_dir" MUTEX_DIR="$mutex_dir" \
-          "$ROOT/scripts/task-release.sh" --status blocked >/dev/null 2>&1 || true
+          "$ROOT/scripts/task-release.sh" --status blocked \
+          --notes "worker_status=failed; exit_status=${worker_status}; item=${acquire_id}" >/dev/null 2>&1 || true
         add_summary "blocked backlog item ${acquire_id}; worker failed status=${worker_status}"
         rm -f "$worker_out" "$acquire_out"
         printf 'action=blocked_backlog_item\n'

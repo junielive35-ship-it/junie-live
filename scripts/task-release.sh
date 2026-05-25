@@ -7,12 +7,14 @@ source "$ROOT/scripts/runtime-paths.sh"
 backlog_dir="${BACKLOG_DIR:-$(junie_backlog_dir_default)}"
 mutex_dir="${MUTEX_DIR:-$(junie_mutex_dir_default)}"
 new_status="done"
+notes=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --backlog-dir) backlog_dir="$2"; shift 2 ;;
     --mutex-dir) mutex_dir="$2"; shift 2 ;;
     --status) new_status="$2"; shift 2 ;;
+    --notes) notes="$2"; shift 2 ;;
     *) printf 'Unknown: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
@@ -47,7 +49,9 @@ fi
 
 rm -rf "$mutex_dir"
 
-REFLECTIONS_DIR="${REFLECTIONS_DIR:-$backlog_dir/../reflections}" "$ROOT/scripts/reflect.sh" "${task_id:-}" "$new_status" 2>/dev/null || true
+reflect_args=("${task_id:-}" "$new_status")
+[[ -n "$notes" ]] && reflect_args+=(--notes "$notes")
+REFLECTIONS_DIR="${REFLECTIONS_DIR:-$backlog_dir/../reflections}" "$ROOT/scripts/reflect.sh" "${reflect_args[@]}" 2>/dev/null || true
 
 printf 'released=true\n'
 printf 'task_id=%s\n' "${task_id:-}"
