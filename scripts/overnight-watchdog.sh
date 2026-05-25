@@ -41,6 +41,24 @@ numfield() { local f="$1" k="$2"; grep -o '"'"$k"'"[[:space:]]*:[[:space:]]*[0-9
 say() { printf '%s
 ' "$*" | tee -a "$findings"; }
 is_terminal_status() { case "$1" in complete|failed|timeout) return 0 ;; *) return 1 ;; esac; }
+mark_state_failed() {
+  local reason="$1"
+  [[ -f "$state_file" ]] || return 0
+  python3 - "$state_file" "$reason" "$(now)" <<'PY'
+import json, sys
+path, reason, now = sys.argv[1:]
+with open(path, encoding="utf-8") as fh:
+    state = json.load(fh)
+state["updated_at"] = now
+state["phase"] = "stale_controller"
+state["status"] = "failed"
+state["expected_next_action"] = reason
+state["worker_pid"] = ""
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(state, fh, indent=2)
+    fh.write("\n")
+PY
+}
 cleanup_repo_if_needed() {
   if $cleanup && [[ "$status" -ge 2 && -x "$cleanup_cmd" ]]; then
     "$cleanup_cmd" --repo "$repo" --state-dir "$state_dir/cleanup" --reason "watchdog cleanup for stale or broken overnight state" >>"$findings" 2>&1 || { say "cleanup_repo_status=failed"; return 1; }
@@ -91,9 +109,25 @@ elif [[ "$terminal" == true ]]; then
   say "controller_pid_check=skipped_terminal_status"
 else
   if [[ -n "$pid" && "$pid" != "0" ]]; then
-    if kill -0 "$pid" 2>/dev/null; then say "controller_pid_alive=true"; else say "WARNING controller pid not alive: $pid"; status=1; fi
+    if kill -0 "$pid" 2>/dev/null; then
+      say "controller_pid_alive=true"
+    else
+      say "WARNING controller pid not alive: $pid"; status=1
+      if $cleanup && [[ "$age" -gt "$stale_seconds" && -z "$worker_pid" ]]; then
+        mark_state_failed "stale controller pid $pid is not alive; inspect controller log and restart explicitly if needed"
+        say "state_action=marked_failed_stale_controller"
+        terminal=true
+        run_status=failed
+      fi
+    fi
   else
     say "WARNING controller pid missing"; status=1
+    if $cleanup && [[ "$age" -gt "$stale_seconds" && -z "$worker_pid" ]]; then
+      mark_state_failed "stale controller pid missing; inspect controller log and restart explicitly if needed"
+      say "state_action=marked_failed_stale_controller"
+      terminal=true
+      run_status=failed
+    fi
   fi
 fi
 

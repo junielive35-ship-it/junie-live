@@ -2054,6 +2054,19 @@ set +e
 set -e
 grep -q '^backlog_stuck_in_progress=0$' "$wd_stuck/state/watchdog-findings.txt" || fail "watchdog should not flag in_progress items when controller is active"
 
+# Cleanup mode should make stale, dead-controller state terminal so reports no longer say running.
+cat >"$wd_stuck/state/state.json" <<'JSON'
+{"run_id":"wd-dead-test","started_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z","phase":"iteration_complete","status":"running","pid":999999,"worker_pid":"","iteration":99,"branch":"test","repo":"repo","expected_next_action":"continue","last_commit":"","last_verify_status":"passed"}
+JSON
+set +e
+./scripts/overnight-watchdog.sh --state-dir "$wd_stuck/state" --mutex-dir "$wd_stuck/nomutex" --backlog-dir "$wd_stuck_bl" --stale-seconds 1 --cleanup >"$tmp/wd-dead.out" 2>"$tmp/wd-dead.err"
+wd_dead_status=$?
+set -e
+[[ "$wd_dead_status" -ge 1 ]] || fail "watchdog should warn on stale dead running controller"
+grep -q '^state_action=marked_failed_stale_controller$' "$wd_stuck/state/watchdog-findings.txt" || fail "watchdog cleanup should mark stale dead controller state failed"
+grep -q '"status": "failed"' "$wd_stuck/state/state.json" || fail "stale dead controller state should be terminal failed after cleanup"
+grep -q '"phase": "stale_controller"' "$wd_stuck/state/state.json" || fail "stale dead controller state should record stale_controller phase"
+
 log "overnight routine smoke tests"
 ov_tmp="$tmp/overnight"
 ov_state="$ov_tmp/state"
