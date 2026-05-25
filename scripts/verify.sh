@@ -842,7 +842,7 @@ archives_after=$(ls "$hygiene_backlog/archive/"*.json 2>/dev/null | wc -l)
 [[ "$items_before" -eq "$items_after" ]] || fail "dry-run should not move items ($items_before vs $items_after)"
 [[ "$archives_before" -eq "$archives_after" ]] || fail "dry-run should not add archives ($archives_before vs $archives_after)"
 
-# Blocked items older than archive_days should be archived
+# Blocked items older than blocked_archive_hours should be archived
 BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type hypothesis --title "Old blocked hyp" --priority 30 >/dev/null
 blocked_id=$(BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh list --status queued 2>/dev/null | tail -1 | cut -f1)
 [[ -f "$hygiene_backlog/items/$blocked_id.json" ]] || fail "blocked item missing after add"
@@ -850,7 +850,7 @@ BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh update "$blocked_id" --statu
 sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "'"$ts_old"'"/' "$hygiene_backlog/items/$blocked_id.json"
 
 set +e
-BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --archive-days 1 >"$tmp/hygiene-blocked.out" 2>"$tmp/hygiene-blocked.err"
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --archive-days 1 --blocked-archive-hours 1 >"$tmp/hygiene-blocked.out" 2>"$tmp/hygiene-blocked.err"
 status=$?
 set -e
 [[ "$status" -eq 2 ]] || fail "blocked archive exit status was $status, expected 2"
@@ -859,19 +859,33 @@ blocked_archived=$(grep '^archived=' "$tmp/hygiene-blocked.out" | sed 's/^archiv
 [[ ! -f "$hygiene_backlog/items/$blocked_id.json" ]] || fail "old blocked item should have moved to archive"
 [[ -f "$hygiene_backlog/archive/$blocked_id.json" ]] || fail "old blocked item should be in archive dir"
 
-# Recent blocked items should NOT be archived
+# Recent blocked items should NOT be archived even with short threshold
 BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type hypothesis --title "Fresh blocked hyp" --priority 25 >/dev/null
 fresh_blocked_id=$(BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh list --status queued 2>/dev/null | tail -1 | cut -f1)
 [[ -f "$hygiene_backlog/items/$fresh_blocked_id.json" ]] || fail "fresh blocked item missing after add"
 BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh update "$fresh_blocked_id" --status blocked >/dev/null
 
 set +e
-BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --archive-days 1 >"$tmp/hygiene-fresh-blocked.out" 2>"$tmp/hygiene-fresh-blocked.err"
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --blocked-archive-hours 1 >"$tmp/hygiene-fresh-blocked.out" 2>"$tmp/hygiene-fresh-blocked.err"
 status=$?
 set -e
 [[ "$status" -eq 0 ]] || fail "fresh blocked hygiene exit status was $status, expected 0"
 grep -q '^archived=0$' "$tmp/hygiene-fresh-blocked.out" || fail "fresh blocked item should NOT be archived"
 [[ -f "$hygiene_backlog/items/$fresh_blocked_id.json" ]] || fail "fresh blocked item should still be in items dir"
+
+# Blocked items should NOT be archived by --archive-days alone (they use --blocked-archive-hours)
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type hypothesis --title "Blocked uses hours" --priority 20 >/dev/null
+blocked_hours_id=$(BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh list --status queued 2>/dev/null | tail -1 | cut -f1)
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh update "$blocked_hours_id" --status blocked >/dev/null
+sed -i 's/"created_at"[[:space:]]*:[[:space:]]*"[^"]*"/"created_at": "'"$ts_old"'"/' "$hygiene_backlog/items/$blocked_hours_id.json"
+
+set +e
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --archive-days 1 --blocked-archive-hours 999999 >"$tmp/hygiene-blocked-hours-only.out" 2>"$tmp/hygiene-blocked-hours-only.err"
+status=$?
+set -e
+[[ -f "$hygiene_backlog/items/$blocked_hours_id.json" ]] || fail "blocked item should NOT be archived when blocked-archive-hours is large"
+# Clean up: archive it for subsequent tests
+BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog-hygiene.sh --blocked-archive-hours 1 >"$tmp/hygiene-blocked-cleanup.out" 2>/dev/null || true
 
 # Stale queued items should trigger warning exit
 BACKLOG_DIR="$hygiene_backlog" ./scripts/backlog.sh add --type hypothesis --title "Stale queued hypothesis" --priority 10 >/dev/null
