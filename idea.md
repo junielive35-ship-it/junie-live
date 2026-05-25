@@ -31,9 +31,11 @@ The agent communicates with the team through Telegram. It can ask clarifying que
 
 ## Architecture
 
-OpenClaw acts as the orchestrator. It owns the long-term context: strategy, architecture, design choices, memory, team communication, planning, scheduling, and review.
+The current root implementation uses OpenClaw as the orchestrator. OpenClaw owns the long-term context: strategy, architecture, design choices, memory, team communication, planning, scheduling, and review.
 
-All coding tasks are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown guidance/docs directly when no source code, scripts, tests, config, generated files, or external systems are changed. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
+The repository also contains `hermes/`, a Hermes-native Junie Live baseline. That directory exists so the Hermes version can evolve separately while keeping the same high-level product contract; do not treat it as accidental duplicate seed/workspace material.
+
+All coding tasks in the OpenClaw implementation are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown guidance/docs directly when no source code, scripts, tests, config, generated files, or external systems are changed. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
 
 Treat coding subagents roughly like junior engineers. The orchestrator must:
 
@@ -66,7 +68,7 @@ Any changes to product architecture, agent architecture, or major workflow assum
 
 ## Summary
 
-Junie Live is a persistent senior-engineer-style agent: product-aware, architecture-aware, strategic, proactive, communicative, and reflective. OpenClaw provides continuity and orchestration; opencode subagents powered by Claude Opus 4.6 with low reasoning perform scoped code/script/config/test implementation work under review. The orchestrator may directly maintain Markdown-only docs and guidance when that is the whole change.
+Junie Live is a persistent senior-engineer-style agent: product-aware, architecture-aware, strategic, proactive, communicative, and reflective. The root implementation uses OpenClaw for continuity and orchestration; opencode subagents powered by Claude Opus 4.6 with low reasoning perform scoped code/script/config/test implementation work under review. The `hermes/` directory holds the separate Hermes-native implementation baseline. The orchestrator may directly maintain Markdown-only docs and guidance when that is the whole change.
 
 
 ## Current implementation status

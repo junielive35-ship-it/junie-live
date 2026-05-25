@@ -82,8 +82,9 @@ After initialization:
 Keep these layers separate:
 
 1. Root docs in `~/code/junie-live/` describe the Junie Live product and its implementation roadmap.
-2. `junie-live/initialization/` contains reusable seed files for any new Junie Live instance.
-3. A copied OpenClaw workspace contains the project-specific initialized identity after bootstrap.
+2. `junie-live/initialization/` contains reusable OpenClaw seed files for any new Junie Live instance.
+3. `junie-live/hermes/` contains the separate Hermes-native Junie Live baseline and its own seed/docs/scripts.
+4. A copied OpenClaw workspace contains the project-specific initialized identity after bootstrap.
 
 If a statement is about the current implementation stage of the Junie Live product, it belongs in layer 1, not layer 2.
 
