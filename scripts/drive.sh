@@ -59,6 +59,7 @@ hygiene_out=$(mktemp)
 "$ROOT/scripts/backlog-hygiene.sh" \
   --stale-minutes "$stale_minutes" \
   --archive-days 7 \
+  --blocked-archive-hours 2 \
   >"$hygiene_out" 2>/dev/null || true
 
 rh() { grep "^${1}=" "$hygiene_out" 2>/dev/null | sed 's/^[^=]*=//' || true; }

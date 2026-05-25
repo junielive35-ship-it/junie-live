@@ -10,6 +10,7 @@ archive_dir="$backlog_dir/archive"
 stale_minutes=120
 stale_queued_days=14
 archive_days=7
+blocked_archive_hours=4
 dry_run=false
 
 while [[ $# -gt 0 ]]; do
@@ -17,6 +18,7 @@ while [[ $# -gt 0 ]]; do
     --stale-minutes) stale_minutes="$2"; shift 2 ;;
     --stale-queued-days) stale_queued_days="$2"; shift 2 ;;
     --archive-days) archive_days="$2"; shift 2 ;;
+    --blocked-archive-hours) blocked_archive_hours="$2"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
     *) printf 'Unknown: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -61,10 +63,24 @@ for f in "$items_dir"/*.json; do
   fi
 
   case "$status" in
-    done|archived|cancelled|blocked)
+    done|archived|cancelled)
       if [[ "$created_epoch" -gt 0 ]]; then
         age_days=$(( (now_epoch - created_epoch) / 86400 ))
         if [[ "$age_days" -ge "$archive_days" ]]; then
+          if $dry_run; then
+            printf 'WOULD_ARCHIVE\t%s\t%s\n' "$(basename "$f")" "$status"
+          else
+            mv "$f" "$archive_dir/"
+            archived_count=$((archived_count + 1))
+            actions_taken=$((actions_taken + 1))
+          fi
+        fi
+      fi
+      ;;
+    blocked)
+      if [[ "$created_epoch" -gt 0 ]]; then
+        age_hours=$(( (now_epoch - created_epoch) / 3600 ))
+        if [[ "$age_hours" -ge "$blocked_archive_hours" ]]; then
           if $dry_run; then
             printf 'WOULD_ARCHIVE\t%s\t%s\n' "$(basename "$f")" "$status"
           else
