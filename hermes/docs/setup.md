@@ -28,7 +28,7 @@ hermes profile create junie-live
 
 ### 2. Install seed files
 
-Copy the entire initialization directory to the profile (persona, skills, docs, INITIALIZATION.md):
+Copy the entire initialization directory to the profile (`SOUL.md`, skills, docs, `INITIALIZATION.md`, `memory-seed.md`):
 ```bash
 cp -a hermes/initialization/. ~/.hermes/profiles/junie-live/
 ```
@@ -104,11 +104,11 @@ backlog items until 8am or blockers.
 ~/.hermes/profiles/junie-live/
 ├── config.yaml           # Profile-specific config
 ├── .env                  # Telegram token, API keys
-├── persona.md            # Junie personality
+├── SOUL.md               # Junie personality + always-on operating rules (auto-loaded by Hermes)
 ├── INITIALIZATION.md     # Initialization guide (deleted after init)
 ├── memory-seed.md        # Initial memory entries template
 ├── docs/                 # Profile docs (strategy, architecture, etc.)
-│   └── seed-AGENTS.md    # AGENTS.md to copy to target repo
+│   └── seed-HERMES.md    # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
 ├── skills/               # Installed skills
 │   ├── junie-autonomous-work-window/
 │   ├── junie-coding-task-decomposition/
@@ -126,6 +126,9 @@ backlog items until 8am or blockers.
     ├── reflections/      # Post-task reflections
     ├── overnight/        # Overnight routine state
     └── logs/             # Operational logs
+
+<target-repo>/
+└── HERMES.md             # Project-level operating protocol (installed by Junie during init)
 ```
 
 ## Updating

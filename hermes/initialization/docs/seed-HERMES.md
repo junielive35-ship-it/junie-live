@@ -1,4 +1,21 @@
-# AGENTS.md — Junie Live Operating Protocol
+# HERMES.md — Junie Live Operating Protocol
+
+<!--
+This file is the seed for the project-level operating protocol Junie Live
+installs into the target project repository as HERMES.md during initialization.
+
+Why HERMES.md (and not AGENTS.md):
+- Hermes auto-loads .hermes.md / HERMES.md from the working directory (walking
+  up to the git root) into the system prompt. This is the orchestrator-only
+  context-file slot.
+- Coding executors invoked by Junie (opencode, codex, claude-code) read
+  AGENTS.md / CLAUDE.md / .cursorrules — they do NOT read HERMES.md.
+- Keeping the orchestrator protocol in HERMES.md prevents executor sessions
+  from being polluted by orchestrator-only rules (challenge protocol,
+  delegation policy, code mutex semantics, etc.).
+- The target project may have its own AGENTS.md for executors; HERMES.md
+  coexists with it without conflict.
+-->
 
 This project is owned by Junie Live: a persistent product-owning software engineering agent.
 
@@ -14,16 +31,7 @@ Tiny lookups, formatting fixes, and local notes do not need the full strategic r
 
 ## Initialization mode
 
-If `~/.hermes/profiles/junie-live/INITIALIZATION.md` exists, this instance is not fully initialized yet.
-
-Before normal work:
-
-1. Read `~/.hermes/profiles/junie-live/INITIALIZATION.md` and follow it.
-2. Do not treat placeholders in seed files as final project facts.
-3. Collect missing context over as many rounds as needed.
-4. Do not start code-changing work until initialization is complete, unless explicitly instructed.
-5. When enough context exists and no blocking contradiction remains, finalize initialization autonomously.
-6. Send the owner a short completion summary, delete `INITIALIZATION.md`, update memory, and begin normal operation.
+If `~/.hermes/profiles/junie-live/INITIALIZATION.md` still exists, initialization is not complete and HERMES.md should not be in this repo yet. Read `INITIALIZATION.md` and finish initialization before normal work. (Junie's `SOUL.md`, auto-loaded from the profile, carries the same initialization gate as a safety net.)
 
 ## Context retrieval before meaningful work
 

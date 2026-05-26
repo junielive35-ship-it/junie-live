@@ -44,7 +44,12 @@ for required_dir in initialization initialization/docs initialization/skills scr
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
 done
 
-for required_file in README.md initialization/AGENTS.md initialization/persona.md initialization/memory-seed.md; do
+for required_file in \
+    README.md \
+    initialization/SOUL.md \
+    initialization/INITIALIZATION.md \
+    initialization/memory-seed.md \
+    initialization/docs/seed-HERMES.md; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 

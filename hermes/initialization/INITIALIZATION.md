@@ -40,7 +40,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 ## Initialization workflow
 
 1. Inspect your Hermes profile setup:
-   - Your persona is already auto-loaded each turn.
+   - Your `SOUL.md` (personality + always-on operating rules) is auto-loaded each turn from `~/.hermes/profiles/junie-live/SOUL.md`.
    - Check your installed skills with `skills_list`.
    - Read your profile docs at `~/.hermes/profiles/junie-live/docs/`.
    - Note: memory is empty on first run. You will populate it during initialization.
@@ -81,11 +81,12 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - **Memory** (via `memory` tool) — read `~/.hermes/profiles/junie-live/memory-seed.md` for initial memory entries to inject, then add project-specific context on top: global goal, current strategy, non-negotiable priorities, architecture constraints, accepted design choices, owner preferences, authority boundaries, autonomous ownership model, active hypotheses, known unresolved contradictions, pointers to detailed docs. Also save the target repo path so all future sessions know where to work.
    - **Profile docs** (at `~/.hermes/profiles/junie-live/docs/`) — detailed project knowledge: strategy, architecture, implementation status, design decisions, product hypotheses. Use the seed doc templates already present.
    - **User memory** (via `memory` tool, target: user) — owner name, communication preferences, escalation path, Telegram ID.
-10. Install `AGENTS.md` in the target project repository:
-    - The seed AGENTS.md is at `~/.hermes/profiles/junie-live/docs/seed-AGENTS.md`.
-    - Copy it to the target repo root: `cp ~/.hermes/profiles/junie-live/docs/seed-AGENTS.md <target-repo>/AGENTS.md`.
-    - Hermes auto-loads AGENTS.md from the working directory, so this ensures the operating protocol is active when working in the target repo.
-    - Adapt it for the specific project if needed.
+10. Install `HERMES.md` in the target project repository:
+    - The seed is at `~/.hermes/profiles/junie-live/docs/seed-HERMES.md`.
+    - Copy it to the target repo root: `cp ~/.hermes/profiles/junie-live/docs/seed-HERMES.md <target-repo>/HERMES.md`.
+    - Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory (walking up to the git root), so this ensures the orchestrator's operating protocol is active when you work in the target repo.
+    - `HERMES.md` is the orchestrator-only context-file slot. Coding executors (opencode, codex, claude-code) read `AGENTS.md` / `CLAUDE.md` / `.cursorrules`, not `HERMES.md`, so the executor sessions stay clean.
+    - Adapt the file for the specific project if needed.
 11. Configure the project-specific code mutex context:
     - identify the owned repository or feature-area scope protected by the mutex;
     - the mutex state directory at `~/.hermes/junie-live/state/code_mutex/` was created by the hire script;
@@ -99,7 +100,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
     - cross-cutting invariants, bypass risks, and guardrails are recorded;
     - the mutex scope and escalation path are configured;
     - target repo path is saved to memory;
-    - AGENTS.md is installed in the target repo;
+    - `HERMES.md` is installed in the target repo;
     - remaining unknowns are non-blocking and recorded.
 14. Send a short completion summary:
     - what project/area you own;
@@ -125,6 +126,6 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 - **Memory tool**: `memory(action="add", target="memory", content="...")` for agent knowledge, `memory(action="add", target="user", content="...")` for owner info. Memory is auto-injected every turn — no need to read files.
 - **Skills**: Your installed skills handle specific workflows (task intake, coding decomposition, implementation review, task reflection, autonomous work windows). They auto-load when relevant. Use `skills_list` to see them.
 - **Profile docs**: Stored at `~/.hermes/profiles/junie-live/docs/`. Use `read_file` / `write_file` to manage.
-- **AGENTS.md**: Hermes auto-loads AGENTS.md from the current working directory into the system prompt. Once you copy the seed to the target repo, it will be active for all work in that repo.
+- **AGENTS.md / HERMES.md**: Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory into the system prompt, walking up to the git root. Once you copy `seed-HERMES.md` to the target repo as `HERMES.md`, it will be active for all orchestrator work in that repo. Hermes does NOT auto-load `AGENTS.md` into Junie's prompt — that slot is reserved for coding executors (opencode, codex, claude-code), which is why Junie uses `HERMES.md` instead.
 - **Cron jobs**: After initialization, consider setting up recommended cron jobs (watchdog, health check) via the `cronjob` tool.
 - **Session continuity**: Hermes sessions persist. Use `session_search` to recall past context across sessions.

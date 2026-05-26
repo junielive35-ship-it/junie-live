@@ -12,16 +12,17 @@ Status values:
 
 | Area / capability | Status | Evidence | Gaps / notes |
 | --- | --- | --- | --- |
-| Persona / personality | implemented | `initialization/persona.md` | Installed during hire |
+| SOUL.md (personality + safety-net rules) | implemented | `initialization/SOUL.md` | Installed to profile root during hire; auto-loaded by Hermes on every turn |
+| HERMES.md (project operating protocol) | implemented | `initialization/docs/seed-HERMES.md` | Copied to `<target-repo>/HERMES.md` by Junie during initialization; auto-loaded by Hermes from cwd |
 | Memory seed | implemented | `initialization/memory-seed.md` | Seeded during hire; populated during initialization |
-| Initialization workflow | implemented | persona + memory seed + skills | Follows same multi-round Q&A as OpenClaw version |
+| Initialization workflow | implemented | SOUL + seed-HERMES + memory seed + skills | Follows same multi-round Q&A as OpenClaw version |
 | Skills (5 core workflows) | implemented | `initialization/skills/` | task-intake, decomposition, review, reflection, autonomous-window |
-| Delegation protocol docs | implemented | `initialization/docs/delegation-protocol.md` | Uses delegate_task instead of opencode |
+| Delegation protocol docs | implemented | `initialization/docs/delegation-protocol.md` | Uses opencode for code work (same as OpenClaw); delegate_task for non-code subtasks |
 | Review protocol docs | implemented | `initialization/docs/review-protocol.md` | Same acceptance gates |
 | Reflection protocol docs | implemented | `initialization/docs/reflection-protocol.md` | Uses Hermes memory tool |
 | Consistency protocol docs | implemented | `initialization/docs/consistency-protocol.md` | Same scan/resolution flow |
 | Code mutex | implemented | `scripts/code-mutex.sh` | File-based lock with holder metadata |
-| Hire script | implemented | `scripts/hire-junie.sh` | Creates profile, installs skills/persona/docs |
+| Hire script | implemented | `scripts/hire-junie.sh` | Creates profile, installs SOUL.md / skills / docs / seed-HERMES.md |
 | Verify script | implemented | `scripts/verify.sh` | Bash syntax, links, structure checks |
 | Telegram communication | contract-only | Hermes gateway handles this natively | Needs gateway setup per-deployment |
 | Cron watchdog | contract-only | Documented in `docs/overnight-routines.md` | Created during initialization, not pre-installed as crontab |

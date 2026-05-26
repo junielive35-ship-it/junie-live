@@ -73,13 +73,16 @@ Junie runs as a Hermes profile (`junie-live`), giving it:
 
 This replaces the OpenClaw workspace concept with something more native.
 
-### 2. AGENTS.md in workdir
+### 2. SOUL.md (profile-wide) + HERMES.md (target repo)
 
-Hermes auto-loads `AGENTS.md` from the current working directory into the system prompt. The Junie Live `AGENTS.md` seed carries the project-level operating protocol: challenge rules, delegation rules, code mutex conventions, change rules, repo hygiene.
+Hermes has two complementary context-file slots, and Junie Live uses both:
 
-This works the same as OpenClaw's `AGENTS.md` in principle — the difference is that Hermes also has persona (personality), memory (persistent state), and skills (auto-loaded protocols) as separate layers. The `AGENTS.md` doesn't need to carry everything.
+- **`SOUL.md`** lives at `~/.hermes/profiles/junie-live/SOUL.md` and is auto-loaded into slot #1 of the system prompt on **every turn**, regardless of working directory. Junie's `SOUL.md` carries the personality plus the always-on operating safety net: the initialization gate, the no-direct-coding rule, the challenge protocol. This keeps the critical rules active even when Junie is handling a Telegram message outside the target repo or running a cron job without `workdir` set.
+- **`HERMES.md`** lives in the **target project repo root** and carries the full project-level operating protocol: detailed delegation rules, code mutex semantics, repo hygiene, change rules, recurring routines. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root. Junie installs it during initialization by copying `~/.hermes/profiles/junie-live/docs/seed-HERMES.md` to `<target-repo>/HERMES.md`.
 
-Cron jobs use the `workdir` parameter to load `AGENTS.md` from the target repo automatically.
+Why `HERMES.md` and not `AGENTS.md` for the project-level slot: coding executors invoked by Junie (`opencode`, `codex`, `claude-code`) read `AGENTS.md` / `CLAUDE.md` / `.cursorrules`. They do **not** read `HERMES.md`. Putting the orchestrator-only protocol in `HERMES.md` keeps the executor sessions clean and prevents the orchestrator's challenge/delegation/mutex rules from contaminating coding workers. A target project's own `AGENTS.md` (if any) coexists with `HERMES.md` without conflict.
+
+Cron jobs use the `workdir` parameter to set the target repo as cwd, which loads `HERMES.md` automatically.
 
 ### 3. Memory instead of MEMORY.md
 
@@ -132,9 +135,9 @@ OpenClaw uses an atomic `mkdir` lock directory. The Hermes version uses the same
 - Same conceptual model, same implementation primitive
 - Only the default path differs: `~/.hermes/junie-live/state/code_mutex/` instead of `.openclaw/state/code_mutex/`
 
-### 8. No workspace artifacts to leak
+### 8. Minimal target-repo footprint
 
-OpenClaw creates runtime artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.openclaw/`, `state/`) that can accidentally end up in the target repo. The Hermes version stores everything under `~/.hermes/` — the target repo is never polluted.
+OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.openclaw/`, `state/`) into the target repo unless careful hygiene scripts run. The Hermes version installs exactly **one** file in the target repo: `HERMES.md` (the project-level operating protocol). Everything else — `SOUL.md`, memory, skills, profile docs, mutex state, backlog, logs — lives under `~/.hermes/` and never touches the target repo. Whether `HERMES.md` is committed to git or kept in `.gitignore` is a per-project decision; committing it makes the orchestrator protocol part of the project's documented contract, ignoring it keeps the project history Junie-agnostic.
 
 ## Data flow
 
@@ -159,4 +162,5 @@ OpenClaw creates runtime artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.opencl
 | Backlog items | `~/.hermes/junie-live/state/backlog/` | Scripts/cron |
 | Operational logs | `~/.hermes/junie-live/state/logs/` | Scripts/cron |
 | Skills | `~/.hermes/profiles/junie-live/skills/` | skill_manage |
-| Persona | `~/.hermes/profiles/junie-live/persona.md` | Manual/hire script |
+| Identity (personality + safety-net rules) | `~/.hermes/profiles/junie-live/SOUL.md` | Manual/hire script |
+| Project operating protocol | `<target-repo>/HERMES.md` (copied from seed during init) | Manual/Junie during init |

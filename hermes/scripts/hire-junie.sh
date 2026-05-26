@@ -3,9 +3,10 @@ set -euo pipefail
 
 # hire-junie.sh — Set up a Junie Live instance on Hermes Agent
 #
-# One command does everything: creates a Hermes profile, installs persona/skills/docs,
-# configures Telegram with DM restriction, creates state directories, installs and
-# starts the gateway. Mirrors the OpenClaw hire-junie.sh experience.
+# One command does everything: creates a Hermes profile, installs SOUL.md /
+# skills / docs / seed-HERMES.md / memory-seed.md / INITIALIZATION.md,
+# configures Telegram with DM restriction, creates state directories, installs
+# and starts the gateway. Mirrors the OpenClaw hire-junie.sh experience.
 
 usage() {
   cat <<'EOF'
@@ -87,10 +88,10 @@ fi
 
 # ── Step 2: Copy seed files to profile ──
 # The initialization/ dir mirrors the profile layout exactly:
-#   persona.md, INITIALIZATION.md, docs/, skills/
+#   SOUL.md, INITIALIZATION.md, memory-seed.md, docs/, skills/
 log "Installing seed files..."
 cp -a "$SEED_DIR/." "$PROFILE_DIR/"
-log "  Copied: persona, INITIALIZATION.md, skills, docs, seed-AGENTS.md"
+log "  Copied: SOUL.md, INITIALIZATION.md, memory-seed.md, skills, docs (incl. seed-HERMES.md)"
 
 # ── Step 3: Create state directories ──
 log "Creating state directories..."

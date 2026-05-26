@@ -9,15 +9,15 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 | Aspect | OpenClaw | Hermes |
 | --- | --- | --- |
 | **Agent framework** | OpenClaw (open-source) | Hermes Agent (open-source, Nous Research) |
-| **Workspace model** | `.openclaw/workspace-*` directory with seed files (`AGENTS.md`, `SOUL.md`, `MEMORY.md`, `TOOLS.md`, `HEARTBEAT.md`) | Hermes profile (`~/.hermes/profiles/junie-live/`) with persona, memory stores, skills |
+| **Workspace model** | `.openclaw/workspace-*` directory with seed files (`AGENTS.md`, `SOUL.md`, `MEMORY.md`, `TOOLS.md`, `HEARTBEAT.md`) | Hermes profile (`~/.hermes/profiles/junie-live/`) holding `SOUL.md`, memory stores, skills, docs |
 | **Persistent context** | `MEMORY.md` file — manually read, manually size-checked, manually compacted | Hermes memory tool — auto-injected into every turn, structured add/replace/remove, searchable |
-| **Persona / personality** | `SOUL.md` file in workspace | `persona.md` in profile — auto-loaded as agent persona |
-| **Operating protocol** | `AGENTS.md` — large protocol file in workspace, loaded by OpenClaw | `AGENTS.md` in workdir (auto-loaded by Hermes) + skills + persona + memory |
-| **Operational reference** | `TOOLS.md` — auto-loaded workspace file with repo paths, dev commands, deploy process, dashboards, escalation contacts | No auto-loaded equivalent. Workaround: `AGENTS.md` instructs the agent to `read_file("TOOLS.md")` before meaningful work, or critical bits go into memory |
+| **Persona / personality** | `SOUL.md` file in workspace | `SOUL.md` in `$HERMES_HOME` — auto-loaded as agent identity (slot #1 in system prompt) on every turn |
+| **Operating protocol** | `AGENTS.md` — large protocol file in workspace, loaded by OpenClaw | `HERMES.md` in target repo root (auto-loaded by Hermes from cwd) + skills + `SOUL.md` + memory; `HERMES.md` is used instead of `AGENTS.md` so coding executors don't pick up orchestrator-only rules |
+| **Operational reference** | `TOOLS.md` — auto-loaded workspace file with repo paths, dev commands, deploy process, dashboards, escalation contacts | No auto-loaded equivalent. Workaround: `HERMES.md` instructs the agent to `read_file("docs/tools.md")` (or equivalent) before meaningful work, or critical bits go into memory |
 | **Coding delegation** | `opencode run` via shell scripts (`run-backlog-worker.sh`) | `delegate_task` (native) or spawned `hermes`/`claude-code`/`codex` process |
 | **Scheduled routines** | System crontab + OpenClaw cron definitions + shell scripts | Hermes native cron jobs — created in-session, no system crontab |
 | **Orchestration logic** | ~25 shell scripts (drive.sh, overnight-controller.sh, etc.) | LLM-driven orchestration guided by skills and docs |
-| **Repo hygiene** | Complex — must prevent workspace artifacts from leaking into target repo | Simple — all state under `~/.hermes/`, nothing leaks |
+| **Repo hygiene** | Complex — must prevent workspace artifacts from leaking into target repo | Single tracked file (`HERMES.md`); all other state under `~/.hermes/` |
 
 ### Delegation Model
 
@@ -77,7 +77,7 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 
 1. **Native tool integration** — `delegate_task`, `cronjob`, `memory`, `session_search`, `skill_manage` are first-class tools. No shell-script glue needed for orchestration.
 
-2. **No workspace artifact leakage** — All state lives under `~/.hermes/`. The target repo is never polluted with agent runtime files. No hygiene scripts needed.
+2. **Minimal target-repo footprint** — Junie installs exactly one file in the target repo (`HERMES.md`, the orchestrator-only project protocol). All other state lives under `~/.hermes/`. The `HERMES.md` slot is invisible to coding executors (opencode, codex, claude-code) which read `AGENTS.md`/`CLAUDE.md`/`.cursorrules` instead, so executor sessions stay clean and the project's own `AGENTS.md` (if any) is untouched.
 
 3. **Flexible delegation** — `delegate_task` works with any model. Can delegate to subagents, spawn separate Hermes processes, or use Claude Code / Codex / OpenCode. Model choice is per-task.
 
