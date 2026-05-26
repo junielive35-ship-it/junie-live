@@ -53,7 +53,7 @@ terminal(
             "Verification: <how to verify the work>. "
             "After completing, run: git status --short --branch --untracked-files=all. "
             "Report outcome_status=done|partial|blocked with any gaps.' "
-            "--model openrouter/anthropic/claude-opus-4.6 --variant minimal "
+            "--model openrouter/anthropic/claude-opus-4.6 --variant low "
             "-f <relevant_file_1> -f <relevant_file_2>",
     workdir="<target repo path>",
     timeout=300

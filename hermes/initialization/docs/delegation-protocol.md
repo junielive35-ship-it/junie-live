@@ -47,7 +47,7 @@ All code-changing work is executed via [OpenCode CLI](https://opencode.ai) using
 
 Default model and settings:
 - **Model:** `openrouter/anthropic/claude-opus-4.6`
-- **Reasoning effort:** `--variant minimal` (low reasoning)
+- **Reasoning effort:** `--variant low` (low reasoning)
 - **Agent:** `build` (default, handles implementation)
 
 ### One-shot tasks (preferred)
@@ -56,7 +56,7 @@ For bounded coding subtasks, use `~/.opencode/bin/opencode run` via terminal:
 
 ```
 terminal(
-  command="~/.opencode/bin/opencode run '<scoped coding objective>' --model openrouter/anthropic/claude-opus-4.6 --variant minimal -f <relevant_files>",
+  command="~/.opencode/bin/opencode run '<scoped coding objective>' --model openrouter/anthropic/claude-opus-4.6 --variant low -f <relevant_files>",
   workdir="<target repo path>",
   timeout=300
 )
@@ -66,7 +66,7 @@ Example:
 
 ```
 terminal(
-  command="~/.opencode/bin/opencode run 'Implement the email validation endpoint in src/api/auth.py with unit tests in tests/test_auth.py. FastAPI backend, see docs/architecture.md for module layout.' --model openrouter/anthropic/claude-opus-4.6 --variant minimal -f src/api/auth.py -f tests/test_auth.py",
+  command="~/.opencode/bin/opencode run 'Implement the email validation endpoint in src/api/auth.py with unit tests in tests/test_auth.py. FastAPI backend, see docs/architecture.md for module layout.' --model openrouter/anthropic/claude-opus-4.6 --variant low -f src/api/auth.py -f tests/test_auth.py",
   workdir="~/code/myapp",
   timeout=300
 )
@@ -78,7 +78,7 @@ For work expected to take longer than 5 minutes, run in background with notifica
 
 ```
 terminal(
-  command="~/.opencode/bin/opencode run '<detailed objective>' --model openrouter/anthropic/claude-opus-4.6 --variant minimal",
+  command="~/.opencode/bin/opencode run '<detailed objective>' --model openrouter/anthropic/claude-opus-4.6 --variant low",
   workdir="<target repo path>",
   background=true,
   notify_on_complete=true
