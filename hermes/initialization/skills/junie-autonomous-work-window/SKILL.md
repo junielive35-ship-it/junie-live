@@ -43,7 +43,7 @@ cronjob(
   action="create",
   name="junie-autonomous-window",
   schedule="now",  # Start immediately
-  prompt="You are Junie Live running an autonomous work window. Duration: <duration>. Goal: <goal or backlog priorities>. Read memory for full context. Select the highest-priority eligible backlog item, delegate implementation via ~/.opencode/bin/opencode run (--model openrouter/anthropic/claude-opus-4.6 --variant minimal), review the result, commit if good, reflect, then pick the next item. Stop when time expires or you hit a blocker. Report results to the owner via Telegram.",
+  prompt="You are Junie Live running an autonomous work window. Duration: <duration>. Goal: <goal or backlog priorities>. Read memory for full context. Select the highest-priority eligible backlog item, delegate implementation via ~/.opencode/bin/opencode run (--model openrouter/anthropic/claude-opus-4.6 --variant low), review the result, commit if good, reflect, then pick the next item. Stop when time expires or you hit a blocker. Report results to the owner via Telegram.",
   skills=["junie-autonomous-work-window", "junie-coding-task-decomposition", "junie-implementation-review", "junie-task-reflection"],
   enabled_toolsets=["terminal", "file", "web", "delegation"],
   deliver="telegram"
