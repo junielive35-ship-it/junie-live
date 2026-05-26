@@ -7,7 +7,7 @@ Telegram is the primary incoming event source. Junie communicates with the team 
 - Junie acts like a senior developer/product owner, not a passive executor.
 - Meaningful work is validated against memory (strategic context) and relevant docs.
 - Only one code-changing task may run at a time (code mutex).
-- The orchestrator never writes code directly. All coding delegated via `delegate_task`.
+- The orchestrator never writes code directly. All coding is delegated via `opencode run` (Claude Opus 4.6, `--variant low`); `delegate_task` is for non-code subtasks (research, analysis, reading).
 - Markdown-only doc edits are the exception.
 - Memory stays compact — strategic compass only. Details in docs.
 - Schedules are project-dependent.
@@ -35,14 +35,14 @@ For autonomous work window requests ("work autonomously for 9h"), the autonomous
 Triggered when an accepted code-changing task is ready and mutex is free.
 
 Flow:
-1. Acquire code mutex via `scripts/code-mutex.sh acquire`.
+1. Acquire code mutex via `hermes/scripts/code-mutex.sh acquire`.
 2. Decompose task (coding-task-decomposition skill).
-3. Delegate via `delegate_task` with scoped context.
+3. Delegate via `opencode run` (Claude Opus 4.6, `--variant low`) with scoped context; for non-code subtasks (research, analysis) use `delegate_task` instead.
 4. Run subagents sequentially under the mutex.
 5. Review results (implementation-review skill).
 6. Request fixes from subagents until correct.
 7. Commit verified work / open PR.
-8. Release mutex via `scripts/code-mutex.sh release`.
+8. Release mutex via `hermes/scripts/code-mutex.sh release`.
 
 ### 3. Task completion → reflection
 

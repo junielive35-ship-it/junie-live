@@ -30,7 +30,7 @@ Starts a bounded autonomous work window. Can be triggered by:
 The controller:
 1. Selects the highest-priority eligible backlog item
 2. Acquires the code mutex
-3. Delegates implementation via `delegate_task`
+3. Delegates implementation via `opencode run` (Claude Opus 4.6, `--variant low`; `delegate_task` is for non-code subtasks only)
 4. Reviews and verifies the result
 5. Commits verified work / blocks failed work
 6. Releases mutex and selects next item
