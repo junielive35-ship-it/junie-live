@@ -44,6 +44,15 @@ if ! git diff --check HEAD -- 2>/dev/null; then
   fail "git diff --check found whitespace errors"
 fi
 
+log "variant-minimal regression guard"
+offenders=$(grep -rn --exclude-dir=.git -- '--variant minimal' . 2>/dev/null | \
+  grep -v '^\./hermes/docs/implementation-status.md:' | \
+  grep -v '^\./hermes/scripts/verify.sh:' || true)
+if [[ -n "$offenders" ]]; then
+  printf '%s\n' "$offenders" >&2
+  fail "variant-minimal regression detected: see offending lines above"
+fi
+
 log "directory structure"
 for required_dir in initialization initialization/docs initialization/skills scripts docs; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
