@@ -46,8 +46,8 @@ fi
 
 log "variant-minimal regression guard"
 offenders=$(grep -rn --exclude-dir=.git -- '--variant minimal' . 2>/dev/null | \
-  grep -v '^\./hermes/docs/implementation-status.md:' | \
-  grep -v '^\./hermes/scripts/verify.sh:' || true)
+  grep -v '^\./docs/implementation-status.md:' | \
+  grep -v '^\./scripts/verify.sh:' || true)
 if [[ -n "$offenders" ]]; then
   printf '%s\n' "$offenders" >&2
   fail "variant-minimal regression detected: see offending lines above"
