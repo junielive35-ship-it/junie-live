@@ -5,7 +5,9 @@
 - [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) installed
 - A Telegram bot token (from [@BotFather](https://t.me/BotFather))
 - Your Telegram user ID
-- An LLM provider configured in Hermes (OpenRouter, Anthropic, etc.)
+- An LLM provider configured in Hermes (OpenRouter, Anthropic, etc.) — for orchestrator turns
+- [opencode](https://github.com/sst/opencode) installed at `~/.opencode/bin/opencode` — for code-changing delegations
+- An OpenRouter API key with access to Claude Opus 4.6 — for opencode (see step 4 below for installation)
 
 ## Quick Setup
 
@@ -45,20 +47,47 @@ Configure the gateway:
 hermes -p junie-live gateway setup
 ```
 
-### 4. Set up Telegram DM allowlist
+### 4. Configure opencode for code-changing delegations
+
+Junie delegates all code-changing work to [opencode](https://github.com/sst/opencode) running Claude Opus 4.6 over OpenRouter. opencode authenticates *independently* of Hermes — it does not read the profile's `.env`. You must configure it once at the system level:
+
+```bash
+# One-time: install your OpenRouter key where opencode can find it from the system home
+echo "your-openrouter-key" > ~/openrouter.key
+chmod 600 ~/openrouter.key
+```
+
+Then verify opencode can authenticate:
+
+```bash
+/home/$USER/.opencode/bin/opencode auth list
+```
+
+You should see either `OpenRouter ~/.local/share/opencode/auth.json` under `Credentials`, or `OpenRouter OPENROUTER_API_KEY` under `Environment`. If both are empty, opencode delegations will fail with `UnknownError`/`err_*` references and Junie cannot do any code-changing work.
+
+**Important for cron / autonomous-window sessions:** when Hermes invokes a skill, cron job, or subagent, `$HOME` is rewritten to the profile-scoped home (`~/.hermes/profiles/junie-live/home/`), where `openrouter.key` does NOT exist. The fallback `$HOME/openrouter.key` lookup that works from an interactive shell silently breaks under cron. The autonomous-window skill handles this by exporting `OPENROUTER_API_KEY` explicitly before every `opencode run` invocation:
+
+```bash
+export OPENROUTER_API_KEY="$(cat /home/$USER/openrouter.key)"
+/home/$USER/.opencode/bin/opencode run '<prompt>' --model openrouter/anthropic/claude-opus-4.6 --variant low
+```
+
+If you write your own cron prompts or skills that invoke opencode, follow the same pattern. See `docs/tools.md` ("$HOME indirection trap") and the `junie-autonomous-work-window` skill v1.2.0 for the full pitfall matrix.
+
+### 5. Set up Telegram DM allowlist
 
 Configure pairing for your Telegram user:
 ```bash
 hermes -p junie-live pairing approve YOUR_TELEGRAM_ID
 ```
 
-### 5. Start the gateway
+### 6. Start the gateway
 
 ```bash
 hermes -p junie-live gateway start
 ```
 
-### 6. Initialize Junie
+### 7. Initialize Junie
 
 Send `/start` to the Telegram bot, then provide:
 - The path to the target project repository
