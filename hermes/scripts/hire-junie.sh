@@ -24,7 +24,7 @@ Options:
   --profile NAME              Hermes profile name. Default: junie-live
   --repo DIR                  Target project repository path.
   --seed-dir DIR              Junie seed dir. Default: auto-detected from script location.
-  --model MODEL               Main model for the profile. Default: openrouter/anthropic/claude-sonnet-4
+  --model MODEL               Main model for the profile. Default: openrouter/anthropic/claude-opus-4.6
   --no-restart                Configure everything but do not start/restart gateway.
   --help                      Show this help.
 
@@ -45,11 +45,11 @@ ADMIN_TELEGRAM_ID=""
 PROFILE="junie-live"
 REPO=""
 SEED_DIR=""
-MODEL="openrouter/anthropic/claude-sonnet-4"
+MODEL="openrouter/anthropic/claude-opus-4.6"
 RESTART=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+HERMES_VERSION_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -66,8 +66,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$SEED_DIR" || ! -d "$SEED_DIR" ]]; then
-  SEED_DIR="$REPO_ROOT/initialization"
+  SEED_DIR="$HERMES_VERSION_ROOT/initialization"
 fi
+
+log "Will use $SEED_DIR as directory with seed files for Junie Live initialization"
 
 [[ -n "$TOKEN" ]] || { err "missing --telegram-token or JUNIE_TELEGRAM_BOT_TOKEN"; exit 2; }
 [[ -n "$ADMIN_TELEGRAM_ID" ]] || { err "missing required --admin-telegram-id"; exit 2; }
