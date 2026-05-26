@@ -85,37 +85,18 @@ else
   hermes profile create "$PROFILE" --no-alias || { err "Failed to create profile $PROFILE"; exit 1; }
 fi
 
-# ── Step 2: Install persona ──
-log "Installing persona..."
-mkdir -p "$PROFILE_DIR"
-cp "$SEED_DIR/persona.md" "$PROFILE_DIR/persona.md"
+# ── Step 2: Copy seed files to profile ──
+# The initialization/ dir mirrors the profile layout exactly:
+#   persona.md, INITIALIZATION.md, docs/, skills/
+log "Installing seed files..."
+cp -a "$SEED_DIR/." "$PROFILE_DIR/"
+log "  Copied: persona, INITIALIZATION.md, skills, docs, seed-AGENTS.md"
 
-# ── Step 3: Install skills ──
-log "Installing Junie Live skills..."
-for skill_dir in "$SEED_DIR/skills"/*/; do
-  [[ -f "$skill_dir/SKILL.md" ]] || continue
-  skill_name=$(grep '^name:' "$skill_dir/SKILL.md" | head -1 | sed 's/^name:[[:space:]]*//')
-  if [[ -n "$skill_name" ]]; then
-    target_dir="$PROFILE_DIR/skills/junie-live/$skill_name"
-    mkdir -p "$target_dir"
-    cp -r "$skill_dir"/* "$target_dir/"
-    log "  Installed skill: $skill_name"
-  fi
-done
-
-# ── Step 4: Copy docs to profile ──
-log "Installing seed docs..."
-DOCS_DIR="$PROFILE_DIR/junie-live-docs"
-mkdir -p "$DOCS_DIR"
-if [[ -d "$SEED_DIR/docs" ]]; then
-  cp -r "$SEED_DIR/docs"/* "$DOCS_DIR/"
-fi
-
-# ── Step 5: Create state directories ──
+# ── Step 3: Create state directories ──
 log "Creating state directories..."
 mkdir -p "$STATE_DIR"/{backlog/items,reflections,overnight,logs}
 
-# ── Step 6: Configure Telegram + model in profile .env ──
+# ── Step 4: Configure Telegram + model in profile .env ──
 log "Configuring profile .env..."
 PROFILE_ENV="$PROFILE_DIR/.env"
 cat > "$PROFILE_ENV" <<ENV
@@ -126,11 +107,11 @@ TELEGRAM_ALLOW_ALL_USERS=false
 ENV
 log "  Telegram configured (DM restricted to admin $ADMIN_TELEGRAM_ID)"
 
-# ── Step 7: Set model in profile config ──
+# ── Step 5: Set model in profile config ──
 log "Setting model: $MODEL"
 hermes -p "$PROFILE" config set model.default "$MODEL" 2>/dev/null || true
 
-# ── Step 8: Install and start gateway ──
+# ── Step 6: Install and start gateway ──
 if [[ "$RESTART" -eq 1 ]]; then
   log "Installing/restarting gateway..."
   hermes -p "$PROFILE" gateway install --force 2>/dev/null || true

@@ -7,7 +7,7 @@ tags: [junie-live, review, quality]
 
 # Implementation Review
 
-Use before accepting delegated code work or opening/updating a PR. Coding work must be performed by subagents via delegate_task, not directly by the orchestrator. Documentation-only Markdown edits may be made directly by the orchestrator.
+Use before accepting delegated code work or opening/updating a PR. Coding work must be performed via `~/.opencode/bin/opencode run`, not directly by the orchestrator. Documentation-only Markdown edits may be made directly by the orchestrator.
 
 ## Workflow
 
@@ -16,7 +16,7 @@ Use before accepting delegated code work or opening/updating a PR. Coding work m
 3. Check alignment with memory (strategic context), relevant docs, architecture, and accepted decisions.
 4. Run or inspect the smallest meaningful verification gate.
 5. Look for edge cases, migrations, config, deploy, docs, and rollback implications.
-6. If the work needs fixes, delegate fixes back via `delegate_task`; do not rubber-stamp worker output.
+6. If the work needs fixes, delegate fixes back via `opencode run`; do not rubber-stamp worker output.
 7. Record risks, follow-ups, and evidence.
 
 ## Outcome acceptance gate

@@ -154,7 +154,7 @@ OpenClaw creates runtime artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.opencl
 | --- | --- | --- |
 | Strategic context | Hermes memory stores | memory tool |
 | Session history | `~/.hermes/profiles/junie-live/state.db` | Hermes sessions |
-| Detailed docs | Target repo `docs/` or profile `junie-live-docs/` | File read/write |
+| Detailed docs | Target repo `docs/` or profile `docs/` | File read/write |
 | Code mutex | `~/.hermes/junie-live/state/code_mutex/` | `code-mutex.sh` |
 | Backlog items | `~/.hermes/junie-live/state/backlog/` | Scripts/cron |
 | Operational logs | `~/.hermes/junie-live/state/logs/` | Scripts/cron |

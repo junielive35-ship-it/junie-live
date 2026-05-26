@@ -7,7 +7,7 @@ tags: [junie-live, delegation, coding, decomposition]
 
 # Coding Task Decomposition
 
-Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; all coding work is delegated via `delegate_task` or spawned coding agents.
+Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; all coding work is delegated via `~/.opencode/bin/opencode run` or `delegate_task` for non-code subtasks.
 
 Documentation-only Markdown edits are an explicit exception and may be handled directly by the orchestrator.
 
@@ -18,7 +18,7 @@ Documentation-only Markdown edits are an explicit exception and may be handled d
 3. Restate objective, constraints, and non-goals.
 4. Identify affected components and likely files.
 5. Split work into sequential scoped tasks when useful.
-6. For each task, prepare a `delegate_task` call with relevant context only.
+6. For each code-changing task, prepare an `opencode run` command via terminal with relevant context. For non-code tasks, use `delegate_task`.
 7. Define verification: tests, typecheck, lint, build, manual inspection.
 8. Plan review gates before any PR/update.
 

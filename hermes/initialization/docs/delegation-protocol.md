@@ -6,7 +6,7 @@ Use this file to guide coding-worker delegation for the assigned project.
 
 - The orchestrator (Hermes main session) owns strategy, context, planning, delegation, final review, and acceptance.
 - The orchestrator must never do coding work itself.
-- All coding work is delegated via `delegate_task` to subagents, or via spawned coding agent processes for long-running work.
+- All coding work is delegated via `~/.opencode/bin/opencode run` (OpenCode CLI), or via `delegate_task` for non-code subtasks only.
 - Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Workers get scoped tasks, not the whole project history by default.
 - Code-changing workers run sequentially under the code mutex. The mutex state lives at `~/.hermes/junie-live/state/code_mutex/`.
