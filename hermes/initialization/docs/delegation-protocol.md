@@ -41,22 +41,64 @@ Outcome status to report (`done`, `partial`, or `blocked`) and any gaps:
 Risks/questions to report:
 ```
 
-## Using delegate_task
+## Coding executor: opencode
 
-For bounded coding subtasks (under ~5 minutes), use `delegate_task`:
+All code-changing work is executed via [OpenCode CLI](https://opencode.ai) using `~/.opencode/bin/opencode run`.
+
+Default model and settings:
+- **Model:** `openrouter/anthropic/claude-opus-4.6`
+- **Reasoning effort:** `--variant minimal` (low reasoning)
+- **Agent:** `build` (default, handles implementation)
+
+### One-shot tasks (preferred)
+
+For bounded coding subtasks, use `~/.opencode/bin/opencode run` via terminal:
 
 ```
-delegate_task(
-  goal="Implement the email validation endpoint",
-  context="Project at ~/code/myapp. FastAPI backend. See docs/architecture.md for the auth module layout. Must include unit tests.",
-  toolsets=["terminal", "file"]
+terminal(
+  command="~/.opencode/bin/opencode run '<scoped coding objective>' --model openrouter/anthropic/claude-opus-4.6 --variant minimal -f <relevant_files>",
+  workdir="<target repo path>",
+  timeout=300
 )
 ```
 
-For longer work or work requiring interactive tools, spawn a separate Hermes process:
+Example:
 
 ```
-terminal(command="hermes chat -q 'Implement the full auth module per the spec at ~/code/myapp/docs/auth-spec.md'", background=true, notify_on_complete=true)
+terminal(
+  command="~/.opencode/bin/opencode run 'Implement the email validation endpoint in src/api/auth.py with unit tests in tests/test_auth.py. FastAPI backend, see docs/architecture.md for module layout.' --model openrouter/anthropic/claude-opus-4.6 --variant minimal -f src/api/auth.py -f tests/test_auth.py",
+  workdir="~/code/myapp",
+  timeout=300
+)
+```
+
+### Long-running tasks
+
+For work expected to take longer than 5 minutes, run in background with notification:
+
+```
+terminal(
+  command="~/.opencode/bin/opencode run '<detailed objective>' --model openrouter/anthropic/claude-opus-4.6 --variant minimal",
+  workdir="<target repo path>",
+  background=true,
+  notify_on_complete=true
+)
+```
+
+### Attaching context
+
+Use `-f` flags to attach files the worker needs to see:
+
+```
+~/.opencode/bin/opencode run '<objective>' -f src/module.py -f docs/spec.md -f tests/test_module.py
+```
+
+### Overriding defaults
+
+When a task needs higher reasoning effort (complex refactoring, architecture changes):
+
+```
+~/.opencode/bin/opencode run '<objective>' --model openrouter/anthropic/claude-opus-4.6 --variant high
 ```
 
 ## Project-specific notes

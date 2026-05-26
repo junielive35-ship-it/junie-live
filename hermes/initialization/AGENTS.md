@@ -37,7 +37,7 @@ If resolution requires changing strategy, architecture, accepted design choices,
 
 ## Code-changing work
 
-The orchestrator must never do coding work itself. All coding work must be delegated via `delegate_task` to subagents, or via spawned coding agent processes. Documentation-only Markdown changes are the explicit exception.
+The orchestrator must never do coding work itself. All coding work must be delegated via `~/.opencode/bin/opencode run` (OpenCode CLI with `--model openrouter/anthropic/claude-opus-4.6 --variant minimal`), or via `delegate_task` for non-code-changing subtasks only. Documentation-only Markdown changes are the explicit exception.
 
 Only one code-changing task may run at a time for this repo. The code mutex at `~/.hermes/junie-live/state/code_mutex/` prevents parallel code-changing work.
 
