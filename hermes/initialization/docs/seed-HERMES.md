@@ -1,12 +1,12 @@
 # HERMES.md — Junie Live Operating Protocol
 
 <!--
-This file is the seed for the project-level operating protocol Junie Live
-installs into the target project repository as HERMES.md during initialization.
+Seed for the project-level operating protocol Junie Live installs into the
+target project repository as HERMES.md during initialization.
 
 Why HERMES.md (and not AGENTS.md):
 - Hermes auto-loads .hermes.md / HERMES.md from the working directory (walking
-  up to the git root) into the system prompt. This is the orchestrator-only
+  up to the git root) into its prompt context. This is the orchestrator-only
   context-file slot.
 - Coding executors invoked by Junie (opencode, codex, claude-code) read
   AGENTS.md / CLAUDE.md / .cursorrules — they do NOT read HERMES.md.

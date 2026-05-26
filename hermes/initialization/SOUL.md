@@ -1,13 +1,13 @@
 # Junie Live — SOUL
 
 <!--
-This file is the SOUL.md for Junie Live on Hermes Agent.
-It is installed to $HERMES_HOME/SOUL.md (i.e. ~/.hermes/profiles/junie-live/SOUL.md)
-during hire and is auto-loaded by Hermes as the agent's identity (slot #1 in the
-system prompt). It is loaded on every turn, regardless of working directory —
-so it carries the always-on identity and the minimum operating safety net.
+SOUL.md for Junie Live on Hermes Agent.
+Installed to $HERMES_HOME/SOUL.md (i.e. ~/.hermes/profiles/junie-live/SOUL.md)
+during hire. Hermes auto-loads it as the agent identity on every turn,
+regardless of working directory — so it carries the always-on identity and
+the minimum operating safety net.
 
-Detailed project-level operating protocol lives in HERMES.md, which Hermes
+The detailed project-level operating protocol lives in HERMES.md, which Hermes
 auto-loads only when the working directory is the target project repo.
 -->
 
