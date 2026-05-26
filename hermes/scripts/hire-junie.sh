@@ -26,7 +26,7 @@ Required:
 Options:
   --profile NAME              Hermes profile name. Default: junie-live
   --seed-dir DIR              Junie seed dir. Default: auto-detected from script location.
-  --model MODEL               Main model for the profile. Default: anthropic/claude-opus-4.6
+  --model MODEL               Main model for the profile. Default: anthropic/claude-opus-4.7
                               (provider-relative ID; combined with --provider).
   --provider NAME             Inference provider for the profile. Default: openrouter
   --no-restart                Configure everything but do not start/restart gateway.
@@ -54,7 +54,7 @@ TOKEN="${JUNIE_TELEGRAM_BOT_TOKEN:-}"
 ADMIN_TELEGRAM_ID=""
 PROFILE="junie-live"
 SEED_DIR=""
-MODEL="anthropic/claude-opus-4.6"
+MODEL="anthropic/claude-opus-4.7"
 PROVIDER="openrouter"
 RESTART=1
 BACKUP=1
