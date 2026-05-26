@@ -115,6 +115,8 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 
 7. **delegate_task limitations** — Subagents cannot use `clarify`, `memory`, `send_message`, or `execute_code`. Subagents are cancelled if the parent session is interrupted. For truly long work, spawned processes are needed.
 
+8. **Injection-detection filter on auto-loaded files** — Hermes runs a prompt-injection scanner on `SOUL.md` and `HERMES.md` before loading them into the system prompt. HTML comments (`<!-- ... -->`) trigger the `html_comment_injection` heuristic and cause the entire file to be blocked with no fallback. This is silent from the agent's perspective (the file simply doesn't appear in context) but logged as `[BLOCKED: SOUL.md contained potential prompt injection (html_comment_injection). Content not loaded.]`. In practice this broke Junie's first initialization: `SOUL.md` carried the initialization gate rule, but the file was blocked because it contained developer-documentation HTML comments. The agent had no identity, no operating rules, and no initialization gate — it just greeted the user casually. OpenClaw has no equivalent filter; workspace files are loaded verbatim. **Workaround:** never use HTML comments in `SOUL.md`, `HERMES.md`, or any file auto-loaded into the Hermes system prompt. Move developer notes into companion documentation files or use markdown-native documentation instead.
+
 ## 3. Suitability Assessment
 
 ### For current project status (MVP)
