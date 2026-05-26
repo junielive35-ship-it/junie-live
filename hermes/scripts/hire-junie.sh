@@ -106,8 +106,12 @@ if [[ "$BACKUP" -eq 1 ]]; then
 fi
 
 # ── Step 2: Create profile (or note it exists) ──
+# Use `hermes profile show` to test existence (rc=0 if exists, rc=1 if not).
+# Parsing `profile list` is fragile — the active profile gets a "◆" marker
+# but inactive ones have no marker at all, so regex matching breaks for
+# profiles created but never set as default.
 log "Creating Hermes profile: $PROFILE"
-if hermes profile list 2>/dev/null | grep -qE "^\s*[◆◇]\s*$PROFILE\s"; then
+if hermes profile show "$PROFILE" >/dev/null 2>&1; then
   log "Profile $PROFILE already exists — runtime state (memory, sessions, config, .env) will be preserved; seed files will be replaced cleanly"
 else
   hermes profile create "$PROFILE" --no-alias || { err "Failed to create profile $PROFILE"; exit 1; }
@@ -174,15 +178,41 @@ log "  Telegram configured (DM restricted to admin $ADMIN_TELEGRAM_ID)"
 log "Setting model: $MODEL"
 hermes -p "$PROFILE" config set model.default "$MODEL" 2>/dev/null || true
 
-# ── Step 7: Install and start gateway ──
+# ── Step 7: Install and start gateway (Ubuntu / Linux + systemd) ──
+# `hermes gateway install` asks two yes/no questions on Linux (start now?
+# start on login?). Both default to yes, so we feed two newlines via stdin
+# and the install proceeds non-interactively. Whole thing is wrapped in
+# `timeout` so the script fails fast instead of hanging.
 if [[ "$RESTART" -eq 1 ]]; then
-  log "Installing/restarting gateway..."
-  hermes -p "$PROFILE" gateway install --force 2>/dev/null || true
-  hermes -p "$PROFILE" gateway restart 2>/dev/null || {
-    hermes -p "$PROFILE" gateway start 2>/dev/null || {
-      log "Gateway could not start automatically. Run: hermes -p $PROFILE gateway start"
-    }
-  }
+  log "Installing gateway as a user systemd service..."
+
+  install_log="$(mktemp)"
+  trap 'rm -f "$install_log"' EXIT
+
+  if timeout 120s bash -c "printf '\n\n' | hermes -p '$PROFILE' gateway install --force" >"$install_log" 2>&1; then
+    log "  Gateway service installed."
+    grep -E '^(✓|↻|Installing|Service)' "$install_log" | sed 's/^/    /' || true
+  else
+    rc=$?
+    err "gateway install failed (rc=$rc). Output:"
+    sed 's/^/  /' "$install_log" >&2
+    log ""
+    log "Recover with one of:"
+    log "  hermes -p $PROFILE gateway install         # interactive"
+    log "  hermes -p $PROFILE gateway run             # foreground"
+    exit 1
+  fi
+
+  # `gateway install` with start_now=Y already started the service.
+  # Force a restart so a re-hire over an already-installed unit reloads
+  # the new .env / config without manual intervention.
+  log "Restarting gateway to pick up new configuration..."
+  if timeout 60s hermes -p "$PROFILE" gateway restart >/dev/null 2>&1; then
+    log "  Gateway restarted."
+  else
+    log "  Note: restart did not complete; checking status..."
+    hermes -p "$PROFILE" gateway status 2>&1 | sed 's/^/    /' | head -10 || true
+  fi
 fi
 
 # ── Done ──
