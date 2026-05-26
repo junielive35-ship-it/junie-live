@@ -39,6 +39,11 @@ while IFS= read -r file; do
   done < <(grep -oE '\[[^]]+\]\([^)]+\)' "$file" | sed -E 's/^.*\(([^)]+)\)$/\1/' || true)
 done < <(find . -path './.git' -prune -o -name '*.md' -type f -print)
 
+log "git whitespace"
+if ! git diff --check HEAD -- 2>/dev/null; then
+  fail "git diff --check found whitespace errors"
+fi
+
 log "directory structure"
 for required_dir in initialization initialization/docs initialization/skills scripts docs; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
