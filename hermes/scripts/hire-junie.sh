@@ -123,7 +123,7 @@ fi
 # profiles created but never set as default.
 log "Creating Hermes profile: $PROFILE"
 if hermes profile show "$PROFILE" >/dev/null 2>&1; then
-  log "Profile $PROFILE already exists — runtime state (memory, sessions, config, .env) will be preserved; seed files will be replaced cleanly"
+  log "Profile $PROFILE already exists — config and .env will be preserved; seed files, memory, sessions, and state will be reset for fresh initialization"
 else
   hermes profile create "$PROFILE" --no-alias || { err "Failed to create profile $PROFILE"; exit 1; }
 fi
@@ -131,9 +131,9 @@ fi
 # ── Step 3: Remove previously-installed seed files, then copy fresh seed ──
 # We surgically remove only the top-level paths that have ever belonged to the
 # Junie seed. This guarantees stale seed files from earlier versions (e.g. an
-# old persona.md that has since been renamed/removed) don't survive a re-hire,
-# while leaving runtime state (memories/, sessions/, state.db, config.yaml,
-# .env, logs/, anything else not in this list) untouched.
+# old persona.md that has since been renamed/removed) don't survive a re-hire.
+# Runtime state (memories, sessions, state.db, cron, operational state) is
+# cleared separately in Step 3b after the fresh seed is installed.
 #
 # KEEP THIS LIST IN SYNC with the actual seed layout. Add historical names too
 # so that re-hiring an old install reliably cleans them out.
@@ -162,6 +162,57 @@ log "  Removed $seed_removed prior seed entries"
 log "Installing seed files..."
 cp -a "$SEED_DIR/." "$PROFILE_DIR/"
 log "  Copied: SOUL.md, INITIALIZATION.md, memory-seed.md, skills, docs (incl. seed-HERMES.md)"
+
+# ── Step 3b: Clear runtime state that would contradict fresh initialization ──
+# On re-hire the agent needs to re-initialize from scratch. Memory stores
+# from a previous initialization carry "INITIALIZED" and project-specific
+# context that would cause the agent to skip the initialization gate even
+# though INITIALIZATION.md was just reinstalled. Sessions carry conversation
+# history that reinforces the stale initialized state.
+#
+# The backup in Step 1 already preserved the old profile, so this is safe.
+log "Clearing runtime state for fresh initialization..."
+runtime_cleared=0
+
+# Memory stores — the agent's persistent memory (MEMORY.md, USER.md).
+# These are auto-injected into every turn. Stale "INITIALIZED" entries
+# here directly conflict with the fresh INITIALIZATION.md.
+if [[ -d "$PROFILE_DIR/memories" ]]; then
+  rm -rf -- "$PROFILE_DIR/memories"
+  runtime_cleared=$((runtime_cleared + 1))
+  log "  Cleared: memories/"
+fi
+
+# Sessions and session database — past conversation context could make
+# the agent believe it's already initialized. The backup preserves them.
+if [[ -f "$PROFILE_DIR/state.db" ]]; then
+  rm -f -- "$PROFILE_DIR/state.db" "$PROFILE_DIR/state.db-shm" "$PROFILE_DIR/state.db-wal"
+  runtime_cleared=$((runtime_cleared + 1))
+  log "  Cleared: state.db"
+fi
+if [[ -d "$PROFILE_DIR/sessions" ]]; then
+  rm -rf -- "$PROFILE_DIR/sessions"
+  runtime_cleared=$((runtime_cleared + 1))
+  log "  Cleared: sessions/"
+fi
+
+# Junie-live operational state (backlog, mutex, reflections, overnight,
+# logs) — stale state from a previous initialization.
+if [[ -d "$STATE_DIR" ]]; then
+  rm -rf -- "$STATE_DIR"
+  runtime_cleared=$((runtime_cleared + 1))
+  log "  Cleared: $STATE_DIR"
+fi
+
+# Cron jobs — stale cron definitions from a previous initialization
+# would fire against the old context.
+if [[ -d "$PROFILE_DIR/cron" ]]; then
+  rm -rf -- "$PROFILE_DIR/cron"
+  runtime_cleared=$((runtime_cleared + 1))
+  log "  Cleared: cron/"
+fi
+
+log "  Cleared $runtime_cleared runtime state entries"
 
 # Post-copy sanity check (mirrors OpenClaw)
 [[ -f "$PROFILE_DIR/INITIALIZATION.md" ]] || { err "copied profile missing INITIALIZATION.md: $PROFILE_DIR"; exit 1; }
