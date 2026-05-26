@@ -108,7 +108,8 @@ backlog items until 8am or blockers.
 ├── INITIALIZATION.md     # Initialization guide (deleted after init)
 ├── memory-seed.md        # Initial memory entries template
 ├── docs/                 # Profile docs (strategy, architecture, etc.)
-│   └── seed-HERMES.md    # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
+│   ├── seed-HERMES.md    # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
+│   └── tools.md          # Operational cheat-sheet (commands, git conventions, deploy, escalation) — filled during init
 ├── skills/               # Installed skills
 │   ├── junie-autonomous-work-window/
 │   ├── junie-coding-task-decomposition/

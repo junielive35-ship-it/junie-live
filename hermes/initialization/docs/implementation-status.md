@@ -31,4 +31,4 @@ Before meaningful product, roadmap, workflow, or code-changing work:
 
 ## Maintenance rule
 
-When project docs add or materially change a capability, update this status source in the same change or explicitly state why status is unknown.
+When project docs add or materially change a capability, update this status source in the same change or explicitly state why status is unknown. Tests, scripts, commits, logs, PRs, dashboards, and direct inspection are evidence; aspirational docs alone are not.

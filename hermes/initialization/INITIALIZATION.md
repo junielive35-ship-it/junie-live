@@ -50,6 +50,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - existing README/docs;
    - architecture and dependency clues;
    - tests, build, deploy, CI, issue/PR conventions;
+   - **operational specifics** (capture for `docs/tools.md`): exact install / build / test / lint / run-locally commands, default branch name, branch-naming convention, PR target, required CI checks, deployment command, rollback procedure, approval requirements, issue tracker URL, analytics/error-reporting dashboards;
    - current git state.
 4. Build an initial project model:
    - product purpose;
@@ -80,6 +81,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 9. If initialization can proceed, update durable state:
    - **Memory** (via `memory` tool) — read `~/.hermes/profiles/junie-live/memory-seed.md` for initial memory entries to inject, then add project-specific context on top: global goal, current strategy, non-negotiable priorities, architecture constraints, accepted design choices, owner preferences, authority boundaries, autonomous ownership model, active hypotheses, known unresolved contradictions, pointers to detailed docs. Also save the target repo path so all future sessions know where to work.
    - **Profile docs** (at `~/.hermes/profiles/junie-live/docs/`) — detailed project knowledge: strategy, architecture, implementation status, design decisions, product hypotheses. Use the seed doc templates already present.
+   - **Operational references** (`~/.hermes/profiles/junie-live/docs/tools.md`) — fill in the structured cheat-sheet from inspection: project paths, dev commands (install, build, test, lint, run-locally), git & PR conventions (default branch, branch naming, PR target, CI checks), mutex configuration (protected scope, escalation contact), deployment & release (release process, deployment command, rollback procedure, approval requirements), product/analytics references (issue tracker, dashboards, error reporting, support intake), and local caveats. Mark genuinely-not-applicable fields as "N/A" with a one-line reason; leave fields you have not yet confirmed as "TODO" and record them as non-blocking unknowns for follow-up. This file is Junie's operational cheat-sheet — do not skip the dev-command, rollback, and escalation fields, they are the highest-value ones.
    - **User memory** (via `memory` tool, target: user) — owner name, communication preferences, escalation path, Telegram ID.
 10. Install `HERMES.md` in the target project repository:
     - The seed is at `~/.hermes/profiles/junie-live/docs/seed-HERMES.md`.
@@ -97,6 +99,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
     - no blocking contradiction remains;
     - owner operating preferences, durable product principles, and autonomous/proactive ownership model are recorded;
     - memory has the strategic compass, profile docs have the details;
+    - `docs/tools.md` is populated with the operational cheat-sheet (dev commands, git conventions, deployment, escalation contacts) — fields you couldn't confirm are marked TODO and listed as non-blocking unknowns;
     - cross-cutting invariants, bypass risks, and guardrails are recorded;
     - the mutex scope and escalation path are configured;
     - target repo path is saved to memory;

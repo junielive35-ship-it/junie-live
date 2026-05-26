@@ -15,6 +15,7 @@ Status values:
 | SOUL.md (personality + safety-net rules) | implemented | `initialization/SOUL.md` | Installed to profile root during hire; auto-loaded by Hermes on every turn |
 | HERMES.md (project operating protocol) | implemented | `initialization/docs/seed-HERMES.md` | Copied to `<target-repo>/HERMES.md` by Junie during initialization; auto-loaded by Hermes from cwd |
 | Memory seed | implemented | `initialization/memory-seed.md` | Seeded during hire; populated during initialization |
+| Operational cheat-sheet (`tools.md`) | implemented | `initialization/docs/tools.md` | Structured template covering project paths, dev commands, git/PR conventions, mutex configuration, deployment & rollback, analytics references, local caveats; populated by Junie during initialization (Hermes equivalent of OpenClaw's TOOLS.md) |
 | Initialization workflow | implemented | SOUL + seed-HERMES + memory seed + skills | Follows same multi-round Q&A as OpenClaw version |
 | Skills (5 core workflows) | implemented | `initialization/skills/` | task-intake, decomposition, review, reflection, autonomous-window |
 | Delegation protocol docs | implemented | `initialization/docs/delegation-protocol.md` | Uses opencode for code work (same as OpenClaw); delegate_task for non-code subtasks |

@@ -49,7 +49,8 @@ for required_file in \
     initialization/SOUL.md \
     initialization/INITIALIZATION.md \
     initialization/memory-seed.md \
-    initialization/docs/seed-HERMES.md; do
+    initialization/docs/seed-HERMES.md \
+    initialization/docs/tools.md; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 

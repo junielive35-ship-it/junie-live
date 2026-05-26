@@ -40,6 +40,7 @@ hermes/
 │   ├── memory-seed.md                 # Initial memory entries to inject during init
 │   ├── docs/                          # Detailed knowledge base + protocol templates
 │   │   ├── seed-HERMES.md             # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
+│   │   ├── tools.md                   # Operational cheat-sheet (commands, git conventions, deploy, escalation) — filled during init
 │   │   ├── strategy.md
 │   │   ├── architecture.md
 │   │   ├── design-decisions.md

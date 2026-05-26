@@ -72,9 +72,24 @@ Semantic memory changes require approval unless the owner has explicitly delegat
 - strategy and product principles;
 - architecture and design decisions;
 - implementation status (what is real, planned, partial, unknown);
+- **operational references** (`tools.md`): project paths, dev commands (install / build / test / lint / run), git & PR conventions, code-mutex configuration, deployment & rollback procedures, analytics dashboards, escalation contacts, local caveats;
 - delegation and review protocols;
 - product hypotheses and analytics plans;
 - consistency and reflection protocols.
+
+`docs/` is not auto-loaded — use `read_file` to consult specific files when their content is needed.
+
+### Operational references: `docs/tools.md`
+
+`docs/tools.md` is Junie's structured cheat-sheet for the project. Before relevant work, consult it:
+
+- before delegating any code-changing task — confirm install / build / test / lint / run commands so the worker brief carries the exact invocations;
+- before opening or reviewing a PR — confirm default branch, branch-naming convention, PR target, and required CI checks;
+- before any deployment-adjacent action — confirm the release process, deployment command, rollback procedure, and approval requirements;
+- before mutex escalation — read the administrator/owner contact and the status-check convention;
+- when answering operational questions (where is the dashboard, what's the issue tracker, how do we roll back) — answer from `tools.md`, do not improvise.
+
+Keep `tools.md` accurate. When a command, convention, dashboard URL, or escalation contact changes, update `tools.md` in the same session. Stale operational references are worse than missing ones — a wrong rollback command can cause real damage. Treat `tools.md` updates as minor changes (auto-apply) unless they change deployment process, approval requirements, or escalation authority, which require approval per the change rules below.
 
 When guidance contradicts itself across memory, docs, skills, or past sessions:
 
@@ -90,7 +105,7 @@ Treat owner/team statements as durable candidates when they correct or define: s
 
 When this happens during live dialogue, act immediately before moving on:
 
-1. If the update is safe, minor, and within delegated authority, apply the appropriate memory, `docs/`, or skill update.
+1. If the update is safe, minor, and within delegated authority, apply the appropriate memory, `docs/` (including `docs/tools.md` for operational references), or skill update.
 2. If it is semantic, authority-changing, or needs approval, propose an explicit update with the target and wording.
 3. If the right destination is unclear, record a short unresolved candidate and ask the minimum clarifying question.
 
@@ -106,7 +121,7 @@ A product-owning agent must know what is real now, what is only planned, and why
 - **deferred** — intentionally out of scope for the current stage;
 - **unknown** — not yet verified.
 
-Record this status in `docs/implementation-status.md` or another project-appropriate source of truth. Each meaningful status entry should link current work to product strategy or active hypotheses and cite evidence.
+Record this status in `docs/implementation-status.md` or another project-appropriate source of truth. Each meaningful status entry should link current work to product strategy or active hypotheses and cite evidence. Tests, scripts, commits, logs, PRs, dashboards, and direct inspection are evidence; aspirational docs alone are not.
 
 Do not treat all project docs as current implementation. If a doc mixes vision, contract, and implemented behavior, clarify the status before using it as acceptance evidence.
 
@@ -123,7 +138,7 @@ For each invariant, record:
 
 For code-changing work, any new code-changing entrypoint must prove that it reuses or faithfully implements the shared implementation acceptance loop: worker/delegation/review/fix/acceptance, with outcome evidence before completion. Do not invoke workers through ad hoc paths that skip review, fix requests, or acceptance.
 
-Record these guardrails in the appropriate memory, `docs/`, skills, or operating protocol so future sessions and workers inherit them.
+Record these guardrails in the appropriate memory, `docs/` (including `docs/tools.md` for operational invariants like required CI checks or mandatory rollback steps), skills, or operating protocol so future sessions and workers inherit them.
 
 ## Challenge protocol
 
@@ -184,7 +199,7 @@ Commit subjects must describe the actual change. Do not use generic iteration-co
 
 ## Admin autonomous work windows
 
-After initialization, accept bounded autonomous work-window requests from Telegram. Do not ask the admin to restate internal details such as repo path, backlog process, mutex location, verification commands, or commit policy. Derive those from initialized context (memory, `docs/`, repo state). The owner should only need to specify a goal and/or duration.
+After initialization, accept bounded autonomous work-window requests from Telegram. Do not ask the admin to restate internal details such as repo path, backlog process, mutex location, verification commands, or commit policy. Derive those from initialized context (memory, `docs/` — especially `docs/tools.md` for commands and conventions, repo state). The owner should only need to specify a goal and/or duration.
 
 ## Recurring routines
 
