@@ -22,7 +22,6 @@ Required:
 
 Options:
   --profile NAME              Hermes profile name. Default: junie-live
-  --repo DIR                  Target project repository path.
   --seed-dir DIR              Junie seed dir. Default: auto-detected from script location.
   --model MODEL               Main model for the profile. Default: openrouter/anthropic/claude-opus-4.6
   --no-restart                Configure everything but do not start/restart gateway.
@@ -43,7 +42,6 @@ need_value() {
 TOKEN="${JUNIE_TELEGRAM_BOT_TOKEN:-}"
 ADMIN_TELEGRAM_ID=""
 PROFILE="junie-live"
-REPO=""
 SEED_DIR=""
 MODEL="openrouter/anthropic/claude-opus-4.6"
 RESTART=1
@@ -56,7 +54,6 @@ while [[ $# -gt 0 ]]; do
     --telegram-token) need_value "$1" "${2:-}"; TOKEN="$2"; shift 2 ;;
     --admin-telegram-id) need_value "$1" "${2:-}"; ADMIN_TELEGRAM_ID="$2"; shift 2 ;;
     --profile) need_value "$1" "${2:-}"; PROFILE="$2"; shift 2 ;;
-    --repo) need_value "$1" "${2:-}"; REPO="$2"; shift 2 ;;
     --seed-dir) need_value "$1" "${2:-}"; SEED_DIR="$2"; shift 2 ;;
     --model) need_value "$1" "${2:-}"; MODEL="$2"; shift 2 ;;
     --no-restart) RESTART=0; shift ;;
@@ -106,14 +103,7 @@ for skill_dir in "$SEED_DIR/skills"/*/; do
   fi
 done
 
-# ── Step 4: Copy AGENTS.md to target repo if specified ──
-if [[ -n "$REPO" && -d "$REPO" ]]; then
-  log "Installing AGENTS.md to target repo..."
-  cp "$SEED_DIR/AGENTS.md" "$REPO/AGENTS.md"
-  log "  AGENTS.md installed at $REPO/AGENTS.md"
-fi
-
-# ── Step 5: Copy docs to profile ──
+# ── Step 4: Copy docs to profile ──
 log "Installing seed docs..."
 DOCS_DIR="$PROFILE_DIR/junie-live-docs"
 mkdir -p "$DOCS_DIR"
@@ -121,11 +111,11 @@ if [[ -d "$SEED_DIR/docs" ]]; then
   cp -r "$SEED_DIR/docs"/* "$DOCS_DIR/"
 fi
 
-# ── Step 6: Create state directories ──
+# ── Step 5: Create state directories ──
 log "Creating state directories..."
 mkdir -p "$STATE_DIR"/{backlog/items,reflections,overnight,logs}
 
-# ── Step 7: Configure Telegram + model in profile .env ──
+# ── Step 6: Configure Telegram + model in profile .env ──
 log "Configuring profile .env..."
 PROFILE_ENV="$PROFILE_DIR/.env"
 cat > "$PROFILE_ENV" <<ENV
@@ -136,11 +126,11 @@ TELEGRAM_ALLOW_ALL_USERS=false
 ENV
 log "  Telegram configured (DM restricted to admin $ADMIN_TELEGRAM_ID)"
 
-# ── Step 8: Set model in profile config ──
+# ── Step 7: Set model in profile config ──
 log "Setting model: $MODEL"
 hermes -p "$PROFILE" config set model.default "$MODEL" 2>/dev/null || true
 
-# ── Step 9: Install and start gateway ──
+# ── Step 8: Install and start gateway ──
 if [[ "$RESTART" -eq 1 ]]; then
   log "Installing/restarting gateway..."
   hermes -p "$PROFILE" gateway install --force 2>/dev/null || true
@@ -159,6 +149,5 @@ log "Profile dir:      $PROFILE_DIR"
 log "State dir:        $STATE_DIR"
 log "Telegram admin:   $ADMIN_TELEGRAM_ID"
 log "Model:            $MODEL"
-[[ -n "$REPO" ]] && log "Target repo:      $REPO"
 log ""
 log "Next: open the Junie bot in Telegram and send /start."
