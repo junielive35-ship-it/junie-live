@@ -10,7 +10,13 @@ set -euo pipefail
 #   code-mutex.sh status [--mutex-dir DIR]
 #   code-mutex.sh acquire --holder ID --reason TEXT [--repo DIR] [--mutex-dir DIR]
 #   code-mutex.sh release [--mutex-dir DIR]
-#   code-mutex.sh check-stale [--stale-minutes N] [--mutex-dir DIR]
+#   code-mutex.sh check-stale [--stale-minutes N] [--auto-recover] [--mutex-dir DIR]
+#
+# --auto-recover (check-stale only):
+#   When the mutex is in BROKEN state (directory exists, holder.json missing),
+#   automatically remove the empty mutex directory and exit 0.
+#   Stale-by-age locks (holder.json present but old) are NOT auto-recovered;
+#   they still require manual release.
 
 STATE_DIR="${JUNIE_STATE_DIR:-${HOME}/.hermes/junie-live/state}"
 MUTEX_DIR=""
@@ -31,6 +37,7 @@ Options:
   --repo DIR              Repository path (for acquire metadata)
   --branch BRANCH         Branch name (for acquire metadata)
   --stale-minutes N       Minutes before mutex is considered stale (default: 30)
+  --auto-recover          (check-stale) Auto-remove BROKEN mutex (dir exists, no holder.json)
 EOF
 }
 
@@ -44,6 +51,7 @@ HOLDER=""
 REASON=""
 REPO=""
 BRANCH=""
+AUTO_RECOVER=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -53,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     --repo) REPO="$2"; shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
     --stale-minutes) STALE_MINUTES="$2"; shift 2 ;;
+    --auto-recover) AUTO_RECOVER=true; shift ;;
     *) printf 'Unknown: %s\n' "$1" >&2; usage; exit 2 ;;
   esac
 done
@@ -122,6 +131,12 @@ JSON
       printf 'mutex=HELD\n'
       printf 'stale=BROKEN\n'
       printf 'reason=mutex directory exists but no holder metadata\n'
+      if [[ "$AUTO_RECOVER" == true ]]; then
+        rmdir "$MUTEX_DIR" 2>/dev/null || rm -rf "$MUTEX_DIR"
+        printf 'recovered=BROKEN\n'
+        printf 'result=removed_empty_mutex_dir\n'
+        exit 0
+      fi
       exit 1
     fi
 
@@ -139,6 +154,10 @@ JSON
     if [[ "$age_minutes" -gt "$STALE_MINUTES" ]]; then
       printf 'stale=YES\n'
       printf 'reason=mutex held for %s minutes (threshold: %s)\n' "$age_minutes" "$STALE_MINUTES"
+      if [[ "$AUTO_RECOVER" == true ]]; then
+        printf 'recovered=NO\n'
+        printf 'result=stale_age_recovery_requires_manual_release\n'
+      fi
       exit 1
     else
       printf 'stale=NO\n'
