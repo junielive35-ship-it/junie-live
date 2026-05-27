@@ -8,30 +8,27 @@ An administrator should be able to say, conceptually, “work overnight on backl
 
 ## Cron roles
 
-The overnight setup is split into three cron-backed roles:
+The overnight setup is split into two cron-backed roles:
 
 1. **Controller** — starts the overnight work window, fills or refreshes the backlog, selects eligible top-priority work, delegates implementation through `scripts/run-backlog-worker.sh`, verifies gates, releases/updates task and mutex state, and writes durable state as it progresses.
 2. **Watchdog** — runs independently during and after the controller window to detect stuck agents, stale opencode workers, stale mutex holders, missing progress, and broken routine state. It may stop a stuck worker, preserve logs, mark work blocked, and release or transfer the mutex only according to the mutex contract.
-3. **Morning report** — summarizes what happened overnight: work attempted, backlog changes, commits/PRs, verification results, blockers, cleanup actions, and recommended next decisions.
-
 These roles are implemented locally by:
 
 - `scripts/start-autonomous-window.sh` — admin-facing wrapper for bounded natural-language autonomous work windows;
 - `scripts/overnight-controller.sh`
 - `scripts/overnight-watchdog.sh`
-- `scripts/overnight-report.sh`
 
 They are intentionally plain shell scripts so scheduled jobs and Telegram-triggered admin work windows can run without an interactive terminal. `hire-junie.sh` now creates the OpenClaw agent first, then calls `scripts/install-overnight-crons.sh`, so every newly hired Junie instance receives an enabled OpenClaw watchdog cron out of the box plus a workspace-local audit artifact:
 
-- `.openclaw/cron/overnight-routines.json` — structured planned definitions for the controller, watchdog, and morning report.
+- `.openclaw/cron/overnight-routines.json` — structured planned definitions for the controller and watchdog.
 
-The helper installs/updates OpenClaw cron jobs using stable `Junie Live overnight ...` names, removing only matching Junie Live jobs for the same agent before re-adding them. By default it installs the watchdog enabled, while the controller and morning-report jobs are installed disabled and remain disabled planned definitions in the JSON audit artifact. Scheduled morning reports are deprecated by default; use `--enable-controller` only after explicit administrator approval and a non-`main` target branch are configured. Use `--enable-morning-report` only if a scheduled report is explicitly wanted. Use `--no-overnight-crons`, `--overnight-artifacts-only`, or `--overnight-disabled` to opt out, write local JSON audit definitions only, or disable all jobs.
+The helper installs/updates OpenClaw cron jobs using stable `Junie Live overnight ...` names, removing only matching Junie Live jobs for the same agent before re-adding them. By default it installs the watchdog enabled, while the controller job is installed disabled and remains a disabled planned definition in the JSON audit artifact. Use `--enable-controller` only after explicit administrator approval and a non-`main` target branch are configured. Use `--no-overnight-crons`, `--overnight-artifacts-only`, or `--overnight-disabled` to opt out, write local JSON audit definitions only, or disable all jobs.
 
 ## Admin-triggered autonomous windows
 
-After initialization, an administrator can ask in Telegram for bounded autonomous work with natural language such as “start autonomous loop for 4h”, “поработай автономно 9 часов”, or “работай над проектом до утра”. Junie should treat this as an operational autonomous-work request, not as a request for the admin to provide repo, backlog, mutex, opencode, verification, commit, or morning-report details.
+After initialization, an administrator can ask in Telegram for bounded autonomous work with natural language such as “start autonomous loop for 4h”, “поработай автономно 9 часов”, or “работай над проектом до утра”. Junie should treat this as an operational autonomous-work request, not as a request for the admin to provide repo, backlog, mutex, opencode, verification, commit, or reporting details.
 
-Junie resolves the duration/end time from the message, asks one concise question only when that bound is missing or ambiguous, validates initialization/repo/mutex context, and starts `scripts/start-autonomous-window.sh --duration ... --background` with explicit workspace-local state. If preflight is unsafe, it reports the blocker and points to the preflight state/log file. This on-demand window uses the same controller/watchdog/report contract as scheduled overnight work, but it is manually triggered and bounded by the admin's requested duration rather than a scheduled cron start. The wrapper defaults to a multi-iteration controller limit for admin windows, so a request such as `/skill autonomous-work-window 9h` can keep selecting and completing backlog items until the time bound, max iterations, or a blocker stops it.
+Junie resolves the duration/end time from the message, asks one concise question only when that bound is missing or ambiguous, validates initialization/repo/mutex context, and starts `scripts/start-autonomous-window.sh --duration ... --background` with explicit workspace-local state. If preflight is unsafe, it reports the blocker and points to the preflight state/log file. This on-demand window uses the same controller/watchdog contract as scheduled overnight work, but it is manually triggered and bounded by the admin's requested duration rather than a scheduled cron start. The wrapper defaults to a multi-iteration controller limit for admin windows, so a request such as `/skill autonomous-work-window 9h` can keep selecting and completing backlog items until the time bound, max iterations, or a blocker stops it.
 
 ## Expected state and log files
 
@@ -41,7 +38,7 @@ Routine state must live under the initialized OpenClaw workspace, not in the rep
 - routine run state such as controller run id, start/end timestamps, selected task id, worker id/session id, current phase, and expected next action;
 - backlog item state for queued, in-progress, blocked, done, and archived items;
 - watchdog findings and cleanup decisions;
-- morning report artifacts or links.
+- controller/watchdog summary artifacts or links.
 
 Logs should be durable enough to debug a failed overnight run and should include command invocations, worker/session identifiers, verification output, commit hashes, PR links when present, timeout reasons, and cleanup actions. Logs and state are operational artifacts of the initialized workspace, not source files in the Junie Live repo. Generated cron definitions explicitly set the repository path, workspace state directory, logs directory, target branch, timeout values, and non-interactive environment. Commands use `/usr/bin/env bash` from a predictable repo cwd and write reports/logs to workspace-local paths instead of relying on an interactive terminal.
 
@@ -57,7 +54,6 @@ The watchdog must be able to identify at least these stuck states:
 - controller state says work is running but no matching worker/session exists;
 - repeated verification failure with no changed retry plan;
 - backlog item stuck `in_progress` without an active owner;
-- morning report missing after an overnight run should have ended.
 
 Detection must prefer concrete evidence: mutex metadata, routine state, process/session status, logs, git status, commits, PR status, and verification output.
 
@@ -91,16 +87,7 @@ Each controller run must record the verification commands it ran and their resul
 - `./scripts/verify.sh`
 - `git diff --check`
 
-The morning report must include:
-
-- whether the controller, watchdog, and morning report roles ran;
-- backlog items created, rescored, selected, completed, blocked, or deferred;
-- mutex status transitions and any stale/broken mutex handling;
-- worker/session ids and timeouts;
-- commits and PRs created or updated;
-- verification results;
-- cleanup actions;
-- unresolved risks and questions.
+Controller/watchdog summaries should include backlog items created, rescored, selected, completed, blocked, or deferred; mutex status transitions and any stale/broken mutex handling; worker/session ids and timeouts; commits and PRs created or updated; verification results; cleanup actions; and unresolved risks and questions.
 
 ## Non-goals
 

@@ -200,5 +200,4 @@ if [[ -d "$backlog_dir/items" ]]; then
   say "backlog_stuck_in_progress=$orphan_count"
 fi
 
-if [[ "$run_status" == "complete" && ! -f "$state_dir/morning-report.txt" ]]; then say "WARNING report missing after completed run"; [[ "$status" -lt 1 ]] && status=1; fi
 exit "$status"

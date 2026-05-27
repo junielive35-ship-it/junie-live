@@ -8,8 +8,8 @@ Usage:
 
 Writes Junie Live overnight OpenClaw cron definitions into an initialized
 workspace and installs/updates a branch-independent watchdog OpenClaw cron job
-by default. Controller work and scheduled reports are kept as disabled planned
-OpenClaw cron definitions unless explicitly enabled.
+by default. Controller work is kept as a disabled planned
+OpenClaw cron definition unless explicitly enabled.
 
 Options:
   --agent-id ID                         Agent id. Default: junie-live
@@ -18,7 +18,6 @@ Options:
   --logs-dir DIR                        Default: WORKSPACE/.openclaw/logs/overnight
   --controller-schedule CRON            Default: 0 1 * * *
   --watchdog-schedule CRON              Default: */15 * * * *
-  --morning-report-schedule CRON        Default: 0 8 * * *
   --worker-timeout-seconds SECONDS      Default: 900
   --stale-seconds SECONDS               Default: 1800
   --max-iterations N                    Default: 1
@@ -28,7 +27,6 @@ Options:
   --artifacts-only                      Only write local JSON definitions; do not call OpenClaw
   --disabled                            Generate disabled definitions and disabled OpenClaw jobs
   --enable-controller                   Install/enable scheduled controller job (requires non-main branch)
-  --enable-morning-report               Install/enable scheduled morning-report job (deprecated by default)
   --dry-run                             Validate and print planned OpenClaw commands; no mutation
   --help                                Show this help
 EOF_USAGE
@@ -44,10 +42,10 @@ quote_args() { printf ' %q' "$@"; printf '\n'; }
 run_openclaw() { if $dry_run; then printf 'DRY-RUN:'; quote_args "$openclaw_bin" "$@"; else "$openclaw_bin" "$@"; fi; }
 
 workspace=""; repo=""; agent_id="junie-live"; branch=""; state_dir=""; logs_dir=""
-controller_schedule="0 1 * * *"; watchdog_schedule="*/15 * * * *"; morning_report_schedule="0 8 * * *"
+controller_schedule="0 1 * * *"; watchdog_schedule="*/15 * * * *"
 worker_timeout_seconds="900"; stale_seconds="1800"; max_iterations="1"
 enabled=true; dry_run=false; install_openclaw=true; openclaw_bin="${OPENCLAW_BIN:-openclaw}"; timezone="Europe/Belgrade"
-enable_controller=false; enable_morning_report=false
+enable_controller=false
 cron_prefix="Junie Live overnight"
 
 while [[ $# -gt 0 ]]; do
@@ -60,7 +58,6 @@ while [[ $# -gt 0 ]]; do
     --logs-dir) need_value "$1" "${2:-}"; logs_dir="$2"; shift 2 ;;
     --controller-schedule) need_value "$1" "${2:-}"; controller_schedule="$2"; shift 2 ;;
     --watchdog-schedule) need_value "$1" "${2:-}"; watchdog_schedule="$2"; shift 2 ;;
-    --morning-report-schedule) need_value "$1" "${2:-}"; morning_report_schedule="$2"; shift 2 ;;
     --worker-timeout-seconds) need_value "$1" "${2:-}"; worker_timeout_seconds="$2"; shift 2 ;;
     --stale-seconds) need_value "$1" "${2:-}"; stale_seconds="$2"; shift 2 ;;
     --max-iterations) need_value "$1" "${2:-}"; max_iterations="$2"; shift 2 ;;
@@ -70,7 +67,6 @@ while [[ $# -gt 0 ]]; do
     --artifacts-only) install_openclaw=false; shift ;;
     --disabled) enabled=false; shift ;;
     --enable-controller) enable_controller=true; shift ;;
-    --enable-morning-report) enable_morning_report=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) err "unknown argument: $1"; usage; exit 2 ;;
@@ -83,7 +79,6 @@ workspace="$(abs_path "$workspace")"; repo="$(abs_path "$repo")"
 [[ -d "$repo" ]] || { err "repo not found: $repo"; exit 1; }
 [[ -f "$repo/scripts/overnight-controller.sh" ]] || { err "missing overnight controller in repo: $repo"; exit 1; }
 [[ -f "$repo/scripts/overnight-watchdog.sh" ]] || { err "missing overnight watchdog in repo: $repo"; exit 1; }
-[[ -f "$repo/scripts/overnight-report.sh" ]] || { err "missing overnight report in repo: $repo"; exit 1; }
 if [[ -z "$branch" ]]; then branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || printf junie/autonomous-mvp-loop)"; fi
 if [[ "$branch" == "main" && "$enable_controller" == true && "$enabled" == true ]]; then
   err "refusing to install enabled overnight controller targeting main"
@@ -95,13 +90,11 @@ def_dir="$workspace/.openclaw/cron"; def_file="$def_dir/overnight-routines.json"
 mkdir -p "$def_dir" "$state_dir" "$logs_dir"
 
 enabled_json=false; $enabled && enabled_json=true
-watchdog_enabled_json=false; controller_enabled_json=false; morning_report_enabled_json=false
+watchdog_enabled_json=false; controller_enabled_json=false
 $enabled && watchdog_enabled_json=true
 if $enabled && $enable_controller; then controller_enabled_json=true; fi
-if $enabled && $enable_morning_report; then morning_report_enabled_json=true; fi
 controller_cmd="cd '$repo' && OCL_NONINTERACTIVE=1 OVERNIGHT_STATE_DIR='$state_dir' OVERNIGHT_LOGS_DIR='$logs_dir' OVERNIGHT_EXPECTED_BRANCH='$branch' OVERNIGHT_ITERATION_TIMEOUT_SECONDS='$worker_timeout_seconds' OVERNIGHT_MAX_ITERATIONS='$max_iterations' exec /usr/bin/env bash '$repo/scripts/overnight-controller.sh' --state-dir '$state_dir' --expected-branch '$branch' --iteration-timeout '$worker_timeout_seconds' --max-iterations '$max_iterations' >> '$logs_dir/controller.cron.log' 2>&1"
 watchdog_cmd="cd '$repo' && OCL_NONINTERACTIVE=1 OVERNIGHT_STATE_DIR='$state_dir' OVERNIGHT_LOGS_DIR='$logs_dir' OVERNIGHT_STALE_SECONDS='$stale_seconds' exec /usr/bin/env bash '$repo/scripts/overnight-watchdog.sh' --state-dir '$state_dir' --stale-seconds '$stale_seconds' --cleanup >> '$logs_dir/watchdog.cron.log' 2>&1"
-report_cmd="cd '$repo' && OCL_NONINTERACTIVE=1 OVERNIGHT_STATE_DIR='$state_dir' OVERNIGHT_LOGS_DIR='$logs_dir' exec /usr/bin/env bash '$repo/scripts/overnight-report.sh' --state-dir '$state_dir' --repo '$repo' >> '$logs_dir/morning-report.cron.log' 2>&1"
 
 write_job() {
   local id="$1" schedule="$2" command="$3" job_enabled="$4" comma="$5"
@@ -147,8 +140,7 @@ cat >"$def_file" <<JSON
   "openclaw": { "timezone": "$(json_escape "$timezone")", "tools": "exec,read", "session": "isolated" },
   "jobs": [
 $(write_job "overnight-controller" "$controller_schedule" "$controller_cmd" "$controller_enabled_json" ",")
-$(write_job "overnight-watchdog" "$watchdog_schedule" "$watchdog_cmd" "$watchdog_enabled_json" ",")
-$(write_job "morning-report" "$morning_report_schedule" "$report_cmd" "$morning_report_enabled_json" "")
+$(write_job "overnight-watchdog" "$watchdog_schedule" "$watchdog_cmd" "$watchdog_enabled_json" "")
   ]
 }
 JSON
@@ -208,7 +200,6 @@ if $install_openclaw; then
   remove_existing_jobs
   install_job controller "$controller_schedule" 7200 "$(make_prompt controller "$controller_cmd")" "$controller_enabled_json"
   install_job watchdog "$watchdog_schedule" 900 "$(make_prompt watchdog "$watchdog_cmd")" "$watchdog_enabled_json"
-  install_job morning-report "$morning_report_schedule" 900 "$(make_prompt morning-report "$report_cmd")" "$morning_report_enabled_json"
   log "OpenClaw cron jobs installed/updated for agent=$agent_id"
 else
   log "artifacts_only=true (OpenClaw cron registry was not mutated)"
