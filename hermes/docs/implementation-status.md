@@ -10,6 +10,8 @@ Status values:
 
 ## Current status
 
+Junie Live's task-solving loop is called the **Marinator** when referring to the protocol that validates/decomposes tasks, delegates execution, checks results, requests fixes, verifies, accepts/reports, and reflects. In the Hermes baseline it is a named protocol across memory, skills, docs, and agent behavior, not a separate module.
+
 | Area / capability | Status | Evidence | Gaps / notes |
 | --- | --- | --- | --- |
 | SOUL.md (personality + safety-net rules) | implemented | `initialization/SOUL.md` | Installed to profile root during hire; auto-loaded by Hermes on every turn |
@@ -18,7 +20,7 @@ Status values:
 | Operational cheat-sheet (`tools.md`) | implemented | `initialization/docs/tools.md` | Structured template covering project paths, dev commands, git/PR conventions, mutex configuration, deployment & rollback, analytics references, local caveats; populated by Junie during initialization (Hermes equivalent of OpenClaw's TOOLS.md) |
 | Initialization workflow | implemented | SOUL + seed-HERMES + memory seed + skills | Follows same multi-round Q&A as OpenClaw version |
 | Skills (5 core workflows) | implemented | `initialization/skills/` | task-intake, decomposition, review, reflection, autonomous-window |
-| Delegation protocol docs | implemented | `initialization/docs/delegation-protocol.md` | Uses opencode for code work (same as OpenClaw); delegate_task for non-code subtasks |
+| Marinator / delegation protocol docs | implemented | `initialization/docs/delegation-protocol.md`; `docs/architecture.md`; `docs/day-to-day-routines.md` | Uses opencode for code work (same as OpenClaw); delegate_task for non-code subtasks; Marinator is currently a named protocol, not a separate module |
 | Review protocol docs | implemented | `initialization/docs/review-protocol.md` | Same acceptance gates |
 | Reflection protocol docs | implemented | `initialization/docs/reflection-protocol.md` | Uses Hermes memory tool |
 | Consistency protocol docs | implemented | `initialization/docs/consistency-protocol.md` | Same scan/resolution flow |

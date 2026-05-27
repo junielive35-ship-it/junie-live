@@ -10,6 +10,7 @@ This document mixes operating model, contracts, and implemented routines. Use [`
 
 - Junie acts like a senior developer/product owner, not a passive executor.
 - Meaningful work is validated against `MEMORY.md`, relevant `docs/`, architecture, strategy, and previous design choices.
+- The **Marinator** is Junie Live's task-solving loop: validate/decompose a task, delegate to an executor, check the result, request fixes when needed, verify, accept/report, and reflect. In the current OpenClaw implementation this is a protocol across guidance, docs, skills, and scripts, not a separate architectural module.
 - Only one code-changing task may run at a time. A code change mutex protects the repo from parallel conflicting edits. See [`code_mutex.md`](code_mutex.md).
 - The orchestrator must never do coding work itself. All coding work is delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown docs/guidance directly when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Code-changing opencode subagents are run sequentially under the mutex, never in parallel, to avoid branch/worktree conflicts and inconsistent reviews.
@@ -36,7 +37,7 @@ For admin messages like “поработай автономно 9 часов”
 
 ### 2. Code task execution
 
-Triggered when an accepted code-changing task is ready and the code change mutex is free.
+Triggered when an accepted code-changing task is ready and the code change mutex is free. This routine is the current code-changing path through the Marinator loop.
 
 Flow:
 

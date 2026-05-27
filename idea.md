@@ -35,7 +35,9 @@ The current root implementation uses OpenClaw as the orchestrator. OpenClaw owns
 
 The repository also contains `hermes/`, a Hermes-native Junie Live baseline. That directory exists so the Hermes version can evolve separately while keeping the same high-level product contract; do not treat it as accidental duplicate seed/workspace material.
 
-All coding tasks in the OpenClaw implementation are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown guidance/docs directly when no source code, scripts, tests, config, generated files, or external systems are changed. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
+Junie Live's central task-solving loop is the **Marinator**: the product-owned loop that takes an accepted task from validation through delegation, worker-result review, fix requests, verification, acceptance, reporting, and reflection. In the current root implementation the Marinator is a protocol spanning OpenClaw guidance, docs, skills, and scripts rather than a separate module. The term is descriptive; it does not imply parallel executors or a new architecture boundary.
+
+All coding tasks in the OpenClaw implementation are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance through the Marinator loop. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown guidance/docs directly when no source code, scripts, tests, config, generated files, or external systems are changed. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
 
 Treat coding subagents roughly like junior engineers. The orchestrator must:
 

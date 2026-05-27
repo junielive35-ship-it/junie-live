@@ -4,6 +4,8 @@
 
 Junie Live on Hermes uses native Hermes features for orchestration, persistence, communication, and scheduling. The architecture eliminates the need for shell-script orchestration layers and OpenClaw workspace conventions.
 
+Junie Live's named task-solving loop is the **Marinator**: validate/decompose a task, delegate to the executor, check results, request fixes, verify, accept/report, and reflect. In the current Hermes baseline this is a protocol carried by memory, skills, docs, and agent behavior rather than a separate module, and it does not imply parallel code-changing executors.
+
 ## Component mapping
 
 ```
@@ -23,7 +25,7 @@ Junie Live on Hermes uses native Hermes features for orchestration, persistence,
 │  └──────────┘  └──────────┘  └──────────┘  └────────────┘  │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │               Agent Loop                              │   │
+│  │           Agent Loop / Marinator                       │   │
 │  │  - Receives messages from Telegram                    │   │
 │  │  - Loads relevant skills automatically                │   │
 │  │  - Consults memory for strategic context              │   │
@@ -145,11 +147,10 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 2. **Skill matching** → relevant skills loaded automatically
 3. **Memory check** → strategic context available in prompt
 4. **Task validation** → intake skill validates against strategy
-5. **Delegation** → `delegate_task` with scoped context
-6. **Review** → orchestrator reviews subagent output
-7. **Commit** → verified changes committed to target repo
-8. **Reflection** → lessons saved to memory/skills/docs
-9. **Report** → results delivered via Telegram
+5. **Marinator execution** → delegate with scoped context, review subagent output, request fixes if needed, and verify the result
+6. **Commit** → verified changes committed to target repo
+7. **Reflection** → lessons saved to memory/skills/docs
+8. **Report** → results delivered via Telegram
 
 ## State management
 
