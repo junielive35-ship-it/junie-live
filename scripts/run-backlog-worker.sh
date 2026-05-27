@@ -162,6 +162,12 @@ fi
 
 if [[ "$use_default_opencode" == true ]]; then
   ensure_opencode_openrouter_auth
+  # Export OPENROUTER_API_KEY for cron/background environments where opencode
+  # may check the env var as an alternative to native auth.json.
+  if [[ -z "${OPENROUTER_API_KEY:-}" ]] && [[ -f "${HOME:-}/openrouter.key" ]]; then
+    OPENROUTER_API_KEY="$(tr -d '\r\n' <"${HOME}/openrouter.key")"
+    export OPENROUTER_API_KEY
+  fi
 fi
 
 export AUTONOMOUS_ITEM_ID="$item_id"
@@ -184,19 +190,61 @@ fi
 
 set +e
 if [[ "$use_default_opencode" == true ]]; then
-  if [[ "${timeout_seconds:-0}" -gt 0 ]]; then
-    (cd "$repo" && timeout --foreground --kill-after=5s "$timeout_seconds" "$opencode_bin" run --model "$AUTONOMOUS_OPENCODE_MODEL" --variant "$AUTONOMOUS_OPENCODE_VARIANT" --agent "$AUTONOMOUS_OPENCODE_AGENT" "$(cat "$AUTONOMOUS_PROMPT_FILE")") >>"$log_file" 2>&1
-  else
-    (cd "$repo" && "$opencode_bin" run --model "$AUTONOMOUS_OPENCODE_MODEL" --variant "$AUTONOMOUS_OPENCODE_VARIANT" --agent "$AUTONOMOUS_OPENCODE_AGENT" "$(cat "$AUTONOMOUS_PROMPT_FILE")") >>"$log_file" 2>&1
+  # ACP mode: start opencode serve (ACP server), execute through --attach.
+  # This routes all implementation work through the ACP protocol layer instead
+  # of direct `opencode run`.
+  acp_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
+  acp_log="$state_dir/logs/${run_id}-acp-server.log"
+  printf 'acp_mode=serve\nacp_port=%s\n' "$acp_port"
+
+  (cd "$repo" && exec "$opencode_bin" serve --port "$acp_port" --hostname 127.0.0.1) >"$acp_log" 2>&1 &
+  acp_pid=$!
+  printf 'acp_pid=%s\n' "$acp_pid"
+
+  acp_ready=false
+  for _acp_wait in $(seq 1 60); do
+    if curl -sf "http://127.0.0.1:$acp_port/global/health" >/dev/null 2>&1; then
+      acp_ready=true
+      break
+    fi
+    if ! kill -0 "$acp_pid" 2>/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+
+  if [[ "$acp_ready" != true ]]; then
+    kill "$acp_pid" 2>/dev/null; wait "$acp_pid" 2>/dev/null || true
+    set -e
+    printf 'worker_status=blocked\nreason=ACP server did not become healthy within 60s\n'
+    printf 'acp_server_log=%s\nprompt_file=%s\nlog_file=%s\n' "$acp_log" "$prompt_file" "$log_file"
+    exit 2
   fi
+
+  if [[ "${timeout_seconds:-0}" -gt 0 ]]; then
+    timeout --foreground --kill-after=5s "$timeout_seconds" \
+      "$opencode_bin" run --attach "http://127.0.0.1:$acp_port" \
+        --model "$AUTONOMOUS_OPENCODE_MODEL" --variant "$AUTONOMOUS_OPENCODE_VARIANT" \
+        --agent "$AUTONOMOUS_OPENCODE_AGENT" \
+        "$(cat "$AUTONOMOUS_PROMPT_FILE")" >>"$log_file" 2>&1
+  else
+    "$opencode_bin" run --attach "http://127.0.0.1:$acp_port" \
+      --model "$AUTONOMOUS_OPENCODE_MODEL" --variant "$AUTONOMOUS_OPENCODE_VARIANT" \
+      --agent "$AUTONOMOUS_OPENCODE_AGENT" \
+      "$(cat "$AUTONOMOUS_PROMPT_FILE")" >>"$log_file" 2>&1
+  fi
+  status=$?
+
+  # Cleanup ACP server
+  kill "$acp_pid" 2>/dev/null; wait "$acp_pid" 2>/dev/null || true
 else
   if [[ "${timeout_seconds:-0}" -gt 0 ]]; then
     (cd "$repo" && timeout --foreground --kill-after=5s "$timeout_seconds" bash -c "$worker_cmd_template") >>"$log_file" 2>&1
   else
     (cd "$repo" && bash -c "$worker_cmd_template") >>"$log_file" 2>&1
   fi
+  status=$?
 fi
-status=$?
 set -e
 
 if [[ "$status" -eq 0 ]]; then
@@ -204,7 +252,7 @@ if [[ "$status" -eq 0 ]]; then
   exit 0
 fi
 
-if [[ "$use_default_opencode" == true ]] && grep -Eiq 'model not found|invalid model|provider.*not found|unknown provider|models? (is|are) invalid' "$log_file"; then
+if [[ "$use_default_opencode" == true ]] && { grep -Eiq 'model not found|invalid model|provider.*not found|unknown provider|models? (is|are) invalid' "$log_file" || { [[ -f "${acp_log:-}" ]] && grep -Eiq 'model not found|invalid model|provider.*not found|unknown provider|models? (is|are) invalid' "$acp_log"; }; }; then
   printf 'worker_status=blocked\n'
   printf 'item_id=%s\nexit_status=%s\nlog_file=%s\n' "$item_id" "$status" "$log_file"
   printf 'reason=opencode model/provider configuration failed before work started\n'

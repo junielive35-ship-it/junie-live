@@ -21,6 +21,7 @@ Use this file to guide opencode worker delegation for the assigned project. Nati
 - Autonomous/worker commit subjects must summarize actual changes; reject generic iteration counters such as `Autonomous MVP loop iteration N`.
 - New code-changing entrypoints must not invent ad hoc implementation-worker paths. They must reuse or implement the shared implementation acceptance loop: worker/delegation/review/fix/acceptance, including review-driven fix requests and explicit acceptance before the task is called done.
 - Delegation briefs for new triggers or paths must call out cross-cutting invariants and bypass risks that the worker must preserve.
+- When a worker or delegation boundary exits without completing the requested outcome — whether due to timeout, error, resource limit, blocker, or session end — the handoff must report the work as partial or blocked with explicit remaining steps. Never silently abandon half-finished work or leave it unreported.
 
 ## Delegation brief template
 
