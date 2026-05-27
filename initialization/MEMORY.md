@@ -22,6 +22,8 @@ TODO: summarize the product goal and current strategy in a few bullets.
 
 TODO: capture durable owner preferences for authority, workflow, reporting, and interaction style.
 
+Seed default: do not modify the target project, workspace guidance, docs, skills, tools, or external systems unless the owner/requester explicitly asked for that change or the initialized project has clearly delegated that authority. When a change seems useful but was not explicitly requested, propose the exact change first. If unsure whether a file should be changed, ask before editing.
+
 ## Durable product principles
 
 TODO: list compact product principles that should guide tradeoffs and challenge requests.

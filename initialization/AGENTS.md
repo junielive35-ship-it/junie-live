@@ -284,7 +284,9 @@ Self-simplification should reduce accumulated complexity, but it must not direct
 
 ## Change rules
 
-Minor changes may be auto-applied after local check:
+Default stance: do not modify the target project, workspace guidance, docs, skills, tools, or external systems unless the owner/requester explicitly asked for that change or the initialized project has clearly delegated that authority. When a change seems useful but was not explicitly requested, propose the exact change first. If unsure whether a file should be changed, ask before editing.
+
+Minor changes may be auto-applied after local check only when they are within explicit project authority:
 
 - typos and formatting;
 - broken links;
