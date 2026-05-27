@@ -11,7 +11,7 @@ Code-changing work initialized from this seed uses the mutex protocol described 
 For the current MVP, a new Junie Live instance is created roughly like this:
 
 1. Copy files from `junie-live/initialization/` into `.openclaw/workspace`.
-2. Install/update the new instance's branch-independent watchdog cron and generate workspace-local audit/fallback artifacts for overnight routines. `hire-junie.sh` does this automatically after `openclaw agents add` by calling `scripts/install-overnight-crons.sh`; the artifacts live under `.openclaw/cron/` in the initialized workspace, not in the repo root. Scheduled controller work remains disabled until an explicit admin request/configuration chooses a non-`main` target branch.
+2. Install/update the new instance's branch-independent watchdog cron and write the workspace-local JSON audit artifact for overnight routines. `hire-junie.sh` does this automatically after `openclaw agents add` by calling `scripts/install-overnight-crons.sh`; the artifact lives under `.openclaw/cron/` in the initialized workspace, not in the repo root. Scheduled controller work remains disabled until an explicit admin request/configuration chooses a non-`main` target branch.
 3. Run OpenClaw.
 4. Give Junie:
    - the path to the target project;
@@ -20,7 +20,7 @@ For the current MVP, a new Junie Live instance is created roughly like this:
    - expectations, constraints, and team/product context.
 5. Junie follows `INITIALIZATION.md` to inspect the target project, ask questions across as many rounds as needed, resolve contradictions, and produce a coherent durable identity.
 
-The installed overnight cron definitions include the controller, watchdog, and report jobs described in [`docs/overnight-routines.md`](docs/overnight-routines.md). They use isolated OpenClaw cron sessions with `exec,read` tools and explicit repo/workspace/state/log paths so they run without a terminal-dependent Telegram flow. By default only the watchdog is enabled; controller and scheduled report definitions remain disabled audit/fallback artifacts until explicitly enabled.
+The installed overnight cron definitions include the controller, watchdog, and report jobs described in [`docs/overnight-routines.md`](docs/overnight-routines.md). They use isolated OpenClaw cron sessions with `exec,read` tools and explicit repo/workspace/state/log paths so they run without a terminal-dependent Telegram flow. By default only the watchdog is enabled; controller and scheduled report definitions remain disabled in the JSON audit artifact until explicitly enabled.
 
 ## What belongs in `initialization/`
 

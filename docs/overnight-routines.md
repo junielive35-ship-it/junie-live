@@ -21,12 +21,11 @@ These roles are implemented locally by:
 - `scripts/overnight-watchdog.sh`
 - `scripts/overnight-report.sh`
 
-They are intentionally plain shell scripts so scheduled jobs and Telegram-triggered admin work windows can run without an interactive terminal. `hire-junie.sh` now creates the OpenClaw agent first, then calls `scripts/install-overnight-crons.sh`, so every newly hired Junie instance receives workspace-local audit/fallback artifacts and an enabled watchdog cron out of the box:
+They are intentionally plain shell scripts so scheduled jobs and Telegram-triggered admin work windows can run without an interactive terminal. `hire-junie.sh` now creates the OpenClaw agent first, then calls `scripts/install-overnight-crons.sh`, so every newly hired Junie instance receives an enabled OpenClaw watchdog cron out of the box plus a workspace-local audit artifact:
 
-- `.openclaw/cron/overnight-routines.json` — structured job definitions for the controller, watchdog, and morning report;
-- `.openclaw/cron/overnight-routines.crontab` — equivalent host-cron lines for administrators/installers that use system cron.
+- `.openclaw/cron/overnight-routines.json` — structured planned definitions for the controller, watchdog, and morning report.
 
-The helper installs/updates OpenClaw cron jobs using stable `Junie Live overnight ...` names, removing only matching Junie Live jobs for the same agent before re-adding them. By default it installs the watchdog enabled, while the controller and morning-report jobs are installed disabled and remain audit/fallback definitions. Scheduled morning reports are deprecated by default; use `--enable-controller` only after explicit administrator approval and a non-`main` target branch are configured. Use `--enable-morning-report` only if a scheduled report is explicitly wanted. Use `--no-overnight-crons`, `--overnight-artifacts-only`, or `--overnight-disabled` to opt out, generate fallback artifacts only, or disable all jobs.
+The helper installs/updates OpenClaw cron jobs using stable `Junie Live overnight ...` names, removing only matching Junie Live jobs for the same agent before re-adding them. By default it installs the watchdog enabled, while the controller and morning-report jobs are installed disabled and remain disabled planned definitions in the JSON audit artifact. Scheduled morning reports are deprecated by default; use `--enable-controller` only after explicit administrator approval and a non-`main` target branch are configured. Use `--enable-morning-report` only if a scheduled report is explicitly wanted. Use `--no-overnight-crons`, `--overnight-artifacts-only`, or `--overnight-disabled` to opt out, write local JSON audit definitions only, or disable all jobs.
 
 ## Admin-triggered autonomous windows
 

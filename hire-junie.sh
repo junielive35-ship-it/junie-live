@@ -22,7 +22,7 @@ Options:
   --model MODEL               OpenClaw model id. Default: openrouter/openai/gpt-5.5
   --no-restart                Configure everything but do not restart Gateway.
   --no-overnight-crons        Do not install or generate overnight cron artifacts.
-  --overnight-artifacts-only  Generate audit/fallback artifacts but do not install OpenClaw cron jobs.
+  --overnight-artifacts-only  Generate the local JSON/OpenClaw cron definitions artifact only; do not install OpenClaw cron jobs.
   --overnight-disabled        Generate/install all overnight cron jobs disabled.
   --overnight-enable-controller
                               Enable scheduled controller cron (requires non-main branch).
