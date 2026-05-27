@@ -66,6 +66,50 @@ mask_secret_line() {
   sed -E 's/(sk-or-v1-[A-Za-z0-9_-]+)/<masked>/g; s/(apiKey|apikey|api_key|key|token|authorization|Bearer)[^,}[:space:]]*/\1=<masked>/Ig'
 }
 
+ensure_opencode_openrouter_auth() {
+  local auth_file key_file key
+  key_file="${HOME:-}/openrouter.key"
+  auth_file="${XDG_DATA_HOME:-${HOME:-}/.local/share}/opencode/auth.json"
+
+  if [[ -f "$auth_file" ]] && python3 - "$auth_file" <<'PY' >/dev/null 2>&1
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+entry = data.get("openrouter", {})
+if entry.get("type") == "api" and entry.get("key"):
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+  then
+    return 0
+  fi
+
+  [[ -f "$key_file" ]] || return 0
+  key="$(tr -d '\r\n' <"$key_file")"
+  [[ -n "$key" ]] || return 0
+
+  mkdir -p "$(dirname "$auth_file")"
+  python3 - "$auth_file" "$key" <<'PY'
+import json, os, sys
+path, key = sys.argv[1], sys.argv[2]
+data = {}
+if os.path.exists(path) and os.path.getsize(path):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except json.JSONDecodeError:
+        data = {}
+data["openrouter"] = {"type": "api", "key": key}
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+os.replace(tmp, path)
+os.chmod(path, 0o600)
+PY
+  unset key
+}
+
 opencode_config_diagnostics() {
   printf 'opencode_config_diagnostics_begin\n'
   printf 'opencode_config_files='
@@ -81,6 +125,7 @@ opencode_config_diagnostics() {
   printf '\n'
   printf 'openrouter_key_file_present=%s\n' "$([[ -f "${HOME:-}/openrouter.key" ]] && printf yes || printf no)"
   printf 'openrouter_env_present=%s\n' "$([[ -n "${OPENROUTER_API_KEY:-}" ]] && printf yes || printf no)"
+  printf 'opencode_auth_file_present=%s\n' "$([[ -f "${XDG_DATA_HOME:-${HOME:-}/.local/share}/opencode/auth.json" ]] && printf yes || printf no)"
   if "$opencode_bin" auth list >/tmp/junie-opencode-auth-$$.txt 2>&1; then
     printf 'opencode_auth_list='
     tr '\n' ' ' </tmp/junie-opencode-auth-$$.txt | mask_secret_line
@@ -115,12 +160,8 @@ if [[ -z "$worker_cmd_template" ]]; then
   use_default_opencode=true
 fi
 
-if [[ "$use_default_opencode" == true && -z "${OPENROUTER_API_KEY:-}" && -f "${HOME:-}/openrouter.key" ]]; then
-  openrouter_key="$(tr -d '\r\n' <"${HOME}/openrouter.key")"
-  if [[ -n "$openrouter_key" ]]; then
-    export OPENROUTER_API_KEY="$openrouter_key"
-  fi
-  unset openrouter_key
+if [[ "$use_default_opencode" == true ]]; then
+  ensure_opencode_openrouter_auth
 fi
 
 export AUTONOMOUS_ITEM_ID="$item_id"
@@ -168,7 +209,7 @@ if [[ "$use_default_opencode" == true ]] && grep -Eiq 'model not found|invalid m
   printf 'item_id=%s\nexit_status=%s\nlog_file=%s\n' "$item_id" "$status" "$log_file"
   printf 'reason=opencode model/provider configuration failed before work started\n'
   printf 'opencode_model=%s\nopencode_variant=%s\nopencode_agent=%s\n' "$opencode_model" "$opencode_variant" "$opencode_agent"
-  printf 'diagnostic=opencode requires a configured provider/model. The production default is OpenRouter Claude Opus 4.6 (%s); if OPENROUTER_API_KEY is unset, the worker loads $HOME/openrouter.key for the opencode subprocess when present. Allowed production providers are OpenAI GPT-5.2+, Anthropic Sonnet/Opus 4.6+, or Google Gemini 3.1 Pro+. Run: %q models and %q auth list; then set AUTONOMOUS_OPENCODE_MODEL to an available allowed model.\n' "$opencode_model" "$opencode_bin" "$opencode_bin"
+  printf 'diagnostic=opencode requires a configured provider/model. The production default is OpenRouter Claude Opus 4.6 (%s). The default worker provisions OpenCode-native OpenRouter auth at $XDG_DATA_HOME/opencode/auth.json or $HOME/.local/share/opencode/auth.json from $HOME/openrouter.key when needed, without printing the key. OpenRouter models used by opencode must either exist in provider.openrouter.models (for example anthropic/claude-opus-4.6, referenced as openrouter/anthropic/claude-opus-4.6) or use an OpenCode/OpenRouter alias that the provider accepts. Allowed production providers are OpenAI GPT-5.2+, Anthropic Sonnet/Opus 4.6+, or Google Gemini 3.1 Pro+. Run: %q models openrouter and %q auth list; then set AUTONOMOUS_OPENCODE_MODEL to an available allowed model.\n' "$opencode_model" "$opencode_bin" "$opencode_bin"
   opencode_config_diagnostics
   exit 2
 fi
