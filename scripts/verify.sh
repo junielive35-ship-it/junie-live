@@ -134,6 +134,9 @@ grep -qi 'new code-changing entrypoint or trigger' initialization/docs/review-pr
 grep -qi 'shared implementation acceptance loop' initialization/docs/review-protocol.md || fail "review protocol must require shared acceptance loop"
 grep -qi 'ad hoc route' initialization/docs/review-protocol.md || fail "review protocol must catch ad hoc bypass routes"
 grep -qi 'New code-changing entrypoints must not invent ad hoc implementation-worker paths' initialization/docs/delegation-protocol.md || fail "delegation protocol must forbid ad hoc implementation-worker paths"
+grep -qi 'Never silently abandon half-finished work' <<<"$seed_hygiene_text" || fail "initialization seed must forbid silent abandonment of half-finished work"
+grep -qi 'remaining steps' <<<"$seed_hygiene_text" || fail "initialization seed must require listing remaining steps for incomplete tasks"
+grep -qi 'Incomplete-task reporting guardrail' initialization/AGENTS.md || fail "AGENTS seed must include incomplete-task reporting guardrail section"
 
 log "autonomous work window skill command"
 autonomous_skill="initialization/skills/autonomous-work-window/SKILL.md"
@@ -186,12 +189,57 @@ sleep 1
 dry_after=$(find "$ROOT" -maxdepth 1 -mindepth 1 \( -name '.openclaw' -o -name 'state' \) -print | sort)
 [[ "$dry_after" == "$dry_before" ]] || fail "autonomous wrapper wrote repo root artifacts"
 
-log "default backlog worker opencode command"
+log "default backlog worker opencode command (ACP mode)"
 opencode_tmp="$auto_tmp/default-opencode-worker"
 mkdir -p "$opencode_tmp/bin" "$opencode_tmp/home" "$opencode_tmp/state" "$opencode_tmp/backlog"
+
+# Shared ACP stub server — minimal HTTP server for opencode serve tests.
+# All stub opencode binaries delegate 'serve' to this Python script so the
+# worker's ACP health check passes and sessions/messages get stub responses.
+cat > "$opencode_tmp/acp-stub.py" <<'PYSERVER'
+import http.server, json, signal, sys
+
+signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
+port = int(sys.argv[1])
+
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/global/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"healthy":true,"version":"stub"}')
+        else:
+            self.send_response(404)
+            self.end_headers()
+    def do_POST(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        if self.path == "/session":
+            self.wfile.write(b'{"id":"stub-session"}')
+        elif "/message" in self.path:
+            self.wfile.write(b'{"info":{"id":"m"},"parts":[]}')
+        elif self.path == "/instance/dispose":
+            self.wfile.write(b'true')
+        else:
+            self.wfile.write(b'true')
+    def log_message(self, *args):
+        pass
+
+http.server.HTTPServer(("127.0.0.1", port), H).serve_forever()
+PYSERVER
+export ACP_STUB_PY="$opencode_tmp/acp-stub.py"
+
+# Default opencode stub: handles 'serve' (ACP server) and 'run' (records argv)
 cat > "$opencode_tmp/bin/opencode" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == "serve" ]]; then
+  port=""; shift
+  while [[ $# -gt 0 ]]; do case "$1" in --port) port="$2"; shift 2 ;; *) shift ;; esac; done
+  exec python3 "$ACP_STUB_PY" "$port"
+fi
 python3 - "$OPENCODE_ARGV_JSON" "$@" <<'PY'
 import json, sys
 path = sys.argv[1]
@@ -207,6 +255,7 @@ PATH="$opencode_tmp/bin:$PATH" HOME="$opencode_tmp/home" AUTONOMOUS_OPENCODE_BIN
     --item-id test-opencode --item-type test --item-title 'Verify default opencode invocation' \
     --item-description 'Prompt content must be delivered through a supported opencode run message.' >"$opencode_tmp/out.txt"
 grep -q '^worker_status=success$' "$opencode_tmp/out.txt" || fail "default opencode worker did not succeed with fake opencode"
+grep -q '^acp_mode=serve$' "$opencode_tmp/out.txt" || fail "default opencode worker must use ACP mode (acp_mode=serve)"
 python3 - "$opencode_tmp/argv.json" <<'PY'
 import json, sys
 argv = json.load(open(sys.argv[1]))
@@ -217,6 +266,11 @@ if '--prompt-file' in argv:
     fail('default opencode argv must not use unsupported --prompt-file')
 if not argv or argv[0] != 'run':
     fail(f'default opencode argv must start with run, got {argv!r}')
+if '--attach' not in argv:
+    fail(f'ACP path must use --attach flag for serve-based execution: {argv!r}')
+attach_url = argv[argv.index('--attach') + 1]
+if not attach_url.startswith('http://127.0.0.1:'):
+    fail(f'--attach must point to local ACP server, got {attach_url!r}')
 for flag, expected in [('--model', 'openrouter/anthropic/claude-opus-4.6'), ('--variant', 'low'), ('--agent', 'build')]:
     if flag not in argv:
         fail(f'missing {flag} in default opencode argv: {argv!r}')
@@ -237,11 +291,15 @@ PATH="/usr/bin:/bin" HOME="$opencode_tmp/home" \
     --item-id test-opencode-env --item-type test --item-title 'Verify env opencode invocation' \
     --item-description 'AUTONOMOUS_OPENCODE_BIN must work when PATH lacks opencode.' >"$opencode_tmp/out-env.txt"
 grep -q '^worker_status=success$' "$opencode_tmp/out-env.txt" || fail "default opencode worker did not succeed with AUTONOMOUS_OPENCODE_BIN"
+grep -q '^acp_mode=serve$' "$opencode_tmp/out-env.txt" || fail "AUTONOMOUS_OPENCODE_BIN worker must use ACP mode"
 python3 - "$opencode_tmp/argv-env.json" <<'PY'
 import json, sys
 argv = json.load(open(sys.argv[1]))
 if '--prompt-file' in argv or not argv or argv[0] != 'run':
     print(f"ERROR: env opencode argv must use supported run shape without --prompt-file: {argv!r}", file=sys.stderr)
+    sys.exit(1)
+if '--attach' not in argv:
+    print(f"ERROR: env opencode argv must use --attach for ACP mode: {argv!r}", file=sys.stderr)
     sys.exit(1)
 if 'AUTONOMOUS_OPENCODE_BIN must work when PATH lacks opencode.' not in argv[-1]:
     print('ERROR: env opencode prompt content missing', file=sys.stderr)
@@ -253,6 +311,11 @@ printf 'sk-or-v1-secret-that-must-not-leak\n' >"$opencode_tmp/home/openrouter.ke
 cat > "$opencode_tmp/bin/opencode-env" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == "serve" ]]; then
+  port=""; shift
+  while [[ $# -gt 0 ]]; do case "$1" in --port) port="$2"; shift 2 ;; *) shift ;; esac; done
+  exec python3 "$ACP_STUB_PY" "$port"
+fi
 python3 - "$OPENCODE_ARGV_JSON" "$OPENROUTER_ENV_CAPTURE" "${OPENROUTER_API_KEY:-}" "$@" <<'PYCAP'
 import json, sys
 argv_path, env_path, key = sys.argv[1:4]
@@ -283,11 +346,15 @@ PATH="/usr/bin:/bin" HOME="$opencode_tmp/home-fallback" AUTONOMOUS_OPENCODE_BIN=
     --item-id test-opencode-fallback --item-type test --item-title 'Verify fallback opencode invocation' \
     --item-description 'HOME dot-opencode fallback must work when PATH lacks opencode.' >"$opencode_tmp/out-fallback.txt"
 grep -q '^worker_status=success$' "$opencode_tmp/out-fallback.txt" || fail "default opencode worker did not succeed with HOME .opencode fallback"
+grep -q '^acp_mode=serve$' "$opencode_tmp/out-fallback.txt" || fail "fallback opencode worker must use ACP mode"
 python3 - "$opencode_tmp/argv-fallback.json" <<'PY'
 import json, sys
 argv = json.load(open(sys.argv[1]))
 if '--prompt-file' in argv or not argv or argv[0] != 'run':
     print(f"ERROR: fallback opencode argv must use supported run shape without --prompt-file: {argv!r}", file=sys.stderr)
+    sys.exit(1)
+if '--attach' not in argv:
+    print(f"ERROR: fallback opencode argv must use --attach for ACP mode: {argv!r}", file=sys.stderr)
     sys.exit(1)
 if 'HOME dot-opencode fallback must work when PATH lacks opencode.' not in argv[-1]:
     print('ERROR: fallback opencode prompt content missing', file=sys.stderr)
@@ -297,11 +364,16 @@ PY
 cat > "$opencode_tmp/bin/opencode-fail" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == "serve" ]]; then
+  port=""; shift
+  while [[ $# -gt 0 ]]; do case "$1" in --port) port="$2"; shift 2 ;; *) shift ;; esac; done
+  exec python3 "$ACP_STUB_PY" "$port"
+fi
 if [[ "${1:-}" == "auth" && "${2:-}" == "list" ]]; then
   printf 'openrouter sk-or-v1-secret-that-must-not-leak\n'
   exit 0
 fi
-printf 'Error: Model not found: %s. Did you mean: openrouter/anthropic/claude-opus-4.6?\n' "${3:-unknown}" >&2
+printf 'Error: Model not found: unknown-model. Did you mean: openrouter/anthropic/claude-opus-4.6?\n' >&2
 exit 1
 STUB
 chmod +x "$opencode_tmp/bin/opencode-fail"

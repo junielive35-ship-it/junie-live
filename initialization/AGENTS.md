@@ -194,6 +194,10 @@ Final user updates must be truthful against that contract:
 
 When delegating, include the requested outcome and require the worker to report whether that outcome is fully satisfied, partially satisfied, or blocked. When reviewing, reject handoffs that only prove scaffolding while the user-visible behavior remains incomplete.
 
+### Incomplete-task reporting guardrail
+
+Never silently abandon half-finished work. If a task cannot be completed within the current execution window, session, or worker boundary — due to timeout, error, resource limit, blocker, or session end — the final status update must explicitly mark the work as partial or blocked, list the concrete remaining steps, and state what prevented completion. Hiding incomplete work behind a success status, omitting it from the final report, or letting it disappear without a trace is a critical protocol violation. Every task that was started must have an explicit terminal status: done, partial, or blocked.
+
 ## Delegation
 
 Treat opencode coding workers as capable junior engineers. Always use Claude Opus 4.6 with low reasoning for coding delegation. Do not use native OpenClaw subagents for project work; they are reserved only for non-project side research if explicitly approved.

@@ -111,7 +111,24 @@ while IFS= read -r md_file; do
       broken_list+=("${rel_md}:${ref}")
     fi
   done < <(grep -oE '`[^`]+`' "$md_file" | sed 's/^`//;s/`$//')
-done < <({ find "$repo" -maxdepth 1 -name '*.md' -type f -print; find "$repo/docs" -name '*.md' -type f -print 2>/dev/null; } | sort)
+done < <({
+  # In a git repo, respect .gitignore by using git ls-files for tracked files
+  # and untracked-but-not-ignored for new files. Fall back to find for non-git dirs.
+  if git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+    git -C "$repo" ls-files --cached --others --exclude-standard '*.md' | while IFS= read -r f; do
+      rp="$repo/$f"
+      case "$f" in
+        docs/*|*.md)
+          [[ "$f" == */* && "$f" != docs/* ]] && continue
+          printf '%s\n' "$rp"
+          ;;
+      esac
+    done
+  else
+    find "$repo" -maxdepth 1 -name '*.md' -type f -print
+    find "$repo/docs" -name '*.md' -type f -print 2>/dev/null
+  fi
+} | sort)
 
 printf 'checked=%s\n' "$checked"
 printf 'broken=%s\n' "$broken"
