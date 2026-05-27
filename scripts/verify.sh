@@ -1499,7 +1499,7 @@ exit 0
 GH_STUB
 chmod +x "$tmp/bin/gh"
 
-PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-status.sh --repo "$pr_tmp" >"$tmp/pr-healthy.out" 2>"$tmp/pr-healthy.err"
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-status.sh --repo "$pr_tmp" --stale-hours 9999 >"$tmp/pr-healthy.out" 2>"$tmp/pr-healthy.err"
 grep -q '^pr_check_available=true$' "$tmp/pr-healthy.out" || fail "healthy pr should be available"
 grep -q '^open_prs=1$' "$tmp/pr-healthy.out" || fail "healthy pr should report 1"
 grep -q '^pr_1_number=42$' "$tmp/pr-healthy.out" || fail "healthy pr number missing"
@@ -1635,7 +1635,7 @@ GH_STUB
 chmod +x "$tmp/bin/gh"
 : > "$gh_log"
 
-PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-follow-up.sh --repo "$fup_tmp" --stale-hours 24 >"$tmp/fup-healthy.out" 2>"$tmp/fup-healthy.err"
+PATH="$tmp/bin:$PATH" GH_STUB_LOG="$gh_log" ./scripts/pr-follow-up.sh --repo "$fup_tmp" --stale-hours 9999 >"$tmp/fup-healthy.out" 2>"$tmp/fup-healthy.err"
 grep -q '^updated=0$' "$tmp/fup-healthy.out" || fail "fup healthy should not update"
 grep -q '^commented=0$' "$tmp/fup-healthy.out" || fail "fup healthy should not comment"
 grep -q 'No PR follow-up needed' "$tmp/fup-healthy.out" || fail "fup healthy should say no action needed"
