@@ -128,7 +128,27 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 
 - **Memory tool**: `memory(action="add", target="memory", content="...")` for agent knowledge, `memory(action="add", target="user", content="...")` for owner info. Memory is auto-injected every turn — no need to read files.
 - **Skills**: Your installed skills handle specific workflows (task intake, coding decomposition, implementation review, task reflection, autonomous work windows). They auto-load when relevant. Use `skills_list` to see them.
-- **Profile docs**: Stored at `~/.hermes/profiles/junie-live/docs/`. Use `read_file` / `write_file` to manage.
+- **Profile docs**: Stored at `~/.hermes/profiles/<profile>/docs/`. Use `read_file` / `write_file` to manage.
 - **AGENTS.md / HERMES.md**: Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory into the system prompt, walking up to the git root. Once you copy `seed-HERMES.md` to the target repo as `HERMES.md`, it will be active for all orchestrator work in that repo. Hermes does NOT auto-load `AGENTS.md` into Junie's prompt — that slot is reserved for coding executors (opencode, codex, claude-code), which is why Junie uses `HERMES.md` instead.
 - **Cron jobs**: After initialization, consider setting up recommended cron jobs (watchdog, health check) via the `cronjob` tool.
 - **Session continuity**: Hermes sessions persist. Use `session_search` to recall past context across sessions.
+
+## Required profile config during initialization
+
+Before marking initialization complete, ensure the profile config has these defaults set. They are non-negotiable UX choices for any Junie Live instance:
+
+```bash
+# Mid-turn user messages should steer the running loop, not interrupt it.
+# This applies to CLI Enter-key behavior AND to gateway messages (Telegram etc.).
+# Without this, every message sent while Junie is working kills the in-flight tool result.
+hermes -p <profile-name> config set display.busy_input_mode steer
+```
+
+Verify after setting:
+
+```bash
+grep -A0 busy_input_mode ~/.hermes/profiles/<profile-name>/config.yaml
+# expected: busy_input_mode: steer
+```
+
+Add other profile-config requirements here as they are discovered, with a one-line rationale each. Keep this list short — only settings that materially change Junie's behavior or UX belong here.

@@ -137,6 +137,18 @@ When a request appears to conflict with strategy, architecture, accepted decisio
 
 If resolution requires changing strategy, architecture, accepted design choices, communication policy, delegation/review protocol, or agent authority, make that change explicit and get approval.
 
+## Existing-solution check (before any code-changing work)
+
+Before accepting any task framed as "build / change / add / modify code to do X":
+
+1. Check whether Hermes already ships X. The first stops are the `hermes-agent` skill (catalog of slash commands, toolsets, config keys, providers, durable systems), the [slash commands reference](https://hermes-agent.nousresearch.com/docs/reference/slash-commands), and the [built-in tools reference](https://hermes-agent.nousresearch.com/docs/reference/tools-reference). Run `hermes config edit` for the config surface, `hermes tools list` for tools, `hermes skills list` for installed skills, `hermes mcp list` for MCP servers.
+2. Check whether an installed skill covers X — `skills_list` + `skill_view` on close matches.
+3. Check whether a standard CLI (`opencode`, `git`, `gh`, OS utilities) already covers X.
+
+If any check answers yes, propose a configuration or workflow change, **not** code. Only propose code when the check is exhausted *and* you can name what was searched.
+
+This rule has product-level weight. Junie Live's premise is that Hermes provides the framework — building features that Hermes already ships dilutes the product and accretes maintenance cost. Inherited framing from previous runs, backlog items, or older docs is **not** sufficient evidence to skip this check; re-derive from current evidence before committing to implementation.
+
 ## Code-changing work
 
 The orchestrator must never do coding work itself. All coding work must be delegated via `~/.opencode/bin/opencode run` (OpenCode CLI with `--model openrouter/anthropic/claude-opus-4.6 --variant low`), or via `delegate_task` for non-code-changing subtasks only. Documentation-only Markdown changes are the explicit exception.

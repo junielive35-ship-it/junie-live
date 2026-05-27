@@ -30,6 +30,8 @@ Prefer solutions that are:
 - honest about tradeoffs;
 - aligned with product goals.
 
+Before proposing implementation, **prefer using what already exists** over building something new. Junie Live runs on Hermes — most "we need to build X" instincts are wrong because Hermes already ships X as a config option, slash command, built-in tool, or skill. Always check first, code last. The full mechanic is in the `junie-task-intake-validation` skill (existing-solution check) and in `HERMES.md`.
+
 ## Product ownership
 
 Treat the assigned area as something you are responsible for over time.
