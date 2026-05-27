@@ -6,29 +6,31 @@ This contract defines the stable behavior Junie Live provides for bounded autono
 
 An administrator should be able to say, conceptually, “work overnight on backlog filling and top task execution” immediately after initialization. Junie must not require the administrator to manually inspect mutex state, check for stuck workers, or remember which maintenance scripts to run. The routines coordinate those checks and report the result.
 
-## Cron roles
+## Cron role
 
-The overnight setup is split into two cron-backed roles:
+The default scheduled setup has one cron-backed role:
 
-1. **Controller** — starts the overnight work window, fills or refreshes the backlog, selects eligible top-priority work, delegates implementation through `scripts/run-backlog-worker.sh`, verifies gates, releases/updates task and mutex state, and writes durable state as it progresses.
-2. **Watchdog** — runs independently during and after the controller window to detect stuck agents, stale opencode workers, stale mutex holders, missing progress, and broken routine state. It may stop a stuck worker, preserve logs, mark work blocked, and release or transfer the mutex only according to the mutex contract.
+1. **Watchdog** — runs independently during and after manual controller windows to detect stuck agents, stale opencode workers, stale mutex holders, missing progress, and broken routine state. It may stop a stuck worker, preserve logs, mark work blocked, and release or transfer the mutex only according to the mutex contract.
+
+Controller work remains a manual/admin-triggered routine, not a scheduled cron. The controller starts bounded autonomous work windows, fills or refreshes the backlog, selects eligible top-priority work, delegates implementation through `scripts/run-backlog-worker.sh`, verifies gates, releases/updates task and mutex state, and writes durable state as it progresses.
+
 These roles are implemented locally by:
 
 - `scripts/start-autonomous-window.sh` — admin-facing wrapper for bounded natural-language autonomous work windows;
 - `scripts/overnight-controller.sh`
 - `scripts/overnight-watchdog.sh`
 
-They are intentionally plain shell scripts so scheduled jobs and Telegram-triggered admin work windows can run without an interactive terminal. `hire-junie.sh` now creates the OpenClaw agent first, then calls `scripts/install-overnight-crons.sh`, so every newly hired Junie instance receives an enabled OpenClaw watchdog cron out of the box plus a workspace-local audit artifact:
+They are intentionally plain shell scripts so scheduled watchdog jobs and Telegram-triggered admin work windows can run without an interactive terminal. `hire-junie.sh` now creates the OpenClaw agent first, then calls `scripts/install-overnight-crons.sh`, so every newly hired Junie instance receives an enabled OpenClaw watchdog cron out of the box plus a workspace-local audit artifact:
 
-- `.openclaw/cron/overnight-routines.json` — structured planned definitions for the controller and watchdog.
+- `.openclaw/cron/overnight-routines.json` — structured planned definition for the watchdog.
 
-The helper installs/updates OpenClaw cron jobs using stable `Junie Live overnight ...` names, removing only matching Junie Live jobs for the same agent before re-adding them. By default it installs the watchdog enabled, while the controller job is installed disabled and remains a disabled planned definition in the JSON audit artifact. Use `--enable-controller` only after explicit administrator approval and a non-`main` target branch are configured. Use `--no-overnight-crons`, `--overnight-artifacts-only`, or `--overnight-disabled` to opt out, write local JSON audit definitions only, or disable all jobs.
+The helper installs/updates OpenClaw cron jobs using stable `Junie Live overnight ...` names, removing only matching Junie Live jobs for the same agent before re-adding them. By default it installs only the watchdog enabled. Use `--no-overnight-crons`, `--overnight-artifacts-only`, or `--overnight-disabled` to opt out, write the local JSON audit definition only, or disable the watchdog job.
 
 ## Admin-triggered autonomous windows
 
 After initialization, an administrator can ask in Telegram for bounded autonomous work with natural language such as “start autonomous loop for 4h”, “поработай автономно 9 часов”, or “работай над проектом до утра”. Junie should treat this as an operational autonomous-work request, not as a request for the admin to provide repo, backlog, mutex, opencode, verification, commit, or reporting details.
 
-Junie resolves the duration/end time from the message, asks one concise question only when that bound is missing or ambiguous, validates initialization/repo/mutex context, and starts `scripts/start-autonomous-window.sh --duration ... --background` with explicit workspace-local state. If preflight is unsafe, it reports the blocker and points to the preflight state/log file. This on-demand window uses the same controller/watchdog contract as scheduled overnight work, but it is manually triggered and bounded by the admin's requested duration rather than a scheduled cron start. The wrapper defaults to a multi-iteration controller limit for admin windows, so a request such as `/skill autonomous-work-window 9h` can keep selecting and completing backlog items until the time bound, max iterations, or a blocker stops it.
+Junie resolves the duration/end time from the message, asks one concise question only when that bound is missing or ambiguous, validates initialization/repo/mutex context, and starts `scripts/start-autonomous-window.sh --duration ... --background` with explicit workspace-local state. If preflight is unsafe, it reports the blocker and points to the preflight state/log file. This on-demand window is manually triggered and bounded by the admin's requested duration rather than a scheduled cron start. The wrapper defaults to a multi-iteration controller limit for admin windows, so a request such as `/skill autonomous-work-window 9h` can keep selecting and completing backlog items until the time bound, max iterations, or a blocker stops it.
 
 ## Expected state and log files
 

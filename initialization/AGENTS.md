@@ -262,7 +262,7 @@ For these requests:
 
 1. Validate initialization is complete and the owned repo, workspace state, tools, and code mutex context exist.
 2. Resolve a bounded duration or end time from the message. If duration/end is missing or ambiguous, ask one concise question.
-3. Use the standard wrapper/controller/watchdog/report path; do not invent ad hoc long-running loops. Prefer `scripts/start-autonomous-window.sh --duration ... --background` with explicit repo, workspace, state directory, expected branch, and controller options when needed.
+3. Use the standard wrapper/controller/watchdog path; do not invent ad hoc long-running loops or scheduled controller cron paths. Prefer `scripts/start-autonomous-window.sh --duration ... --background` with explicit repo, workspace, state directory, expected branch, and controller options when needed.
 4. Let the initialized project context decide backlog priorities, delegation rules, mutex behavior, verification, commits, reports, and blockers.
 5. Reply concisely: started or blocked, duration/end time, state/log/report locations, and what the admin should expect next.
 

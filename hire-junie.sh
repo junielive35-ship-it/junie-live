@@ -24,10 +24,6 @@ Options:
   --no-overnight-crons        Do not install or generate overnight cron artifacts.
   --overnight-artifacts-only  Generate the local JSON/OpenClaw cron definitions artifact only; do not install OpenClaw cron jobs.
   --overnight-disabled        Generate/install all overnight cron jobs disabled.
-  --overnight-enable-controller
-                              Enable scheduled controller cron (requires non-main branch).
-  --overnight-controller-schedule CRON
-                              Default: 0 1 * * *
   --overnight-watchdog-schedule CRON
                               Default: */15 * * * *
   --overnight-worker-timeout-seconds SECONDS
@@ -72,8 +68,6 @@ RESTART=1
 INSTALL_OVERNIGHT_CRONS=1
 OVERNIGHT_DISABLED=0
 OVERNIGHT_ARTIFACTS_ONLY=0
-OVERNIGHT_ENABLE_CONTROLLER=0
-OVERNIGHT_CONTROLLER_SCHEDULE="0 1 * * *"
 OVERNIGHT_WATCHDOG_SCHEDULE="*/15 * * * *"
 OVERNIGHT_WORKER_TIMEOUT_SECONDS="900"
 OVERNIGHT_STALE_SECONDS="1800"
@@ -101,10 +95,6 @@ while [[ $# -gt 0 ]]; do
       OVERNIGHT_ARTIFACTS_ONLY=1; shift ;;
     --overnight-disabled)
       OVERNIGHT_DISABLED=1; shift ;;
-    --overnight-enable-controller)
-      OVERNIGHT_ENABLE_CONTROLLER=1; shift ;;
-    --overnight-controller-schedule)
-      need_value "$1" "${2:-}"; OVERNIGHT_CONTROLLER_SCHEDULE="$2"; shift 2 ;;
     --overnight-watchdog-schedule)
       need_value "$1" "${2:-}"; OVERNIGHT_WATCHDOG_SCHEDULE="$2"; shift 2 ;;
     --overnight-worker-timeout-seconds)
@@ -176,14 +166,12 @@ if [[ "$INSTALL_OVERNIGHT_CRONS" -eq 1 ]]; then
     --workspace "$WORKSPACE"
     --repo "$repo_root"
     --agent-id "$AGENT_ID"
-    --controller-schedule "$OVERNIGHT_CONTROLLER_SCHEDULE"
     --watchdog-schedule "$OVERNIGHT_WATCHDOG_SCHEDULE"
     --worker-timeout-seconds "$OVERNIGHT_WORKER_TIMEOUT_SECONDS"
     --stale-seconds "$OVERNIGHT_STALE_SECONDS"
     --max-iterations "$OVERNIGHT_MAX_ITERATIONS"
   )
   [[ "$OVERNIGHT_DISABLED" -eq 0 ]] || cron_args+=(--disabled)
-  [[ "$OVERNIGHT_ENABLE_CONTROLLER" -eq 0 ]] || cron_args+=(--enable-controller)
   [[ "$OVERNIGHT_ARTIFACTS_ONLY" -eq 0 ]] || cron_args+=(--artifacts-only)
   "$repo_root/scripts/install-overnight-crons.sh" "${cron_args[@]}"
 fi

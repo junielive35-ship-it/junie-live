@@ -95,7 +95,7 @@ Responsibilities:
 
 ## Scheduled / continuous routines
 
-The product/technical contract for stable out-of-box watchdog monitoring and admin-triggered autonomous work windows is defined in [`docs/overnight-routines.md`](docs/overnight-routines.md). Scheduled routines should preserve that controller/watchdog contract even when implemented by smaller scripts. New instances install OpenClaw cron jobs during `hire-junie.sh` initialization and keep `.openclaw/cron/overnight-routines.json` as a local audit/planned-definitions artifact. The watchdog cron is installed enabled by default as branch-independent safety monitoring. The scheduled controller job is installed disabled by default; code-changing controller work starts only after an explicit admin request such as `/skill autonomous-work-window 9h` or after an explicit later enablement with a non-`main` target branch.
+The product/technical contract for stable out-of-box watchdog monitoring and admin-triggered autonomous work windows is defined in [`docs/overnight-routines.md`](docs/overnight-routines.md). New instances install the OpenClaw watchdog cron during `hire-junie.sh` initialization and keep `.openclaw/cron/overnight-routines.json` as a local audit artifact. The watchdog cron is installed enabled by default as branch-independent safety monitoring. Controller work is not scheduled by cron by default; code-changing controller work starts only after an explicit admin request such as `/skill autonomous-work-window 9h` or a future approved 24/7 runner design.
 
 ### 6. Code mutex status check
 

@@ -31,7 +31,7 @@ Before starting:
 2. Derive the owned repo/workspace, backlog, mutex, branch, verification gates, commit/report expectations, opencode model, and state/log paths from initialized context (`MEMORY.md`, `AGENTS.md`, `TOOLS.md`, `docs/`, repo state, and workspace `.openclaw/state`).
 3. Do **not** ask the admin to restate internal details such as repo path, backlog process, mutex location, opencode/Claude settings, verification commands, commit policy, or report format.
 4. Check repo/workspace and code mutex/preflight according to initialized guidance. If the mutex is held or preflight blocks, do not start a competing loop.
-5. Never run on `main` and never invent ad hoc loops. Use the standard wrapper/controller/watchdog/report path only.
+5. Never run on `main` and never invent ad hoc loops. Use the standard wrapper/controller/watchdog path only; controller work is manual/admin-triggered, not scheduled by cron by default.
 
 Start the window with the standard wrapper after initialization, normally:
 
@@ -39,7 +39,7 @@ Start the window with the standard wrapper after initialization, normally:
 scripts/start-autonomous-window.sh --duration <resolved-duration-or-end> --background
 ```
 
-Add explicit `--workspace`, `--repo`, `--state-dir`, `--expected-branch`, controller limits, or goal/context options only when the initialized project guidance or wrapper requires them. Let the wrapper/controller handle repeated backlog choice, sequential opencode-compatible worker delegation, verification, meaningful commits, task release/blocking, mutex cleanup, watchdog/report state, and blocker handling until the requested end time, max iterations, or a blocker.
+Add explicit `--workspace`, `--repo`, `--state-dir`, `--expected-branch`, controller limits, or goal/context options only when the initialized project guidance or wrapper requires them. Let the wrapper/controller handle repeated backlog choice, sequential opencode-compatible worker delegation, verification, meaningful commits, task release/blocking, mutex cleanup, watchdog/state summaries, and blocker handling until the requested end time, max iterations, or a blocker.
 
 ## Telegram response format
 
