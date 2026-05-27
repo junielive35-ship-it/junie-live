@@ -1,12 +1,14 @@
 # Delegation Protocol
 
-Use this file to guide coding-worker or subagent delegation for the assigned project.
+Use this file to guide opencode worker delegation for the assigned project. Native OpenClaw subagents are not part of the project implementation workflow.
 
 ## Principles
 
 - The orchestrator owns strategy, context, planning, delegation, final review, and acceptance.
 - The orchestrator must never do coding work itself.
 - All coding work is delegated to opencode powered by Claude Opus 4.6 with low reasoning.
+- Native OpenClaw subagents (`sessions_spawn` with `runtime="subagent"`) are forbidden for project work and must not be used as implementation workers.
+- If work needs a subagent/worker, use the opencode worker boundary; if the change is documentation-only Markdown, the orchestrator may edit it directly under the Markdown exception.
 - Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Workers get scoped tasks, not the whole project history by default.
 - Code-changing opencode workers run sequentially under the code mutex unless an approved isolation strategy exists. The mutex is the atomic lock directory `.openclaw/state/code_mutex/` with holder metadata in `holder.json`.

@@ -154,7 +154,7 @@ Semantic `MEMORY.md` changes require approval unless the owner has explicitly de
 
 ## Code-changing work
 
-The orchestrator must never do coding work itself. All coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown docs/guidance directly when no source code, scripts, tests, config, generated files, or external systems are changed.
+The orchestrator must never do coding work itself. All coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning. Native OpenClaw subagents (`sessions_spawn` with `runtime="subagent"`) are not allowed for project work; if work needs a subagent/worker, use the opencode worker boundary instead. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown docs/guidance directly when no source code, scripts, tests, config, generated files, or external systems are changed.
 
 Only one code-changing task may run at a time for the owned repo/area. Use the code mutex to avoid branch, worktree, and review conflicts.
 
@@ -171,7 +171,7 @@ Before starting queued code work, check the mutex state and current repo status.
 
 If the mutex is already held, do not start code-changing work. For cron/scheduled jobs, ask the configured administrator or owner whether to wait, abort, or override. For Telegram intake, ask the caller the same question and include the current holder summary when available.
 
-Code-changing opencode subagents must run sequentially under the mutex. Do not run parallel code-changing workers against the same repo unless the owner explicitly approves an isolation strategy.
+Code-changing opencode workers must run sequentially under the mutex. Do not run parallel code-changing workers against the same repo unless the owner explicitly approves an isolation strategy. Do not use native OpenClaw subagents as a substitute for opencode workers.
 
 ## User-outcome completion protocol
 
@@ -196,7 +196,7 @@ When delegating, include the requested outcome and require the worker to report 
 
 ## Delegation
 
-Treat opencode coding subagents as capable junior engineers. Always use Claude Opus 4.6 with low reasoning for coding delegation.
+Treat opencode coding workers as capable junior engineers. Always use Claude Opus 4.6 with low reasoning for coding delegation. Do not use native OpenClaw subagents for project work; they are reserved only for non-project side research if explicitly approved.
 
 For each delegated implementation task:
 
@@ -210,7 +210,7 @@ The orchestrator remains responsible for the outcome through planning, context, 
 
 ## Repository hygiene
 
-After implementation, cron, subagent, or other worker activity, check the owned repo with:
+After implementation, cron, opencode worker, or other approved worker activity, check the owned repo with:
 
 ```bash
 git status --short --branch --untracked-files=all
