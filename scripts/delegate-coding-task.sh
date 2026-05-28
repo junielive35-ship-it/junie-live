@@ -57,7 +57,7 @@ job_id=$(json_get 'job_id')
 repo=$(json_get 'repo')
 prompt_file=$(json_get 'prompt_file')
 run_dir=$(json_get 'run_dir')
-summary_model=$(json_get_default 'summary_model' 'openai/gpt-4.1-mini')
+summary_model=$(json_get_default 'summary_model' 'openrouter/openai/gpt-4.1-mini')
 update_interval_seconds=$(json_get_default 'update_interval_seconds' '300')
 no_progress_seconds=$(json_get_default 'no_progress_seconds' '900')
 timeout_seconds=$(json_get_default 'timeout_seconds' '7200')
@@ -67,6 +67,16 @@ delivery_target=$(json_get 'delivery.target')
 delivery_thread_id=$(json_get_default 'delivery.thread_id' '')
 delivery_account_id=$(json_get_default 'delivery.account_id' '')
 opencode_previous_session_id=$(json_get_default 'opencode_previous_session_id' '')
+OPENCODE_BIN=${OPENCODE_BIN:-}
+if [[ -z "$OPENCODE_BIN" ]]; then
+  if command -v opencode >/dev/null 2>&1; then
+    OPENCODE_BIN=$(command -v opencode)
+  elif [[ -x "$HOME/.opencode/bin/opencode" ]]; then
+    OPENCODE_BIN="$HOME/.opencode/bin/opencode"
+  else
+    OPENCODE_BIN=opencode
+  fi
+fi
 
 stdout_log="$run_dir/opencode.stdout.log"
 stderr_log="$run_dir/opencode.stderr.log"
@@ -173,10 +183,18 @@ $(cat "$delta_file")
 PROMPT
 )
   if summary_json=$(openclaw infer model run --gateway --model "$summary_model" --json --prompt "$summary_prompt" 2>>"$runner_log"); then
-    summary=$(python3 -c 'import json,sys; raw=sys.stdin.read();
+    summary=$(python3 -c 'import json,sys
+raw=sys.stdin.read()
 try:
- data=json.loads(raw); print(data.get("text") or data.get("content") or data.get("message") or raw[:700])
-except Exception: print(raw[:700])' <<<"$summary_json")
+    data=json.loads(raw)
+    text=data.get("text") or data.get("content") or data.get("message")
+    if not text and isinstance(data.get("outputs"), list) and data["outputs"]:
+        first=data["outputs"][0]
+        if isinstance(first, dict):
+            text=first.get("text") or first.get("content") or first.get("message")
+    print((text or raw)[:700])
+except Exception:
+    print(raw[:700])' <<<"$summary_json")
   else
     summary="Marinator worker $job_id: opencode is still running; new log output was produced in the last interval."
   fi
@@ -197,7 +215,7 @@ build_opencode_args() {
   prompt=$(cat "$prompt_file")
   OPENCODE_ARGS=(run)
   if [[ -n "$opencode_previous_session_id" && "$opencode_previous_session_id" != "null" ]]; then
-    help_text=$(opencode run --help 2>/dev/null || true)
+    help_text=$("$OPENCODE_BIN" run --help 2>/dev/null || true)
     if grep -q -- '--session' <<<"$help_text"; then
       OPENCODE_ARGS+=(--session "$opencode_previous_session_id")
     elif grep -q -- '--resume' <<<"$help_text"; then
@@ -224,7 +242,7 @@ if [[ ! -f "$prompt_file" ]]; then
   wake_marinator "failed" "prompt file not found"
   exit 66
 fi
-if ! command -v opencode >/dev/null 2>&1; then
+if ! command -v "$OPENCODE_BIN" >/dev/null 2>&1 && [[ ! -x "$OPENCODE_BIN" ]]; then
   write_status "failed" reason opencode_not_found
   append_event "failed" reason opencode_not_found
   wake_marinator "failed" "opencode binary not found in PATH"
@@ -237,7 +255,7 @@ append_event "started" repo "$repo" prompt_file "$prompt_file"
 
 (
   cd "$repo"
-  setsid opencode "${OPENCODE_ARGS[@]}" >"$stdout_log" 2>"$stderr_log" &
+  setsid "$OPENCODE_BIN" "${OPENCODE_ARGS[@]}" >"$stdout_log" 2>"$stderr_log" &
   opencode_pid=$!
   echo "$opencode_pid" > "$pid_path"
   wait "$opencode_pid"

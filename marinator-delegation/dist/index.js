@@ -1,20 +1,34 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { Type } from "typebox";
+import { fileURLToPath } from "node:url";
 import { defineToolPlugin } from "openclaw/plugin-sdk/tool-plugin";
 import { jsonResult } from "openclaw/plugin-sdk/core";
-const SUMMARY_MODEL = "openai/gpt-4.1-mini";
+const SUMMARY_MODEL = "openrouter/openai/gpt-4.1-mini";
 const UPDATE_INTERVAL_SECONDS = 300;
 const NO_PROGRESS_SECONDS = 900;
 const TIMEOUT_SECONDS = 7200;
-const parameters = Type.Object({
-    job_id: Type.String({ description: "Stable Marinator job id. Allowed characters: letters, digits, dot, underscore, dash." }),
-    repo: Type.String({ description: "Absolute path to the target repository." }),
-    prompt_file: Type.String({ description: "Absolute path to the prompt file for opencode." }),
-    attachments: Type.Optional(Type.Array(Type.String(), { description: "Optional attachment file paths for the worker." })),
-    opencode_previous_session_id: Type.Optional(Type.Union([Type.String(), Type.Null()], { description: "Optional previous opencode session id for follow-up/resume." })),
-});
+const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_ROOT = path.resolve(PLUGIN_ROOT, "..");
+const parameters = {
+    type: "object",
+    properties: {
+        job_id: { type: "string", description: "Stable Marinator job id. Allowed characters: letters, digits, dot, underscore, dash." },
+        repo: { type: "string", description: "Absolute path to the target repository." },
+        prompt_file: { type: "string", description: "Absolute path to the prompt file for opencode." },
+        attachments: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional attachment file paths for the worker.",
+        },
+        opencode_previous_session_id: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description: "Optional previous opencode session id for follow-up/resume.",
+        },
+    },
+    required: ["job_id", "repo", "prompt_file"],
+    additionalProperties: false,
+};
 function requireNonEmpty(value, label) {
     if (typeof value !== "string" || value.trim().length === 0) {
         throw new Error(`marinator_delegate missing required ${label}`);
@@ -29,6 +43,17 @@ function safeJobId(jobId) {
         throw new Error("job_id must not be a path traversal segment");
     }
     return jobId;
+}
+function canonicalizeDeliveryTarget(channel, target, threadId) {
+    if (channel !== "telegram") {
+        return threadId !== undefined ? { target, threadId } : { target };
+    }
+    const match = target.match(/^telegram:(-?\d+)(?::topic:(\d+))?$/);
+    if (!match) {
+        return threadId !== undefined ? { target, threadId } : { target };
+    }
+    const canonicalThreadId = threadId !== undefined ? threadId : match[2];
+    return canonicalThreadId !== undefined ? { target: match[1], threadId: canonicalThreadId } : { target: match[1] };
 }
 function resolveWorkspaceDir(agentDir, workspaceDir) {
     if (workspaceDir && workspaceDir.trim())
@@ -73,11 +98,11 @@ export default defineToolPlugin({
                         const deliveryContext = toolContext.deliveryContext;
                         const deliveryChannel = requireNonEmpty(deliveryContext?.channel, "toolContext.deliveryContext.channel");
                         const deliveryTarget = requireNonEmpty(deliveryContext?.to, "toolContext.deliveryContext.to");
-                        const threadId = deliveryContext?.threadId;
+                        const { target: deliveryTargetCanonical, threadId } = canonicalizeDeliveryTarget(deliveryChannel, deliveryTarget, deliveryContext?.threadId);
                         const accountId = deliveryContext?.accountId ?? toolContext.agentAccountId;
                         const runDir = path.join(workspaceDir, ".openclaw", "state", "marinator", "runs", jobId);
                         const specPath = path.join(runDir, "spec.json");
-                        const runnerPath = path.join(repo, "scripts", "delegate-coding-task.sh");
+                        const runnerPath = path.join(REPO_ROOT, "scripts", "delegate-coding-task.sh");
                         const resolvedSpec = {
                             job_id: jobId,
                             repo,
@@ -92,7 +117,7 @@ export default defineToolPlugin({
                             orchestrator_session_key: orchestratorSessionKey,
                             delivery: {
                                 channel: deliveryChannel,
-                                target: deliveryTarget,
+                                target: deliveryTargetCanonical,
                                 ...(threadId !== undefined ? { thread_id: threadId } : {}),
                                 ...(accountId ? { account_id: accountId } : {}),
                             },
