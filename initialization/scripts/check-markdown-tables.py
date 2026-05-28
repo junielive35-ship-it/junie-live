@@ -30,7 +30,7 @@ def check_file(path: Path) -> list[str]:
     return errors
 def main(argv: list[str]) -> int:
     if not argv:
-        print("usage: scripts/check-markdown-tables.py FILE.md [...]", file=sys.stderr); return 2
+        print("usage: initialization/scripts/check-markdown-tables.py FILE.md [...]", file=sys.stderr); return 2
     errors: list[str] = []
     for arg in argv:
         path = Path(arg)

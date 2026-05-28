@@ -4,16 +4,19 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/reflect.sh --task-id ID --title TITLE --status STATUS [--type TYPE] [--notes TEXT] [--duration SECONDS] [--reflections-dir DIR]
+  initialization/scripts/reflect.sh --task-id ID --title TITLE --status STATUS [--type TYPE] [--notes TEXT] [--duration SECONDS] [--reflections-dir DIR]
 
 Writes a small JSON reflection artifact. This helper is intentionally standalone;
 it does not read or mutate backlog/task state.
 EOF
 }
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=scripts/runtime-paths.sh
-source "$ROOT/scripts/runtime-paths.sh"
+# runtime-paths.sh is always a sibling of this script, both in the source repo
+# (initialization/scripts/) and in a hired workspace (scripts/). Resolve it
+# relative to this script's own directory so both layouts work.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=initialization/scripts/runtime-paths.sh
+source "$SCRIPT_DIR/runtime-paths.sh"
 
 task_id=""
 title=""

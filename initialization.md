@@ -4,6 +4,13 @@
 
 These files are copied into an OpenClaw workspace before the first run of a new Junie Live agent. They are not the initialized identity of a specific project. They are the starting scaffold that tells Junie how to initialize itself.
 
+Alongside the guidance seed, `initialization/` also bundles the project-agnostic runtime assets every working Junie Live instance needs:
+
+- `initialization/scripts/` — operational scripts such as the bounded Marinator opencode runner (`initialization/scripts/delegate-coding-task.sh`), code-mutex helpers, PR/CI helpers, reflection, and the MD/table consistency checkers.
+- `initialization/marinator-delegation/` — the OpenClaw plugin that exposes the `marinator_delegate` tool and drives the runner.
+
+`hire-junie.sh` copies these into the workspace, links the plugin from the workspace copy, and patches OpenClaw config (tools allowlist and runtime models) so a hired instance can delegate coding work without manual setup. The plugin resolves the runner relative to its own location (the runner sits next to the plugin under the workspace, in a sibling `scripts/` directory), so the instance is self-contained and does not depend on this source repo's path. These assets are project-agnostic: they work the same for any target project.
+
 Code-changing work initialized from this seed uses the mutex protocol described in [`code_mutex.md`](code_mutex.md).
 
 ## MVP setup flow
@@ -33,6 +40,7 @@ They may describe:
 - generic recurring-check guidance;
 - templates for project-specific files such as `MEMORY.md`, `TOOLS.md`, and `docs/`;
 - reusable skills such as task reflection.
+- project-agnostic runtime assets every instance needs: operational scripts in `initialization/scripts/` and the `initialization/marinator-delegation/` delegation plugin.
 
 The files should make sense if copied into a workspace for any target project, for example:
 

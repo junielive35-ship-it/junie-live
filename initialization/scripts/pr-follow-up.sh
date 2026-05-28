@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-repo="${REPO:-$ROOT}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Default repo root: the enclosing git repo if there is one (source repo or a
+# git-tracked workspace), otherwise the parent of this script's directory.
+repo_root_default() {
+  git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/.." && pwd)
+}
+repo="${REPO:-$(repo_root_default)}"
 stale_hours=24
 dry_run=false
 
@@ -17,7 +22,8 @@ done
 
 ps_out=$(mktemp)
 trap 'rm -f "$ps_out"' EXIT
-"$ROOT/scripts/pr-status.sh" --repo "$repo" --stale-hours "$stale_hours" >"$ps_out" 2>/dev/null || true
+# pr-status.sh is a sibling in both the source repo and a hired workspace.
+"$SCRIPT_DIR/pr-status.sh" --repo "$repo" --stale-hours "$stale_hours" >"$ps_out" 2>/dev/null || true
 
 read_val() { grep "^${1}=" "$ps_out" 2>/dev/null | sed 's/^[^=]*=//' || true; }
 

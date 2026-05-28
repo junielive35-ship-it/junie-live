@@ -14,18 +14,18 @@ Status values:
 
 Junie Live aims to be a persistent product-owning senior SWE agent for one assigned project/area, not a generic coding bot. The MVP priority is the autonomous ownership loop, also called the **Marinator** when referring to the task-solving loop itself: strategy/context → selected work item → mutex → delegated opencode worker → orchestrator review/fix/verification → meaningful commit/report → reflection/cleanup.
 
-The next implementation priority is rebuilding the Marinator delegation boundary cleanly, without the removed auxiliary shell backlog/controller/watchdog implementation.
+The Marinator delegation boundary now ships inside the reusable seed: the `initialization/marinator-delegation/` OpenClaw plugin exposes the `marinator_delegate` tool, which drives the bounded `initialization/scripts/delegate-coding-task.sh` opencode runner. `hire-junie.sh` copies these into the workspace, links the plugin, and patches OpenClaw config so a freshly hired instance can delegate without manual setup. The remaining work is exercising the full opencode worker loop end to end, not rebuilding the boundary.
 
 ## Current status matrix
 
 | Area / capability | Source docs | Status | Evidence | Gaps / notes |
 | --- | --- | --- | --- | --- |
-| Reusable initialization seed | `initialization.md`; `initialization/` | implemented | `hire-junie.sh`; seed files; `scripts/verify.sh` seed checks | Needs real usage across more projects. |
+| Reusable initialization seed | `initialization.md`; `initialization/` | implemented | `hire-junie.sh`; seed files; bundled `initialization/scripts/` and `initialization/marinator-delegation/`; `scripts/verify.sh` seed checks | Seed now carries the Marinator delegation runtime so a hired instance is self-contained. Needs real usage across more projects. |
 | Initialized project workspace model | `openclaw_files.md`; `initialization.md` | implemented for this repo | workspace `/home/Danila.Savenkov/.openclaw/workspace-junie-live` | Keep seed generic; project state belongs in initialized workspace/root docs. |
 | Hermes-native baseline | `hermes/README.md`; `hermes/docs/implementation-status.md` | baseline exists; separate development | `hermes/` directory | Keep Hermes-specific implementation under `hermes/`; root docs only need high-level awareness unless platform direction changes. |
 | Strategy/current-status awareness | `idea.md`; `day_to_day_routines.md`; this file | partial | this file; workspace `docs/implementation-status.md` | Keep current after meaningful changes. |
-| Code mutex protocol | `code_mutex.md`; `day_to_day_routines.md` | implemented | `scripts/code-mutex-status.sh`; lock-directory contract | Helper scripts that depended on the removed backlog implementation were dropped. |
-| Marinator / delegated code-changing flow | `idea.md`; `day_to_day_routines.md`; seed protocols | contract-only / rebuilding | high-level docs only | Previous shell backlog/controller/worker implementation was removed; the opencode delegation boundary needs a new implementation. |
+| Code mutex protocol | `code_mutex.md`; `day_to_day_routines.md` | implemented | `initialization/scripts/code-mutex-status.sh`; lock-directory contract | Helper scripts that depended on the removed backlog implementation were dropped. |
+| Marinator / delegated code-changing flow | `idea.md`; `day_to_day_routines.md`; seed protocols | partial | `initialization/marinator-delegation/` plugin (`marinator_delegate` tool); `initialization/scripts/delegate-coding-task.sh` bounded runner; `hire-junie.sh` links the plugin and patches OpenClaw config | Delegation boundary is bundled into the seed and wired by `hire-junie.sh`; end-to-end opencode worker runs not yet exercised in CI. |
 | User-outcome completion safeguards | seed protocols | implemented as guidance | seed `AGENTS.md`; `initialization/docs/review-protocol.md`; `initialization/docs/delegation-protocol.md`; verify checks | Must be enforced by reviewers; not just documented. |
 | Repo-root hygiene | `day_to_day_routines.md`; `scripts/check-repo-hygiene.sh` | implemented | `scripts/check-repo-hygiene.sh`; `scripts/verify.sh` | Watch for OpenClaw bootstrap accidentally using repo root. |
 | Admin autonomous work window | `day_to_day_routines.md` | contract-only | high-level routine intent remains | Previous `start-autonomous-window`, controller, watchdog, backlog, and worker scripts were removed. Do not claim this as implemented until rebuilt. |
@@ -33,9 +33,9 @@ The next implementation priority is rebuilding the Marinator delegation boundary
 | Backlog scripts | `day_to_day_routines.md` | removed | no root `scripts/backlog*.sh` | Future planning surface is undecided. |
 | Hypothesis generation | `day_to_day_routines.md` | contract-only | high-level routine intent remains | Previous file-backed hypothesis/backlog scripts were removed. |
 | Routine health check | `day_to_day_routines.md` | contract-only | high-level routine intent remains | Previous shell routine-health implementation was removed. |
-| PR/CI lifecycle | `day_to_day_routines.md` | partial/contract-only | `scripts/pr-status.sh`; `scripts/pr-follow-up.sh` smoke tests | PR authority, CI conventions, and real integration not configured. |
-| MD consistency scan | `day_to_day_routines.md` | partial | `scripts/md-consistency.sh`; verify smoke tests | Detects stale file references; semantic contradiction detection not yet implemented. |
-| Reflection/self-improvement | `day_to_day_routines.md`; seed docs | partial | `scripts/reflect.sh`; seed protocol docs | Reflection script is now standalone and no longer tied to backlog task release. |
+| PR/CI lifecycle | `day_to_day_routines.md` | partial/contract-only | `initialization/scripts/pr-status.sh`; `initialization/scripts/pr-follow-up.sh` smoke tests | PR authority, CI conventions, and real integration not configured. |
+| MD consistency scan | `day_to_day_routines.md` | partial | `initialization/scripts/md-consistency.sh`; verify smoke tests | Detects stale file references; semantic contradiction detection not yet implemented. |
+| Reflection/self-improvement | `day_to_day_routines.md`; seed docs | partial | `initialization/scripts/reflect.sh`; seed protocol docs | Reflection script is now standalone and no longer tied to backlog task release. |
 | Capability usage analytics | `capabilities_usage_tracking.md` | deferred | doc explicitly says v2 | Must not block MVP routines. |
 | Deployment/release process | `TOOLS.md`; `MEMORY.md` | unknown/not configured | no command/dashboard recorded | Ask Danila before deploy/release actions. |
 | Team/group communication | `TOOLS.md`; `USER.md` | unknown/not configured | Telegram DM/group only | External/team-facing messages require approval. |

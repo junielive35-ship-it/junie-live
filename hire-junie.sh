@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Resolve this script's own directory so it can be run from any cwd and still
+# find its bundled initialization seed (which includes the Marinator delegation
+# runtime assets and operational scripts every Junie Live instance needs).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 usage() {
   cat <<'EOF_USAGE'
 Usage:
@@ -18,7 +23,7 @@ Required:
 Options:
   --agent-id ID               OpenClaw agent id. Default: junie-live
   --workspace DIR             Agent workspace dir. Default: ~/.openclaw/workspace-junie-live
-  --seed-dir DIR              Junie seed dir. Default: ./initialization
+  --seed-dir DIR              Junie seed dir. Default: <script dir>/initialization
   --model MODEL               OpenClaw model id. Default: openrouter/openai/gpt-5.5
   --no-restart                Configure everything but do not restart Gateway.
   --help                      Show this help.
@@ -51,7 +56,7 @@ TOKEN="${JUNIE_TELEGRAM_BOT_TOKEN:-}"
 ADMIN_TELEGRAM_ID=""
 AGENT_ID="junie-live"
 WORKSPACE="$HOME/.openclaw/workspace-junie-live"
-SEED_DIR="./initialization"
+SEED_DIR="$SCRIPT_DIR/initialization"
 MODEL="openrouter/openai/gpt-5.5"
 RESTART=1
 
@@ -92,6 +97,8 @@ if [[ -e "$SEED_DIR/BOOTSTRAP.md" ]]; then
   err "seed dir must not contain BOOTSTRAP.md for Junie multi-round initialization: $SEED_DIR/BOOTSTRAP.md"
   exit 1
 fi
+[[ -f "$SEED_DIR/scripts/delegate-coding-task.sh" ]] || { err "seed dir missing Marinator runner: $SEED_DIR/scripts/delegate-coding-task.sh"; exit 1; }
+[[ -f "$SEED_DIR/marinator-delegation/dist/index.js" ]] || { err "seed dir missing built Marinator delegation plugin: $SEED_DIR/marinator-delegation/dist/index.js"; exit 1; }
 command -v openclaw >/dev/null || { err "openclaw CLI not found in PATH"; exit 1; }
 command -v tar >/dev/null || { err "tar not found in PATH"; exit 1; }
 
@@ -122,6 +129,10 @@ if [[ -e "$WORKSPACE/BOOTSTRAP.md" ]]; then
   err "copied workspace unexpectedly contains BOOTSTRAP.md: $WORKSPACE/BOOTSTRAP.md"
   exit 1
 fi
+PLUGIN_DIR="$WORKSPACE/marinator-delegation"
+RUNNER="$WORKSPACE/scripts/delegate-coding-task.sh"
+[[ -f "$PLUGIN_DIR/dist/index.js" ]] || { err "copied workspace missing Marinator plugin: $PLUGIN_DIR/dist/index.js"; exit 1; }
+[[ -f "$RUNNER" ]] || { err "copied workspace missing Marinator runner: $RUNNER"; exit 1; }
 
 openclaw agents add "$AGENT_ID" \
   --workspace "$WORKSPACE" \
@@ -133,8 +144,14 @@ openclaw channels add \
   --account "$TELEGRAM_ACCOUNT" \
   --token "$TOKEN"
 
+# Temp config patch files. Declared up front and cleaned by a single EXIT trap
+# so cleanup is safe under `set -u` regardless of where the script exits.
+patch_file=""
+marinator_patch=""
+cleanup() { rm -f "${patch_file:-}" "${marinator_patch:-}"; }
+trap cleanup EXIT
+
 patch_file="$(mktemp)"
-trap 'rm -f "$patch_file"' EXIT
 cat >"$patch_file" <<JSON
 {
   channels: {
@@ -154,6 +171,79 @@ openclaw config patch --file "$patch_file"
 openclaw agents bind \
   --agent "$AGENT_ID" \
   --bind "telegram:$TELEGRAM_ACCOUNT"
+
+# --- Marinator delegation runtime ---
+# Every working Junie Live instance delegates coding work through the bundled
+# marinator-delegation OpenClaw plugin, which drives the supervised opencode
+# runner copied into the workspace. Configure the plugin, the config it depends
+# on, and the runtime models so the instance is ready to delegate out of the box.
+
+# 1) Make the marinator-delegation tool visible under the coding tools profile.
+#    tools.alsoAllow is an array, and `config patch` replaces arrays wholesale,
+#    so read the current list and merge our entry without clobbering others.
+also_allow_current="$(openclaw config get tools.alsoAllow --json 2>/dev/null || printf '[]')"
+also_allow_merged="$(MARINATOR_TOOL="marinator-delegation" python3 - "$also_allow_current" <<'PY'
+import json, os, sys
+try:
+    current = json.loads(sys.argv[1]) if sys.argv[1].strip() else []
+    if not isinstance(current, list):
+        current = []
+except Exception:
+    current = []
+want = os.environ["MARINATOR_TOOL"]
+if want not in current:
+    current.append(want)
+print(json.dumps(current))
+PY
+)"
+marinator_patch="$(mktemp)"
+cat >"$marinator_patch" <<JSON
+{
+  tools: {
+    alsoAllow: $also_allow_merged
+  },
+  agents: {
+    defaults: {
+      models: {
+        "openrouter/openai/gpt-4.1-mini": {}
+      }
+    }
+  }
+}
+JSON
+openclaw config patch --file "$marinator_patch"
+
+# 2) Install/link the bundled plugin from the initialized workspace so the
+#    instance is self-contained and does not depend on this source repo's path.
+#    The plugin spawns a child process (the opencode runner), so OpenClaw treats
+#    it as an unsafe install and requires the explicit force-unsafe bypass.
+if openclaw plugins install --link --force --dangerously-force-unsafe-install "$PLUGIN_DIR"; then
+  log "Marinator delegation plugin linked from $PLUGIN_DIR"
+else
+  err "failed to install/link marinator-delegation plugin from $PLUGIN_DIR"
+  exit 1
+fi
+
+# 3) Best-effort verification: report plugin load status and tool contract.
+if plugin_status="$(openclaw plugins inspect marinator-delegation --json 2>/dev/null)"; then
+  printf '%s\n' "$plugin_status" | python3 - <<'PY' || true
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+plugin = data.get("plugin", data)
+status = plugin.get("status")
+source = plugin.get("source")
+tools = (plugin.get("contracts") or {}).get("tools") or plugin.get("toolNames") or []
+print(f"  plugin status: {status}")
+print(f"  plugin source: {source}")
+print(f"  plugin tools:  {tools}")
+PY
+else
+  log "  (could not inspect marinator-delegation plugin status; continuing)"
+fi
+# --- end Marinator delegation runtime ---
 
 if ! approve_output="$(openclaw devices approve --latest 2>&1)"; then
   printf '%s\n' "$approve_output" >&2
@@ -178,5 +268,6 @@ log "Agent:            $AGENT_ID"
 log "Workspace:        $WORKSPACE"
 log "Telegram account: $TELEGRAM_ACCOUNT"
 log "Allowed admin id: $ADMIN_TELEGRAM_ID"
+log "Marinator plugin: $PLUGIN_DIR (linked)"
 log ""
 log "Next: open the Junie bot in Telegram and send /start."

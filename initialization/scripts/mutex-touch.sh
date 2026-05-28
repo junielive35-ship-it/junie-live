@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=scripts/runtime-paths.sh
-source "$ROOT/scripts/runtime-paths.sh"
+# runtime-paths.sh is always a sibling of this script, both in the source repo
+# (initialization/scripts/) and in a hired workspace (scripts/). Resolve it
+# relative to this script's own directory so both layouts work.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=initialization/scripts/runtime-paths.sh
+source "$SCRIPT_DIR/runtime-paths.sh"
 mutex_dir="${MUTEX_DIR:-$(junie_mutex_dir_default)}"
 
 while [[ $# -gt 0 ]]; do
