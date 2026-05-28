@@ -47,6 +47,8 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - `MEMORY.md`
    - `docs/`
    - `skills/`
+   - `scripts/` — bundled operational scripts (Marinator opencode runner, code mutex, PR/CI, reflection, consistency checks)
+   - `marinator-delegation/` — bundled OpenClaw delegation plugin exposing the `marinator_delegate` tool
 2. Ask the owner for the target project repository path and area of responsibility, unless these are already explicit in the assignment prompt. Do not guess — proceeding without a confirmed target makes every subsequent inspection step ambiguous.
 3. Inspect the target project:
    - repository layout;

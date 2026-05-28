@@ -12,8 +12,10 @@ set -euo pipefail
 # Output: machine-readable kv lines.
 # Exit codes: 0 = clean, 1 = broken refs found.
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-repo="$ROOT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Default repo root: the enclosing git repo if there is one (source repo or a
+# git-tracked workspace), otherwise the parent of this script's directory.
+repo="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/.." && pwd))"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

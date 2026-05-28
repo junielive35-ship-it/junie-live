@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { defineToolPlugin } from "openclaw/plugin-sdk/tool-plugin";
 import { jsonResult } from "openclaw/plugin-sdk/core";
 const SUMMARY_MODEL = "openrouter/openai/gpt-4.1-mini";
-const UPDATE_INTERVAL_SECONDS = 300;
+const UPDATE_INTERVAL_SECONDS = 60;
 const NO_PROGRESS_SECONDS = 900;
 const TIMEOUT_SECONDS = 7200;
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

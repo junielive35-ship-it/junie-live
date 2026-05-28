@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Default repo root: the enclosing git repo if there is one (source repo or a
+# git-tracked workspace), otherwise the parent of this script's directory.
+repo_root_default() {
+  git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/.." && pwd)
+}
 repo=""
 stale_hours=24
 
@@ -13,7 +18,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$repo" ]] || repo="$ROOT"
+[[ -n "$repo" ]] || repo="$(repo_root_default)"
 cd "$repo"
 
 # ---- gh availability ----

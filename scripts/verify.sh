@@ -27,14 +27,15 @@ while IFS= read -r script; do
   [[ -f "$script" ]] || continue
   bash -n "$script" || fail "bash syntax error in $script"
   script_count=$((script_count + 1))
-done < <(find scripts -maxdepth 1 -name '*.sh' -type f | sort)
-[[ "$script_count" -ge 8 ]] || fail "expected at least 8 bash scripts in scripts/, found $script_count"
+done < <({ find scripts -maxdepth 1 -name '*.sh' -type f
+           find initialization/scripts -maxdepth 1 -name '*.sh' -type f; } | sort)
+[[ "$script_count" -ge 8 ]] || fail "expected at least 8 bash scripts across scripts/ and initialization/scripts/, found $script_count"
 
 log "python syntax"
-python3 -m py_compile scripts/check-markdown-tables.py
+python3 -m py_compile initialization/scripts/check-markdown-tables.py
 
 log "maintained markdown tables"
-scripts/check-markdown-tables.py implementation-status.md
+initialization/scripts/check-markdown-tables.py implementation-status.md
 
 log "local markdown links"
 while IFS= read -r file; do
@@ -51,7 +52,7 @@ done < <(find . -path './.git' -prune -o -path './hermes' -prune -o -name '*.md'
 
 log "md consistency scan"
 mc_base="$(mktemp -d)"
-./scripts/md-consistency.sh >"$mc_base/md-consistency.out"
+./initialization/scripts/md-consistency.sh --repo "$ROOT" >"$mc_base/md-consistency.out"
 grep -q '^checked=' "$mc_base/md-consistency.out" || fail "md-consistency missing checked count"
 mc_count=$(grep '^checked=' "$mc_base/md-consistency.out" | sed 's/^checked=//')
 [[ "$mc_count" -ge 8 ]] || fail "md-consistency checked too few refs: $mc_count"
@@ -62,7 +63,7 @@ mkdir -p "$mc_tmp/scripts"
 printf '#!/bin/true\n' > "$mc_tmp/scripts/exists.sh"
 printf '# Test\n\nSee `scripts/exists.sh` and `missing-script.sh`.\n' > "$mc_tmp/test.md"
 set +e
-./scripts/md-consistency.sh --repo "$mc_tmp" >"$mc_base/mc-broken.out" 2>"$mc_base/mc-broken.err"
+./initialization/scripts/md-consistency.sh --repo "$mc_tmp" >"$mc_base/mc-broken.out" 2>"$mc_base/mc-broken.err"
 mc_status=$?
 set -e
 [[ "$mc_status" -eq 1 ]] || fail "md-consistency should exit 1 when broken refs found"
