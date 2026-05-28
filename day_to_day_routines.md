@@ -4,13 +4,13 @@ Assumption for v1: Telegram is the only incoming event source. Junie can communi
 
 ## Current implementation status
 
-This document mixes operating model, contracts, and implemented routines. Use [`implementation-status.md`](implementation-status.md) to see what is implemented, partial, contract-only, deferred, or unknown before treating a routine as available.
+This document describes the operating model and high-level routine contracts. Use [`implementation-status.md`](implementation-status.md) to see what is implemented, partial, contract-only, deferred, or unknown before treating a routine as available.
 
 ## Core runtime principles
 
 - Junie acts like a senior developer/product owner, not a passive executor.
 - Meaningful work is validated against `MEMORY.md`, relevant `docs/`, architecture, strategy, and previous design choices.
-- The **Marinator** is Junie Live's task-solving loop: validate/decompose a task, delegate to an executor, check the result, request fixes when needed, verify, accept/report, and reflect. In the current OpenClaw implementation this is a protocol across guidance, docs, skills, and scripts, not a separate architectural module.
+- The **Marinator** is Junie Live's task-solving loop: validate/decompose a task, delegate to an executor, check the result, request fixes when needed, verify, accept/report, and reflect. It is a product/operating loop, not a commitment to a specific shell-script implementation.
 - Only one code-changing task may run at a time. A code change mutex protects the repo from parallel conflicting edits. See [`code_mutex.md`](code_mutex.md).
 - The orchestrator must never do coding work itself. All coding work is delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown docs/guidance directly when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Code-changing opencode subagents are run sequentially under the mutex, never in parallel, to avoid branch/worktree conflicts and inconsistent reviews.
@@ -25,15 +25,15 @@ Triggered by DM, mention, or relevant group-chat request.
 
 Flow:
 
-1. Classify the message: question, task request, bug report, feature request, decision request, autonomous work window, FYI/no action.
+1. Classify the message: question, task request, bug report, feature request, decision request, autonomous work-window request, FYI/no action.
 2. Clarify if needed.
 3. For meaningful tasks, retrieve relevant `MEMORY.md` and docs.
 4. Validate against strategy, architecture, accepted design choices, and prior decisions.
 5. Challenge contradictions instead of blindly accepting the request.
 6. Confirm shared understanding for non-trivial tasks.
-7. Queue, execute, defer, or ask for approval.
+7. Execute directly when allowed, delegate, defer, or ask for approval.
 
-For admin messages like “поработай автономно 9 часов”, “иди улучшай продукт 9 часов”, “работай над проектом до утра”, or “start autonomous loop for 4h”, Junie should recognize a bounded autonomous work-window intent after initialization. The admin should not need to specify repo, backlog, mutex, opencode, verification, meaningful commits, or report details; Junie derives those from the initialized workspace. Resolve the duration/end time from the message or ask one concise question if it is missing/ambiguous, then use `scripts/start-autonomous-window.sh --duration ... --background` rather than ad hoc loops. Reply with started/blocked status, duration/end time, state/log/report location, and what to expect next.
+For admin messages like “поработай автономно 9 часов”, “иди улучшай продукт 9 часов”, “работай над проектом до утра”, or “start autonomous loop for 4h”, Junie should recognize bounded autonomous work-window intent after initialization. The admin should not need to specify internal details such as repo path, mutex location, opencode model, verification commands, meaningful commits, or report format. If the current repo has no implemented autonomous-window runner, Junie must say so and either propose a concrete implementation plan or perform a bounded manual session with explicit progress/checkpoints instead of pretending a background controller exists.
 
 ### 2. Code task execution
 
@@ -41,19 +41,19 @@ Triggered when an accepted code-changing task is ready and the code change mutex
 
 Flow:
 
-1. Acquire code change mutex using the lock-directory flow from [`code_mutex.md`](code_mutex.md).
-2. Decompose task into scoped subagent tasks.
+1. Acquire the code change mutex using the lock-directory flow from [`code_mutex.md`](code_mutex.md).
+2. Decompose the task into scoped executor tasks.
 3. Delegate implementation to opencode powered by Claude Opus 4.6 with low reasoning; never implement code directly in the orchestrator. Markdown-only documentation/guidance edits may be made directly by the orchestrator when they are the whole change.
-4. Run code-changing opencode subagents sequentially, not in parallel.
-5. Give each subagent precise context, constraints, and verification expectations.
-6. Review results against the full strategic/architectural context before starting the next code-changing subagent step.
-7. Request fixes from opencode until the implementation is correct.
-8. Open or update a GitHub pull request.
+4. Run code-changing opencode work sequentially, not in parallel.
+5. Give each executor precise context, constraints, and verification expectations.
+6. Review results against the full strategic/architectural context before starting the next code-changing step.
+7. Request fixes from opencode until the implementation is correct or blocked.
+8. Open or update a GitHub pull request only with approval or recorded authority.
 9. Release mutex when the code-changing work is done, blocked, cancelled, or handed off.
 
 Concrete mutex state lives in `.openclaw/state/code_mutex/holder.json` inside the initialized OpenClaw workspace, not in the repo root. The lock is acquired by atomically creating `.openclaw/state/code_mutex/`; the metadata JSON is only for human-readable state and does not provide atomicity. Repo scripts default runtime state to `${JUNIE_WORKSPACE:-$HOME/.openclaw/workspace-junie-live}/.openclaw/state/...`; tests may override with temp dirs, but production/default runs must never create repo-root `.openclaw/` or `state/`.
 
-If the mutex is already held, do not start code-changing work. Cron/scheduled jobs ask the configured administrator/owner whether to wait, abort, or override. Telegram intake asks the caller the same question and includes the current holder summary when available.
+If the mutex is already held, do not start code-changing work. Ask the caller or configured owner whether to wait, abort, or override, and include the current holder summary when available.
 
 ### 3. Pull request lifecycle
 
@@ -63,10 +63,10 @@ Responsibilities:
 
 - track CI status;
 - respond to review comments;
-- request opencode subagent fixes when needed;
+- request opencode fixes when needed;
 - detect stale PRs;
 - communicate blockers;
-- update task/backlog state;
+- update task/decision state;
 - run post-merge follow-up when needed.
 
 ### 4. `MEMORY.md` edit → size check
@@ -95,33 +95,31 @@ Responsibilities:
 
 ## Scheduled / continuous routines
 
-The product/technical contract for stable out-of-box watchdog monitoring and admin-triggered autonomous work windows is defined in [`docs/overnight-routines.md`](docs/overnight-routines.md). New instances install the OpenClaw watchdog cron during `hire-junie.sh` initialization and keep `.openclaw/cron/overnight-routines.json` as a local audit artifact. The watchdog cron is installed enabled by default as branch-independent safety monitoring. Controller work is not scheduled by cron by default; code-changing controller work starts only after an explicit admin request such as `/skill autonomous-work-window 9h` or a future approved 24/7 runner design.
+These are high-level routine types. This repository currently keeps concrete scheduling minimal; do not infer that a routine exists as a shell script or installed cron unless [`implementation-status.md`](implementation-status.md), current repo state, or OpenClaw runtime state proves it.
 
 ### 6. Code mutex status check
 
-Regular scheduled operation. It is not merely triggered by new queued code work.
+Regular scheduled or manual operation.
 
 Responsibilities:
 
 - check whether the code change mutex is free or held;
 - if held, inspect the worker/task holding it;
 - verify recent progress, logs, branch/PR state, and expected next action;
-- if the worker appears to be hanging or making no useful progress, cancel the task, stop the worker, and preserve relevant logs/state;
+- if the worker appears to be hanging or making no useful progress, preserve relevant logs/state and ask for an explicit owner decision before cleanup or override;
 - analyze what went wrong before retrying;
-- fix the prompt, decomposition, environment, or task constraints if needed;
-- rerun only when the retry plan is clear and safe;
 - release or transfer the mutex explicitly after cancellation, blockage, handoff, or completion.
 
 ### 7. MD consistency scan
 
-Runs on a configurable schedule.
+Runs on a configurable schedule or before accepting documentation-heavy changes.
 
 Inputs:
 
-- recent Telegram messages;
+- recent messages;
 - recent commits and PRs;
-- changed md files;
-- task/backlog/decision state.
+- changed Markdown files;
+- task and decision state.
 
 Responsibilities:
 
@@ -137,15 +135,15 @@ Runs on a project-stage-dependent schedule or when new data appears.
 
 Inputs may include analytics, bug reports, user/team feedback, release results, and product observations.
 
-Hypotheses are stored in backlog for later scoring and filtering. Junk accumulation is expected but must be controlled by backlog hygiene.
+Hypotheses should be stored in the project-appropriate planning surface for later scoring and filtering. Junk accumulation is expected but must be controlled by hygiene/review.
 
-### 9. Backlog prioritization and execution loop
+### 9. Prioritization and execution loop
 
-Runs when Junie is idle or on a configurable schedule.
+Runs when Junie is idle, explicitly asked, or on a configured schedule.
 
 Responsibilities:
 
-- score checked/valid backlog items;
+- score checked/valid work items;
 - account for active GitHub PRs and Telegram context;
 - mark tasks already in progress by teammates, including elapsed time;
 - suggest help if teammate progress appears slow;
@@ -155,17 +153,17 @@ Responsibilities:
 
 A user/team request may optionally have configured preemption power to pause or cancel current work to reduce human waiting time.
 
-### 10. Backlog hygiene
+### 10. Work-item hygiene
 
-Runs on a configurable schedule.
+Runs on a configurable schedule or during planning reviews.
 
 Responsibilities:
 
 - deduplicate tasks and hypotheses;
-- rescore after new evidence (use `scripts/backlog-rescore.sh` for age-based prioritization);
+- rescore after new evidence;
 - merge related items;
 - archive stale, invalidated, or low-value items;
-- keep execution queue understandable.
+- keep the execution queue understandable.
 
 ### 11. Self-simplification
 
@@ -236,13 +234,6 @@ Require explicit approval:
 
 If unsure, treat the change as major or create a change candidate and ask.
 
-Autonomous windows retry verification failures up to 7 fixes, then block, release mutex, preserve diff/status, and clean failed workspace. Hard timeout default: 7200s.
-
-## Autonomous window local failures
-
-Use `scripts/start-autonomous-window.sh` for admin work windows. It continues after safe local task failures by default (`--continue-on-local-failure --max-local-failures 3`), blocking and cleaning the failed task before selecting the next one. Stop and inspect state/logs if the controller reports `cleanup_failed` or `too_many_local_failures`.
-
-
 ## Repo Root Hygiene
 
-Do not run OpenClaw workspace bootstrap with this git repo as the workspace. Root files such as `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `USER.md`, `HEARTBEAT.md`, `IDENTITY.md`, `.openclaw/`, and `state/` are runtime/workspace artifacts here and must be prevented or cleaned, not hidden with `.gitignore` or `.git/info/exclude`. Use `scripts/check-repo-hygiene.sh` or `scripts/verify.sh` before accepting autonomous work.
+Do not run OpenClaw workspace bootstrap with this git repo as the workspace. Root files such as `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `USER.md`, `HEARTBEAT.md`, `IDENTITY.md`, `.openclaw/`, and `state/` are runtime/workspace artifacts here and must be prevented or cleaned, not hidden with `.gitignore` or `.git/info/exclude`. Use `scripts/check-repo-hygiene.sh` or `scripts/verify.sh` before accepting work.

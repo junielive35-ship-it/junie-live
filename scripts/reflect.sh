@@ -1,56 +1,65 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/reflect.sh --task-id ID --title TITLE --status STATUS [--type TYPE] [--notes TEXT] [--duration SECONDS] [--reflections-dir DIR]
+
+Writes a small JSON reflection artifact. This helper is intentionally standalone;
+it does not read or mutate backlog/task state.
+EOF
+}
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/runtime-paths.sh
 source "$ROOT/scripts/runtime-paths.sh"
-task_id="${1:-}"
-new_status="${2:-done}"
+
+task_id=""
+title=""
+type="task"
+status="done"
 notes=""
 duration=""
+reflections_dir="${REFLECTIONS_DIR:-$(junie_state_root_default)/reflections}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --task-id) task_id="$2"; shift 2 ;;
+    --title) title="$2"; shift 2 ;;
+    --type) type="$2"; shift 2 ;;
+    --status) status="$2"; shift 2 ;;
     --notes) notes="$2"; shift 2 ;;
     --duration) duration="$2"; shift 2 ;;
-    *) shift ;;
+    --reflections-dir) reflections_dir="$2"; shift 2 ;;
+    --help|-h) usage; exit 0 ;;
+    *) printf 'Unknown: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
-[[ -z "$task_id" ]] && exit 0
+[[ -n "$task_id" ]] || { printf 'ERROR: --task-id is required\n' >&2; exit 2; }
+[[ -n "$title" ]] || { printf 'ERROR: --title is required\n' >&2; exit 2; }
 
-backlog_dir="${BACKLOG_DIR:-$(junie_backlog_dir_default)}"
-reflections_dir="${REFLECTIONS_DIR:-$(junie_reflections_dir_default)}"
 mkdir -p "$reflections_dir"
-
-item_file="$backlog_dir/archive/$task_id.json"
-[[ ! -f "$item_file" ]] && item_file="$backlog_dir/items/$task_id.json"
-[[ ! -f "$item_file" ]] && exit 0
-
-read_field() {
-  local f="$1" field="$2"
-  local val
-  val=$(grep -o '"'"$field"'"[[:space:]]*:[[:space:]]*"[^"]*"' "$f" 2>/dev/null | head -1 | sed 's/.*"'"$field"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
-  if [[ -z "$val" ]]; then
-    val=$(grep -o '"'"$field"'"[[:space:]]*:[[:space:]]*[0-9]*' "$f" 2>/dev/null | head -1 | sed 's/.*"'"$field"'"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/') || true
-  fi
-  printf '%s' "$val"
-}
-
-escape_json() {
-  printf '%s' "$1" | sed 's/["\]/\\&/g'
-}
-
-title=$(read_field "$item_file" title)
-type=$(read_field "$item_file" type)
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-cat > "$reflections_dir/${task_id}.json" <<EOF
-{
-  "task_id": "$(escape_json "$task_id")",
-  "type": "$(escape_json "$type")",
-  "title": "$(escape_json "$title")",
-  "status": "$(escape_json "$new_status")",
-  "reflected_at": "$ts"$(if [[ -n "$duration" ]]; then printf ',\n  "duration_seconds": %s' "$duration"; fi)$(if [[ -n "$notes" ]]; then printf ',\n  "notes": "%s"' "$(escape_json "$notes")"; fi)
+python3 - "$reflections_dir/${task_id}.json" "$task_id" "$type" "$title" "$status" "$ts" "$duration" "$notes" <<'PY'
+import json, sys
+path, task_id, typ, title, status, ts, duration, notes = sys.argv[1:]
+out = {
+    "task_id": task_id,
+    "type": typ,
+    "title": title,
+    "status": status,
+    "reflected_at": ts,
 }
-EOF
+if duration:
+    out["duration_seconds"] = int(duration)
+if notes:
+    out["notes"] = notes
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(out, fh, indent=2, ensure_ascii=False)
+    fh.write("\n")
+PY
+
+printf 'reflection_written=%s\n' "$reflections_dir/${task_id}.json"

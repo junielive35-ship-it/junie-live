@@ -11,16 +11,15 @@ Code-changing work initialized from this seed uses the mutex protocol described 
 For the current MVP, a new Junie Live instance is created roughly like this:
 
 1. Copy files from `junie-live/initialization/` into `.openclaw/workspace`.
-2. Install/update the new instance's branch-independent watchdog cron and write the workspace-local JSON audit artifact for overnight routines. `hire-junie.sh` does this automatically after `openclaw agents add` by calling `scripts/install-overnight-crons.sh`; the artifact lives under `.openclaw/cron/` in the initialized workspace, not in the repo root. Controller work remains manually triggered through the autonomous-window wrapper until a future approved 24/7 runner design replaces that path.
-3. Run OpenClaw.
-4. Give Junie:
+2. Run OpenClaw with the new agent workspace.
+3. Give Junie:
    - the path to the target project;
-   - Means of communication (contact persons, group chats, etc, for MVP - Telegram only)
+   - means of communication (contact persons, group chats, etc.; for MVP, Telegram only);
    - the area of responsibility;
    - expectations, constraints, and team/product context.
-5. Junie follows `INITIALIZATION.md` to inspect the target project, ask questions across as many rounds as needed, resolve contradictions, and produce a coherent durable identity.
+4. Junie follows `INITIALIZATION.md` to inspect the target project, ask questions across as many rounds as needed, resolve contradictions, and produce a coherent durable identity.
 
-The installed overnight cron definition is the watchdog job described in [`docs/overnight-routines.md`](docs/overnight-routines.md). It uses an isolated OpenClaw cron session with `exec,read` tools and explicit repo/workspace/state/log paths so it runs without a terminal-dependent Telegram flow. Controller work is started manually via `scripts/start-autonomous-window.sh` for now.
+Concrete autonomous-window, backlog, watchdog, or executor scheduling implementations are project-dependent. They should not be assumed to exist just because the seed workspace was copied.
 
 ## What belongs in `initialization/`
 
@@ -79,13 +78,4 @@ After initialization:
 
 ## Layering rule
 
-Keep these layers separate:
-
-1. Root docs in `~/code/junie-live/` describe the Junie Live product and its implementation roadmap.
-2. `junie-live/initialization/` contains reusable OpenClaw seed files for any new Junie Live instance.
-3. `junie-live/hermes/` contains the separate Hermes-native Junie Live baseline and its own seed/docs/scripts.
-4. A copied OpenClaw workspace contains the project-specific initialized identity after bootstrap.
-
-If a statement is about the current implementation stage of the Junie Live product, it belongs in layer 1, not layer 2.
-
-If a statement is about how every Junie Live agent should behave when initialized for a project, it may belong in layer 2.
+Seed guidance may say “during initialization, discover X and record it.” It should not hard-code the result of that discovery for the Junie Live repository.

@@ -82,11 +82,17 @@ resolve_ref() {
   if [[ "$ref" == docs/* ]]; then
     [[ -e "$repo/initialization/$ref" ]] && return 0
   fi
-  # Repo-name-prefixed paths (e.g., junie-live/initialization/)
+  # Repo-name-prefixed paths (e.g., junie-live/initialization/). In temp
+  # verification clones, the directory name may differ from the product repo name,
+  # so also recognize the stable Junie Live repo prefix.
   local repo_basename
   repo_basename="$(basename "$repo")"
   if [[ "$ref" == "$repo_basename/"* ]]; then
     local stripped="${ref#"$repo_basename"/}"
+    [[ -e "$repo/$stripped" ]] && return 0
+  fi
+  if [[ "$ref" == "junie-live/"* ]]; then
+    local stripped="${ref#junie-live/}"
     [[ -e "$repo/$stripped" ]] && return 0
   fi
   return 1

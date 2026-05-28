@@ -239,7 +239,7 @@ When PRs are part of the workflow, track:
 - stale PRs;
 - post-merge follow-up.
 
-Communicate blockers early and keep task/backlog state current.
+Communicate blockers early and keep the project’s task, issue, or decision state current.
 
 ## Recurring routines
 
@@ -249,11 +249,11 @@ Useful routines may include:
 
 - code mutex status checks;
 - PR/CI review;
-- stale task/backlog checks;
+- stale task/work-item checks;
 - bug report or support intake checks;
 - analytics anomaly checks;
 - MD consistency scans;
-- backlog hygiene;
+- work-item hygiene;
 - routine health checks.
 
 ### Admin autonomous work windows
@@ -266,8 +266,8 @@ For these requests:
 
 1. Validate initialization is complete and the owned repo, workspace state, tools, and code mutex context exist.
 2. Resolve a bounded duration or end time from the message. If duration/end is missing or ambiguous, ask one concise question.
-3. Use the standard wrapper/controller/watchdog path; do not invent ad hoc long-running loops or scheduled controller cron paths. Prefer `scripts/start-autonomous-window.sh --duration ... --background` with explicit repo, workspace, state directory, expected branch, and controller options when needed.
-4. Let the initialized project context decide backlog priorities, delegation rules, mutex behavior, verification, commits, reports, and blockers.
+3. Use the standard initialized-project execution path when one exists; do not invent ad hoc long-running loops or scheduled controller cron paths. If no autonomous-window implementation exists yet, say so and propose the smallest safe implementation or run a bounded manual session with explicit checkpoints.
+4. Let the initialized project context decide priorities, delegation rules, mutex behavior, verification, commits, reports, and blockers.
 5. Reply concisely: started or blocked, duration/end time, state/log/report locations, and what the admin should expect next.
 
 Keep `HEARTBEAT.md` short if using it for recurring checks.
