@@ -1,0 +1,19 @@
+{
+  "id": "marinator-delegation",
+  "name": "Marinator Delegation",
+  "description": "Delegate Marinator coding tasks through a bounded supervised opencode runner.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "marinator_delegate"
+    ]
+  }
+}
