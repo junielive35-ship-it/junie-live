@@ -161,6 +161,41 @@ wake_marinator() {
   fi
 }
 
+# Terminal states never need a stale-running rescue from the exit trap.
+TERMINAL_STATES_RE='^(completed|failed|timeout|killed|stalled)$'
+
+current_state() {
+  python3 - "$status_path" 2>/dev/null <<'PYSTATE' || true
+import json, sys
+try:
+    with open(sys.argv[1], 'r', encoding='utf-8') as fh:
+        print(json.load(fh).get('state', ''))
+except Exception:
+    pass
+PYSTATE
+}
+
+# Guarantee status.json is never left as a non-terminal state after the runner
+# exits for any reason we can trap (normal exit, error, or a catchable signal).
+# Without this, a runner/waiter that dies unexpectedly leaves status "running"
+# forever and Marinator is never woken.
+on_runner_exit() {
+  local rc=$?
+  trap - EXIT INT TERM HUP
+  local state
+  state=$(current_state)
+  if [[ ! "$state" =~ $TERMINAL_STATES_RE ]]; then
+    # Best-effort: avoid orphaning the opencode process group.
+    if [[ -n "${opencode_pgid:-}" ]]; then
+      kill -TERM -- "-$opencode_pgid" 2>/dev/null || true
+    fi
+    write_status "failed" reason runner_exited_unexpectedly exit_code "$rc" || true
+    append_event "failed" reason runner_exited_unexpectedly exit_code "$rc" || true
+    wake_marinator "failed" "runner exited unexpectedly (rc=$rc) without a terminal status; treating worker as failed" || true
+  fi
+  exit "$rc"
+}
+
 summarize_delta() {
   local offset_file="$run_dir/.summary.offset"
   local current_size previous_size delta_file summary_prompt summary_json summary
@@ -253,13 +288,25 @@ build_opencode_args
 write_status "running" started_at "$(now_iso)"
 append_event "started" repo "$repo" prompt_file "$prompt_file"
 
+# From here on, a non-terminal status must never survive runner exit.
+opencode_pgid=""
+trap on_runner_exit EXIT INT TERM HUP
+
 (
+  # Record opencode.exit even if opencode exits non-zero, the wait is
+  # interrupted, or this subshell dies for another reason. errexit (inherited
+  # from the parent) would otherwise abort the subshell on a non-zero wait
+  # before the exit code is written, leaving the supervisor with stale state.
+  trap 'rc=$?; [[ -f "$exit_path" ]] || echo "$rc" > "$exit_path"' EXIT
   cd "$repo"
   setsid "$OPENCODE_BIN" "${OPENCODE_ARGS[@]}" >"$stdout_log" 2>"$stderr_log" &
   opencode_pid=$!
   echo "$opencode_pid" > "$pid_path"
+  set +e
   wait "$opencode_pid"
-  echo $? > "$exit_path"
+  opencode_status=$?
+  set -e
+  echo "$opencode_status" > "$exit_path"
 ) &
 waiter_pid=$!
 echo "$waiter_pid" > "$waiter_pid_path"
@@ -338,8 +385,21 @@ else
   if [[ -f "$exit_path" ]]; then
     exit_code=$(cat "$exit_path")
   else
+    # The waiter disappeared without recording opencode.exit (e.g. it was
+    # SIGKILLed). Do not pretend the worker succeeded: fall back to the waiter
+    # status and force a non-zero failure code if it looked clean.
     exit_code=$waiter_status
+    if [[ "$exit_code" -eq 0 ]]; then
+      exit_code=70
+    fi
+    append_event "waiter_exited_without_opencode_exit" waiter_status "$waiter_status" exit_code "$exit_code"
   fi
+fi
+# Guard against a corrupt/empty opencode.exit so the numeric comparison below
+# (and the exit trap) cannot misfire under errexit.
+if ! [[ "$exit_code" =~ ^-?[0-9]+$ ]]; then
+  append_event "opencode_exit_unreadable" raw_exit "$exit_code"
+  exit_code=70
 fi
 summarize_delta || true
 
