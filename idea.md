@@ -39,6 +39,8 @@ Junie Live's central task-solving loop is the **Marinator**: the product-owned l
 
 All coding tasks in the OpenClaw implementation are delegated to opencode subagents powered by Claude Opus 4.6 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance through the Marinator loop. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown guidance/docs directly when no source code, scripts, tests, config, generated files, or external systems are changed. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
 
+The concrete OpenClaw delegation boundary is the bundled `marinator_delegate` tool. A hired instance links the `marinator-delegation` plugin from its workspace copy, and the tool starts a supervised opencode runner that records durable run state, progress events, terminal status, and wake events under the initialized workspace. This keeps implementation work observable without changing Marinator semantics: task/subtask boundaries are still chosen by acceptance, review risk, and user-visible outcome, not by progress-update cadence.
+
 Treat coding subagents roughly like junior engineers. The orchestrator must:
 
 1. Decompose work into appropriately sized coding tasks.

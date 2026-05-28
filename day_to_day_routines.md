@@ -53,6 +53,8 @@ Flow:
 
 Concrete mutex state lives in `.openclaw/state/code_mutex/holder.json` inside the initialized OpenClaw workspace, not in the repo root. The lock is acquired by atomically creating `.openclaw/state/code_mutex/`; the metadata JSON is only for human-readable state and does not provide atomicity. Repo scripts default runtime state to `${JUNIE_WORKSPACE:-$HOME/.openclaw/workspace-junie-live}/.openclaw/state/...`; tests may override with temp dirs, but production/default runs must never create repo-root `.openclaw/` or `state/`.
 
+The standard implementation boundary for code delegation is the `marinator_delegate` OpenClaw tool installed by `hire-junie.sh`. It creates a durable run under `.openclaw/state/marinator/runs/<job_id>/`, invokes the supervised workspace runner copied from `initialization/scripts/delegate-coding-task.sh`, streams concise progress summaries, and wakes the orchestrator when the worker reaches a terminal state. The runner must write `opencode.exit` and terminal `status.json` state for success, failure, timeout, stalled, or killed outcomes; a vanished worker must be reported as failed rather than left as `running`.
+
 If the mutex is already held, do not start code-changing work. Ask the caller or configured owner whether to wait, abort, or override, and include the current holder summary when available.
 
 ### 3. Pull request lifecycle
