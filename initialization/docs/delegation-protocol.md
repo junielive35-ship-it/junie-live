@@ -23,6 +23,24 @@ Use this file to guide opencode worker delegation for the assigned project. Nati
 - Delegation briefs for new triggers or paths must call out cross-cutting invariants and bypass risks that the worker must preserve.
 - When a worker or delegation boundary exits without completing the requested outcome — whether due to timeout, error, resource limit, blocker, or session end — the handoff must report the work as partial or blocked with explicit remaining steps. Never silently abandon half-finished work or leave it unreported.
 
+## Bundled Marinator delegation runtime
+
+A hired Junie Live workspace includes the standard Marinator delegation runtime:
+
+- `marinator-delegation/` — OpenClaw plugin exposing the `marinator_delegate` tool.
+- `scripts/delegate-coding-task.sh` — supervised opencode runner used by the plugin.
+- `.openclaw/state/marinator/runs/<job_id>/` — per-run state, logs, events, and result artifacts.
+
+`hire-junie.sh` is responsible for copying these assets from the seed, linking the plugin from the workspace copy, and patching runtime config so `marinator_delegate` is usable with `tools.profile: "coding"`:
+
+- `tools.alsoAllow` includes `marinator-delegation`;
+- `agents.defaults.models["openrouter/openai/gpt-4.1-mini"] = {}` is present for progress-summary inference;
+- the plugin install/link uses the explicit unsafe-install bypass because the runner starts an external child process.
+
+The plugin creates a resolved `spec.json` from the current OpenClaw delivery context, starts the runner detached, and returns the run directory. The runner is responsible for bounded execution, progress summaries, terminal status, and waking the orchestrator on completion or failure. Progress summaries are observability only; they must not change Marinator task/subtask granularity, which remains based on review and acceptance boundaries.
+
+A Marinator run must not remain in `running` after the worker process exits. The runner records `opencode.exit`, writes terminal `status.json` state, appends `events.jsonl`, and wakes Marinator for `completed`, `failed`, `timeout`, `killed`, or `stalled` outcomes. If the runner exits unexpectedly before a terminal state, it must fail closed and report `runner_exited_unexpectedly` rather than silently abandoning the task.
+
 ## Delegation brief template
 
 ```markdown

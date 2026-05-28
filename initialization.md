@@ -11,6 +11,14 @@ Alongside the guidance seed, `initialization/` also bundles the project-agnostic
 
 `hire-junie.sh` copies these into the workspace, links the plugin from the workspace copy, and patches OpenClaw config (tools allowlist and runtime models) so a hired instance can delegate coding work without manual setup. The plugin resolves the runner relative to its own location (the runner sits next to the plugin under the workspace, in a sibling `scripts/` directory), so the instance is self-contained and does not depend on this source repo's path. These assets are project-agnostic: they work the same for any target project.
 
+After hire, the expected runtime layout is:
+
+- workspace `marinator-delegation/` — linked OpenClaw plugin directory;
+- workspace runner copied from `initialization/scripts/delegate-coding-task.sh` — supervised opencode runner used by `marinator_delegate`;
+- workspace Marinator run state directory — per-run durable state with `spec.json`, `status.json`, `events.jsonl`, logs, `opencode.exit`, and a result artifact when available.
+
+The hire flow must also make the `marinator-delegation` plugin visible under coding tool profiles via `tools.alsoAllow`, register `openrouter/openai/gpt-4.1-mini` for progress summaries, and install/link the plugin with the explicit unsafe-install bypass because the runner starts a child process. The runner reports concise progress as observability, but task granularity still follows the Marinator acceptance loop. Every run should reach an explicit terminal status (`completed`, `failed`, `timeout`, `killed`, or `stalled`) and wake the orchestrator so half-finished work is not silently abandoned.
+
 Code-changing work initialized from this seed uses the mutex protocol described in [`code_mutex.md`](code_mutex.md).
 
 ## MVP setup flow
