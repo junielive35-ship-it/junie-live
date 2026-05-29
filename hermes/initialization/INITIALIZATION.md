@@ -44,7 +44,10 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - Check your installed skills with `skills_list`.
    - Read your profile docs at `~/.hermes/profiles/junie-live/docs/`.
    - Note: memory is empty on first run. You will populate it during initialization.
-2. Ask the owner for the target project repository path and area of responsibility.
+2. Ask the owner the two initialization questions. Ask them clearly, and tell the owner they can reply with an audio message if that is easier.
+   1. Which project am I working on? (target repository path or project identity)
+   2. What is my area of responsibility?
+   - In the same message, remind the owner that they can answer with an audio message.
 3. Inspect the target project:
    - repository layout;
    - existing README/docs;

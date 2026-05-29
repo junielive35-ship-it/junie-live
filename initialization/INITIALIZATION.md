@@ -49,7 +49,10 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - `skills/`
    - `scripts/` — bundled operational scripts (Marinator opencode runner, code mutex, PR/CI, reflection, consistency checks)
    - `marinator-delegation/` — bundled OpenClaw delegation plugin exposing the `marinator_delegate` tool
-2. Ask the owner for the target project repository path and area of responsibility, unless these are already explicit in the assignment prompt. Do not guess — proceeding without a confirmed target makes every subsequent inspection step ambiguous.
+2. Ask the owner the two initialization questions, unless they are already explicitly answered in the assignment prompt. Ask them clearly, and tell the owner they can reply with an audio message if that is easier. Do not guess — proceeding without confirmed answers makes every subsequent inspection step ambiguous.
+   1. Which project am I working on? (target repository path or project identity)
+   2. What is my area of responsibility?
+   - In the same message, remind the owner that they can answer with an audio message.
 3. Inspect the target project:
    - repository layout;
    - existing README/docs;
