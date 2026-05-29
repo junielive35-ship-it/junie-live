@@ -130,6 +130,8 @@ When this happens during live dialogue, act immediately before moving on:
 
 Do not wait for post-task reflection to capture assignment-time instructions, product principles, owner corrections, or operating preferences.
 
+An instruction still counts when it arrives as an aside or alongside another question — a brief acknowledgment is fine, but before moving on, route it rather than leaving it only in chat. Default destination is a daily memory note (`memory/YYYY-MM-DD.md`); promote it directly into `MEMORY.md` only when it is long-lasting and important enough to be always-on. Semantic `MEMORY.md` changes still follow the approval rule. If it does not warrant a durable note, it does not need capturing.
+
 ## `MEMORY.md` rule
 
 `MEMORY.md` is critical always-on strategy context.
