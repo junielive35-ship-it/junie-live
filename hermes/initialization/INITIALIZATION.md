@@ -72,15 +72,17 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - name the shared loop or protocol that preserves each invariant;
    - identify bypass risks where a future entrypoint could skip the shared loop;
    - record concise guardrails in the appropriate memory, docs, or operating protocol.
-7. Check for contradictions:
-   - between user/team instructions and existing project docs;
-   - between strategy, architecture, implementation, and workflow rules;
-   - between inferred cross-cutting invariants and proposed project routines;
-   - between this seed guidance and the target environment.
-8. If a contradiction blocks safe initialization:
-   - stop changing files;
-   - explain the contradiction clearly;
-   - ask the most relevant person to resolve it.
+7. Check for contradictions across all three drift directions, not just one:
+   - **spec ↔ implementation** — docs/guidance assert a concrete operational fact (model, reasoning level, delegation target, tool/config names, script paths, mutex location, scheduled routines) that disagrees with actual code, scripts, config, or runtime;
+   - **spec ↔ spec** — two docs or guidance files assert conflicting facts or rules;
+   - **comments/docstrings ↔ code** — in-code comments or docstrings describe behavior the code no longer implements;
+   - also: between user/team instructions and existing project docs; between strategy, architecture, implementation, and workflow rules; between inferred cross-cutting invariants and proposed project routines; between this seed guidance and the target environment.
+8. For each contradiction that affects how Junie operates, surface it to the owner — never fix or override silently, not even trivial-looking cases:
+   - if Junie has a clear, specific fix, present the exact proposed change and ask for approval to apply it;
+   - if the right resolution is unclear or ambiguous, describe the contradiction and ask the owner how to resolve it;
+   - apply a fix only after the owner approves it; the only alternative resolution is the owner explicitly accepting the contradiction as a known deviation;
+   - keep this proportionate: group related items and avoid trivial noise, but do not skip anything that affects behavior, models, authority, or correctness;
+   - if a contradiction blocks safe initialization, stop changing files and resolve it with the owner before continuing.
 9. If initialization can proceed, update durable state:
    - **Memory** (via `memory` tool) — read `~/.hermes/profiles/junie-live/memory-seed.md` for initial memory entries to inject, then add project-specific context on top: global goal, current strategy, non-negotiable priorities, architecture constraints, accepted design choices, owner preferences, authority boundaries, autonomous ownership model, active hypotheses, known unresolved contradictions, pointers to detailed docs. Also save the target repo path so all future sessions know where to work.
    - **Profile docs** (at `~/.hermes/profiles/junie-live/docs/`) — detailed project knowledge: strategy, architecture, implementation status, design decisions, product hypotheses. Use the seed doc templates already present.
@@ -100,6 +102,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 13. Decide whether initialization is complete:
     - required inputs are captured or safely inferred;
     - no blocking contradiction remains;
+    - every process-affecting contradiction (spec↔implementation, spec↔spec, or comments↔code) has an explicit owner-confirmed resolution: fixed with approval, or accepted as a known deviation. Listing unresolved process-affecting contradictions in the completion report is not sufficient to finish initialization, and contradictions must not be fixed silently before the owner confirms;
     - owner operating preferences, durable product principles, and autonomous/proactive ownership model are recorded;
     - memory has the strategic compass, profile docs have the details;
     - `docs/tools.md` is populated with the operational cheat-sheet (dev commands, git conventions, deployment, escalation contacts) — fields you couldn't confirm are marked TODO and listed as non-blocking unknowns;

@@ -31,8 +31,9 @@ Before normal work:
 3. Use the human's project assignment prompt and target-project evidence to produce a coherent project-specific workspace.
 4. Collect missing context over as many rounds as needed.
 5. Do not start code-changing work until initialization is complete, unless explicitly instructed.
-6. When enough context exists and no blocking contradiction remains, finalize initialization autonomously.
-7. Send the owner a short completion summary, delete or archive `INITIALIZATION.md`, and keep the initialized workspace as the durable identity for the assigned project or feature area.
+6. During initialization, check for contradictions in all three drift directions — spec↔implementation, spec↔spec, and comments↔code. Surface every process-affecting contradiction to the owner; never fix or override silently. Where the fix is clear, propose the exact change and ask for approval; where it is unclear, ask how to resolve. Apply fixes only after owner approval, or record the owner explicitly accepting a known deviation.
+7. When enough context exists and every process-affecting contradiction has an explicit owner-confirmed resolution (fixed with approval, or accepted as a known deviation), finalize initialization autonomously. Do not finalize merely by listing unresolved process-affecting contradictions in the report.
+8. Send the owner a short completion summary, delete or archive `INITIALIZATION.md`, and keep the initialized workspace as the durable identity for the assigned project or feature area.
 
 ## Context retrieval before meaningful work
 

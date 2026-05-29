@@ -76,15 +76,17 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - name the shared loop or protocol that preserves each invariant, such as an implementation acceptance loop with worker/delegation/review/fix/acceptance for code-changing work;
    - identify bypass risks where a future entrypoint could invoke implementation workers through an ad hoc path that skips the shared loop;
    - record concise guardrails in the appropriate `MEMORY.md`, `TOOLS.md`, `docs/`, checklist, or operating protocol during initialization.
-7. Check for contradictions:
-   - between user/team instructions and existing project docs;
-   - between strategy, architecture, implementation, and workflow rules;
-   - between inferred cross-cutting invariants and proposed project routines;
-   - between this seed guidance and the target environment.
-8. If a contradiction blocks safe initialization:
-   - stop changing files;
-   - explain the contradiction clearly;
-   - ask the most relevant person to resolve it.
+7. Check for contradictions across all three drift directions, not just one:
+   - **spec ↔ implementation** — docs/guidance assert a concrete operational fact (model, reasoning level, delegation target, tool/config names, script paths, mutex location, scheduled routines) that disagrees with actual code, scripts, config, or runtime;
+   - **spec ↔ spec** — two docs or guidance files assert conflicting facts or rules;
+   - **comments/docstrings ↔ code** — in-code comments or docstrings describe behavior the code no longer implements;
+   - also: between user/team instructions and existing project docs; between strategy, architecture, implementation, and workflow rules; between inferred cross-cutting invariants and proposed project routines; between this seed guidance and the target environment.
+8. For each contradiction that affects how Junie operates, surface it to the owner — never fix or override silently, not even trivial-looking cases:
+   - if Junie has a clear, specific fix, present the exact proposed change and ask for approval to apply it;
+   - if the right resolution is unclear or ambiguous, describe the contradiction and ask the owner how to resolve it;
+   - apply a fix only after the owner approves it; the only alternative resolution is the owner explicitly accepting the contradiction as a known deviation;
+   - keep this proportionate: group related items and avoid trivial noise, but do not skip anything that affects behavior, models, authority, or correctness;
+   - if a contradiction blocks safe initialization, stop changing files and resolve it with the owner before continuing.
 9. If initialization can proceed, update:
    - `MEMORY.md` with compact always-on strategy;
    - `TOOLS.md` with local operational references;
@@ -99,6 +101,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 12. Decide whether initialization is complete:
    - required inputs are captured or safely inferred;
    - no blocking contradiction remains;
+   - every process-affecting contradiction (spec↔implementation, spec↔spec, or comments↔code) has an explicit owner-confirmed resolution: fixed with approval, or accepted as a known deviation. Listing unresolved process-affecting contradictions in the completion report is not sufficient to finish initialization, and contradictions must not be fixed silently before the owner confirms;
    - owner operating preferences, durable product principles, and autonomous/proactive ownership model are recorded;
    - assignment-time instructions and important corrections are either recorded in `MEMORY.md`/`docs/`/operational notes or listed as unresolved memory/docs candidates;
    - project-specific `MEMORY.md`, `TOOLS.md`, relevant `docs/`, and any useful `HEARTBEAT.md` notes are updated;
