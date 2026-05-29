@@ -140,6 +140,13 @@ rm -rf "$WORKSPACE" "$AGENT_STATE_DIR" "$INGRESS_SPOOL_DIR"
 mkdir -p "$WORKSPACE"
 cp -a "$SEED_DIR/." "$WORKSPACE/"
 
+# Pre-create the runtime state root so the first code task can acquire the
+# code-mutex via the single-level atomic `mkdir "$WORKSPACE/.openclaw/state/code_mutex"`.
+# That acquire intentionally omits -p, so its parent must already exist on a
+# cold workspace; we do NOT create code_mutex itself (that is the atomic lock).
+mkdir -p "$WORKSPACE/.openclaw/state"
+log "Pre-created runtime state root: $WORKSPACE/.openclaw/state"
+
 # Purge stale Telegram message-store records for this account so the freshly
 # hired Junie does not get prior history injected as "Conversation context".
 # Back up the whole store first, then drop only "$TELEGRAM_ACCOUNT:*" lines
