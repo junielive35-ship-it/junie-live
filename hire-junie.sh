@@ -149,7 +149,8 @@ openclaw channels add \
 patch_file=""
 marinator_patch=""
 load_paths_patch=""
-cleanup() { rm -f "${patch_file:-}" "${marinator_patch:-}" "${load_paths_patch:-}"; }
+heartbeat_patch=""
+cleanup() { rm -f "${patch_file:-}" "${marinator_patch:-}" "${load_paths_patch:-}" "${heartbeat_patch:-}"; }
 trap cleanup EXIT
 
 patch_file="$(mktemp)"
@@ -261,7 +262,62 @@ JSON
   fi
 fi
 
-# 3) Install the bundled plugin (copy, not link) from the initialized workspace
+# 3) Register a heartbeat wake-runner for THIS agent so targeted Marinator
+#    completion wakes reach the junie-live orchestrator session.
+#    OpenClaw only registers an agent's heartbeat wake-runner when that agent
+#    has a non-zero heartbeat interval. The supervised runner notifies the
+#    orchestrator on completion via `openclaw system event --session-key
+#    <orchestrator_session_key> --mode now`; that targeted wake fires
+#    immediately (intent "immediate", bypassing the not-due gate) but is only
+#    dispatched if the agent owns a wake-runner. Without this, the wake falls
+#    back to the default `main` agent and the orchestrator never gets the turn.
+#    The periodic heartbeat itself must stay low-noise and low-cost: a long
+#    interval with target "none" (no chat delivery), isolatedSession (fresh
+#    cheap session, no telegram pollution), lightContext, and no system-prompt
+#    section. agents.list is an array and `config patch` replaces arrays
+#    wholesale, so read the current list, merge the heartbeat object into the
+#    entry whose id == "$AGENT_ID" (preserving every other entry/field), and
+#    write it back. Idempotent: an existing heartbeat is overwritten in place.
+agents_list_current="$(openclaw config get agents.list --json 2>/dev/null || printf '[]')"
+agents_list_merged="$(AGENT_ID="$AGENT_ID" python3 - "$agents_list_current" <<'PY'
+import json, os, sys
+try:
+    current = json.loads(sys.argv[1]) if sys.argv[1].strip() else []
+    if not isinstance(current, list):
+        current = []
+except Exception:
+    current = []
+agent_id = os.environ["AGENT_ID"]
+heartbeat = {
+    "every": "6h",
+    "target": "none",
+    "isolatedSession": True,
+    "lightContext": True,
+    "includeSystemPromptSection": False,
+}
+for entry in current:
+    if isinstance(entry, dict) and entry.get("id") == agent_id:
+        entry["heartbeat"] = heartbeat
+        break
+print(json.dumps(current))
+PY
+)"
+heartbeat_patch="$(mktemp)"
+cat >"$heartbeat_patch" <<JSON
+{
+  agents: {
+    list: $agents_list_merged
+  }
+}
+JSON
+if openclaw config patch --replace-path agents.list --file "$heartbeat_patch"; then
+  log "Registered heartbeat wake-runner for agent $AGENT_ID (every 6h, target none, isolated)"
+else
+  err "failed to register heartbeat wake-runner for agent $AGENT_ID"
+  exit 1
+fi
+
+# 4) Install the bundled plugin (copy, not link) from the initialized workspace
 #    so the instance is self-contained and does not depend on this source repo's
 #    path. The plugin now bundles its runner under marinator-delegation/scripts/,
 #    so a copy install carries everything it needs. `--force` overwrites any prior
@@ -275,7 +331,7 @@ else
   exit 1
 fi
 
-# 4) Best-effort verification: report plugin load status and tool contract.
+# 5) Best-effort verification: report plugin load status and tool contract.
 if plugin_status="$(openclaw plugins inspect marinator-delegation --json 2>/dev/null)"; then
   printf '%s\n' "$plugin_status" | python3 - <<'PY' || true
 import json, sys
