@@ -155,7 +155,14 @@ send_telegram() {
 wake_marinator() {
   local event=$1
   local message=$2
-  local text="Marinator worker event: $event\njob_id: $job_id\nrun_dir: $run_dir\n$message"
+  local text="Marinator worker event: $event
+job_id: $job_id
+status: $event
+result_path: ${result_path:-$run_dir/result.md}
+run_dir: $run_dir
+$message
+
+Orchestrator: review result_path and the repo diff, then either re-delegate a fix or report the outcome to the user."
   if ! openclaw system event --session-key "$orchestrator_session_key" --mode now --text "$text" >>"$runner_log" 2>&1; then
     append_event "marinator_wake_failed" event "$event" message "$message"
   fi
