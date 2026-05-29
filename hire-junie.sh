@@ -272,9 +272,12 @@ fi
 #    dispatched if the agent owns a wake-runner. Without this, the wake falls
 #    back to the default `main` agent and the orchestrator never gets the turn.
 #    The periodic heartbeat itself must stay low-noise and low-cost: a long
-#    interval with target "none" (no chat delivery), isolatedSession (fresh
-#    cheap session, no telegram pollution), lightContext, and no system-prompt
-#    section. agents.list is an array and `config patch` replaces arrays
+#    interval with target "none" (no chat delivery) and no system-prompt
+#    section. It deliberately runs in the agent's SHARED real session (no
+#    isolatedSession): a targeted wake must land in the real session so its
+#    enqueued system event is inspected and injected as a turn. Cost stays low
+#    via target "none" + the long interval, not via session isolation.
+#    agents.list is an array and `config patch` replaces arrays
 #    wholesale, so read the current list, merge the heartbeat object into the
 #    entry whose id == "$AGENT_ID" (preserving every other entry/field), and
 #    write it back. Idempotent: an existing heartbeat is overwritten in place.
@@ -288,11 +291,21 @@ try:
 except Exception:
     current = []
 agent_id = os.environ["AGENT_ID"]
+# IMPORTANT: do NOT set isolatedSession here. For a targeted wake
+# (`system event --session-key <agent main session> --mode now`), the
+# heartbeat preflight only inspects and injects the session's pending
+# system events when the run targets the agent's REAL session. With
+# isolatedSession=true the runner resolves an isolated session key that
+# does NOT match the forced real-session key, so shouldInspectPendingEvents
+# becomes false and the enqueued wake text is never injected as a turn --
+# it stays parked until an unrelated inbound message drains it. That is
+# exactly the Marinator supervisor-wake bug. Keep the shared real session
+# (no isolatedSession, no lightContext) so wake events drain on idle.
+# Cost stays low because the periodic tick uses target "none" and a long
+# interval; it does not deliver to chat.
 heartbeat = {
     "every": "6h",
     "target": "none",
-    "isolatedSession": True,
-    "lightContext": True,
     "includeSystemPromptSection": False,
 }
 for entry in current:
