@@ -8,8 +8,11 @@ const SUMMARY_MODEL = "openrouter/openai/gpt-4.1-mini";
 const UPDATE_INTERVAL_SECONDS = 60;
 const NO_PROGRESS_SECONDS = 900;
 const TIMEOUT_SECONDS = 7200;
+// Resolve the bundled runner relative to this plugin package so the plugin stays
+// self-contained and works under any install shape (linked, copied, npm, ClawHub).
+// dist/index.js lives at <package>/dist/index.js, so "../scripts" is <package>/scripts.
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REPO_ROOT = path.resolve(PLUGIN_ROOT, "..");
+const RUNNER_PATH = path.join(PLUGIN_ROOT, "scripts", "delegate-coding-task.sh");
 const parameters = {
     type: "object",
     properties: {
@@ -102,7 +105,6 @@ export default defineToolPlugin({
                         const accountId = deliveryContext?.accountId ?? toolContext.agentAccountId;
                         const runDir = path.join(workspaceDir, ".openclaw", "state", "marinator", "runs", jobId);
                         const specPath = path.join(runDir, "spec.json");
-                        const runnerPath = path.join(REPO_ROOT, "scripts", "delegate-coding-task.sh");
                         const resolvedSpec = {
                             job_id: jobId,
                             repo,
@@ -136,7 +138,9 @@ export default defineToolPlugin({
                             job_id: jobId,
                             spec_path: specPath,
                         })}\n`, { encoding: "utf8", flag: "a" });
-                        const runner = runDetached(runnerPath, ["--job", specPath], repo);
+                        // Invoke through `bash` so we do not depend on the runner's executable
+                        // bit surviving copy/npm/ClawHub installs.
+                        const runner = runDetached("bash", [RUNNER_PATH, "--job", specPath], repo);
                         await writeFile(path.join(runDir, "events.jsonl"), `${JSON.stringify({
                             ts: new Date().toISOString(),
                             event: "runner_started",

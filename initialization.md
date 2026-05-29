@@ -6,15 +6,15 @@ These files are copied into an OpenClaw workspace before the first run of a new 
 
 Alongside the guidance seed, `initialization/` also bundles the project-agnostic runtime assets every working Junie Live instance needs:
 
-- `initialization/scripts/` — operational scripts such as the bounded Marinator opencode runner (`initialization/scripts/delegate-coding-task.sh`), code-mutex helpers, PR/CI helpers, reflection, and the MD/table consistency checkers.
-- `initialization/marinator-delegation/` — the OpenClaw plugin that exposes the `marinator_delegate` tool and drives the runner.
+- `initialization/scripts/` — operational scripts such as code-mutex helpers, PR/CI helpers, reflection, and the MD/table consistency checkers.
+- `initialization/marinator-delegation/` — the OpenClaw plugin that exposes the `marinator_delegate` tool and drives the bounded opencode runner it bundles at `initialization/marinator-delegation/scripts/delegate-coding-task.sh`.
 
-`hire-junie.sh` copies these into the workspace, links the plugin from the workspace copy, and patches OpenClaw config (tools allowlist and runtime models) so a hired instance can delegate coding work without manual setup. The plugin resolves the runner relative to its own location (the runner sits next to the plugin under the workspace, in a sibling `scripts/` directory), so the instance is self-contained and does not depend on this source repo's path. These assets are project-agnostic: they work the same for any target project.
+`hire-junie.sh` copies these into the workspace, installs (copies) the plugin from the workspace copy, and patches OpenClaw config (tools allowlist and runtime models) so a hired instance can delegate coding work without manual setup. The plugin bundles its runner under its own `scripts/` directory and resolves it relative to the plugin package, so the plugin is self-contained and works under any install shape (copy, npm, ClawHub) without depending on this source repo's path. These assets are project-agnostic: they work the same for any target project.
 
 After hire, the expected runtime layout is:
 
-- workspace `marinator-delegation/` — linked OpenClaw plugin directory;
-- workspace runner copied from `initialization/scripts/delegate-coding-task.sh` — supervised opencode runner used by `marinator_delegate`;
+- workspace `marinator-delegation/` — installed (copied) OpenClaw plugin directory;
+- runner bundled in the plugin, copied from `initialization/marinator-delegation/scripts/delegate-coding-task.sh` — supervised opencode runner used by `marinator_delegate`;
 - workspace Marinator run state directory — per-run durable state with `spec.json`, `status.json`, `events.jsonl`, logs, `opencode.exit`, and a result artifact when available.
 
 The hire flow must also make the `marinator-delegation` plugin visible under coding tool profiles via `tools.alsoAllow`, register `openrouter/openai/gpt-4.1-mini` for progress summaries, and install/link the plugin with the explicit unsafe-install bypass because the runner starts a child process. The runner reports concise progress as observability, but task granularity still follows the Marinator acceptance loop. Every run should reach an explicit terminal status (`completed`, `failed`, `timeout`, `killed`, or `stalled`) and wake the orchestrator so half-finished work is not silently abandoned.

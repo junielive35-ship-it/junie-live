@@ -28,7 +28,7 @@ Use this file to guide opencode worker delegation for the assigned project. Nati
 A hired Junie Live workspace includes the standard Marinator delegation runtime:
 
 - `marinator-delegation/` — OpenClaw plugin exposing the `marinator_delegate` tool.
-- `scripts/delegate-coding-task.sh` — supervised opencode runner used by the plugin.
+- `marinator-delegation/scripts/delegate-coding-task.sh` — supervised opencode runner bundled inside the plugin.
 - `.openclaw/state/marinator/runs/<job_id>/` — per-run state, logs, events, and result artifacts.
 
 `hire-junie.sh` is responsible for copying these assets from the seed, linking the plugin from the workspace copy, and patching runtime config so `marinator_delegate` is usable with `tools.profile: "coding"`:

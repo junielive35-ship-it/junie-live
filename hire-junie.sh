@@ -97,7 +97,7 @@ if [[ -e "$SEED_DIR/BOOTSTRAP.md" ]]; then
   err "seed dir must not contain BOOTSTRAP.md for Junie multi-round initialization: $SEED_DIR/BOOTSTRAP.md"
   exit 1
 fi
-[[ -f "$SEED_DIR/scripts/delegate-coding-task.sh" ]] || { err "seed dir missing Marinator runner: $SEED_DIR/scripts/delegate-coding-task.sh"; exit 1; }
+[[ -f "$SEED_DIR/marinator-delegation/scripts/delegate-coding-task.sh" ]] || { err "seed dir missing Marinator runner: $SEED_DIR/marinator-delegation/scripts/delegate-coding-task.sh"; exit 1; }
 [[ -f "$SEED_DIR/marinator-delegation/dist/index.js" ]] || { err "seed dir missing built Marinator delegation plugin: $SEED_DIR/marinator-delegation/dist/index.js"; exit 1; }
 command -v openclaw >/dev/null || { err "openclaw CLI not found in PATH"; exit 1; }
 command -v tar >/dev/null || { err "tar not found in PATH"; exit 1; }
@@ -130,7 +130,7 @@ if [[ -e "$WORKSPACE/BOOTSTRAP.md" ]]; then
   exit 1
 fi
 PLUGIN_DIR="$WORKSPACE/marinator-delegation"
-RUNNER="$WORKSPACE/scripts/delegate-coding-task.sh"
+RUNNER="$WORKSPACE/marinator-delegation/scripts/delegate-coding-task.sh"
 [[ -f "$PLUGIN_DIR/dist/index.js" ]] || { err "copied workspace missing Marinator plugin: $PLUGIN_DIR/dist/index.js"; exit 1; }
 [[ -f "$RUNNER" ]] || { err "copied workspace missing Marinator runner: $RUNNER"; exit 1; }
 
@@ -213,14 +213,17 @@ cat >"$marinator_patch" <<JSON
 JSON
 openclaw config patch --file "$marinator_patch"
 
-# 2) Install/link the bundled plugin from the initialized workspace so the
-#    instance is self-contained and does not depend on this source repo's path.
-#    The plugin spawns a child process (the opencode runner), so OpenClaw treats
-#    it as an unsafe install and requires the explicit force-unsafe bypass.
-if openclaw plugins install --link --force --dangerously-force-unsafe-install "$PLUGIN_DIR"; then
-  log "Marinator delegation plugin linked from $PLUGIN_DIR"
+# 2) Install the bundled plugin (copy, not link) from the initialized workspace
+#    so the instance is self-contained and does not depend on this source repo's
+#    path. The plugin now bundles its runner under marinator-delegation/scripts/,
+#    so a copy install carries everything it needs. `--force` overwrites any prior
+#    install for idempotent re-runs (it is invalid alongside `--link`). The plugin
+#    spawns a child process (the opencode runner), so OpenClaw treats it as an
+#    unsafe install and requires the explicit force-unsafe bypass.
+if openclaw plugins install --force --dangerously-force-unsafe-install "$PLUGIN_DIR"; then
+  log "Marinator delegation plugin installed from $PLUGIN_DIR"
 else
-  err "failed to install/link marinator-delegation plugin from $PLUGIN_DIR"
+  err "failed to install marinator-delegation plugin from $PLUGIN_DIR"
   exit 1
 fi
 
