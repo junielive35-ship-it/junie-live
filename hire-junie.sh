@@ -89,6 +89,14 @@ SEED_DIR="$(expand_path "$SEED_DIR")"
 BACKUP_DIR="$HOME/.openclaw/backups"
 AGENT_STATE_DIR="$HOME/.openclaw/agents/$AGENT_ID"
 INGRESS_SPOOL_DIR="$HOME/.openclaw/telegram/ingress-spool-$TELEGRAM_ACCOUNT"
+# Chat-scoped Telegram message store. OpenClaw keeps inbound Telegram messages
+# for a chat in one JSONL store (one record per line, key="<account>:<chatId>:<msgId>").
+# This store is shared across agents in the same chat; the "Conversation context"
+# block injected into a session is filtered by account prefix. Stale
+# "$TELEGRAM_ACCOUNT:*" records survive workspace/agent-state cleanup and leak
+# previous Junie history into a freshly hired instance, so they must be purged
+# selectively (without touching other accounts' records, e.g. the main agent's).
+TELEGRAM_MSG_STORE="$HOME/.openclaw/agents/main/sessions/sessions.json.telegram-messages.json"
 
 [[ -n "$TOKEN" ]] || { err "missing --telegram-token or JUNIE_TELEGRAM_BOT_TOKEN"; exit 2; }
 [[ -n "$ADMIN_TELEGRAM_ID" ]] || { err "missing required --admin-telegram-id"; exit 2; }
@@ -131,6 +139,46 @@ openclaw gateway stop || true
 rm -rf "$WORKSPACE" "$AGENT_STATE_DIR" "$INGRESS_SPOOL_DIR"
 mkdir -p "$WORKSPACE"
 cp -a "$SEED_DIR/." "$WORKSPACE/"
+
+# Purge stale Telegram message-store records for this account so the freshly
+# hired Junie does not get prior history injected as "Conversation context".
+# Back up the whole store first, then drop only "$TELEGRAM_ACCOUNT:*" lines
+# (other accounts, e.g. the main agent, are left untouched). Done while the
+# Gateway is stopped so the store is not concurrently rewritten.
+if [[ -f "$TELEGRAM_MSG_STORE" ]]; then
+  store_backup="$BACKUP_DIR/${AGENT_ID}-telegram-messages-before-hire-$ts.json"
+  cp "$TELEGRAM_MSG_STORE" "$store_backup"
+  log "Telegram message-store backup: $store_backup"
+  removed_count="$(TELEGRAM_ACCOUNT="$TELEGRAM_ACCOUNT" STORE="$TELEGRAM_MSG_STORE" python3 - <<'PY'
+import json, os
+store = os.environ["STORE"]
+prefix = os.environ["TELEGRAM_ACCOUNT"] + ":"
+kept = []
+removed = 0
+with open(store, "r", encoding="utf-8") as fh:
+    for line in fh:
+        if not line.strip():
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            kept.append(line if line.endswith("\n") else line + "\n")
+            continue
+        if str(obj.get("key", "")).startswith(prefix):
+            removed += 1
+            continue
+        kept.append(line if line.endswith("\n") else line + "\n")
+tmp = store + ".tmp"
+with open(tmp, "w", encoding="utf-8") as fh:
+    fh.write("".join(kept))
+os.replace(tmp, store)
+print(removed)
+PY
+)"
+  log "Purged $removed_count stale '$TELEGRAM_ACCOUNT:' Telegram message-store records."
+else
+  log "Telegram message store not found ($TELEGRAM_MSG_STORE); skipping message purge."
+fi
 
 [[ -f "$WORKSPACE/INITIALIZATION.md" ]] || { err "copied workspace missing INITIALIZATION.md: $WORKSPACE"; exit 1; }
 if [[ -e "$WORKSPACE/BOOTSTRAP.md" ]]; then
