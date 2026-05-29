@@ -170,7 +170,7 @@ Concrete implementation:
 - release only after the code-changing routine is done, blocked, cancelled, or explicitly handed off;
 - verify holder identity before releasing or overriding when possible.
 
-Before starting queued code work, check the mutex state and current repo status. Markdown-only documentation/guidance edits do not require opencode delegation by default, but still require normal strategic review, consistency checks, and approval rules for semantic changes.
+Before acquiring the mutex or delegating, confirm the change was explicitly requested. Exploratory phrasing ("what if we…", "should we…", "could we…") is a proposal to evaluate, not authorization; when in doubt, state the exact change and wait for an explicit go. Being small, obviously correct, or a continuation of recently-approved work grants no authority on its own. Then check mutex state and repo status. Markdown-only documentation/guidance edits do not require opencode delegation by default, but still require normal strategic review, consistency checks, and approval rules for semantic changes.
 
 If the mutex is already held, do not start code-changing work. For cron/scheduled jobs, ask the configured administrator or owner whether to wait, abort, or override. For Telegram intake, ask the caller the same question and include the current holder summary when available.
 
