@@ -88,6 +88,7 @@ WORKSPACE="$(expand_path "$WORKSPACE")"
 SEED_DIR="$(expand_path "$SEED_DIR")"
 BACKUP_DIR="$HOME/.openclaw/backups"
 AGENT_STATE_DIR="$HOME/.openclaw/agents/$AGENT_ID"
+INGRESS_SPOOL_DIR="$HOME/.openclaw/telegram/ingress-spool-$TELEGRAM_ACCOUNT"
 
 [[ -n "$TOKEN" ]] || { err "missing --telegram-token or JUNIE_TELEGRAM_BOT_TOKEN"; exit 2; }
 [[ -n "$ADMIN_TELEGRAM_ID" ]] || { err "missing required --admin-telegram-id"; exit 2; }
@@ -110,6 +111,7 @@ ts="$(date +%Y%m%d-%H%M%S)"
 items=()
 [[ -e "$WORKSPACE" ]] && items+=("${WORKSPACE#$HOME/.openclaw/}")
 [[ -e "$AGENT_STATE_DIR" ]] && items+=("agents/$AGENT_ID")
+[[ -e "$INGRESS_SPOOL_DIR" ]] && items+=("telegram/ingress-spool-$TELEGRAM_ACCOUNT")
 if [[ "${#items[@]}" -gt 0 ]]; then
   backup="$BACKUP_DIR/${AGENT_ID}-before-hire-$ts.tgz"
   tar -czf "$backup" -C "$HOME/.openclaw" "${items[@]}"
@@ -120,7 +122,13 @@ if [[ "$existing" -eq 1 ]]; then
   openclaw agents delete "$AGENT_ID" --force || true
 fi
 
-rm -rf "$WORKSPACE" "$AGENT_STATE_DIR"
+# Stop the Gateway before deleting state so it cannot recreate sessions or
+# replay the telegram ingress spool mid-cleanup. The Gateway is started again
+# by the restart step at the end of this script (unless --no-restart).
+log "Stopping Gateway before cleanup..."
+openclaw gateway stop || true
+
+rm -rf "$WORKSPACE" "$AGENT_STATE_DIR" "$INGRESS_SPOOL_DIR"
 mkdir -p "$WORKSPACE"
 cp -a "$SEED_DIR/." "$WORKSPACE/"
 
@@ -398,6 +406,14 @@ if [[ "$RESTART" -eq 1 ]]; then
     exit 1
   }
   openclaw channels status --probe || true
+else
+  # We stopped the Gateway before cleanup; bring it back even with --no-restart
+  # so the host is not left with a stopped Gateway. Use start (not restart).
+  log "Starting Gateway (was stopped for cleanup; --no-restart skips the probe/restart step)..."
+  openclaw gateway start || {
+    err "gateway start failed; run openclaw status for details"
+    exit 1
+  }
 fi
 
 log ""
