@@ -24,7 +24,7 @@ Options:
   --agent-id ID               OpenClaw agent id. Default: junie-live
   --workspace DIR             Agent workspace dir. Default: ~/.openclaw/workspace-junie-live
   --seed-dir DIR              Junie seed dir. Default: <script dir>/initialization
-  --model MODEL               OpenClaw model id. Default: openrouter/openai/gpt-5.5
+  --model MODEL               OpenClaw model id. Default: openrouter/anthropic/claude-opus-4.8
   --no-restart                Configure everything but do not restart Gateway.
   --help                      Show this help.
 
@@ -57,7 +57,7 @@ ADMIN_TELEGRAM_ID=""
 AGENT_ID="junie-live"
 WORKSPACE="$HOME/.openclaw/workspace-junie-live"
 SEED_DIR="$SCRIPT_DIR/initialization"
-MODEL="openrouter/openai/gpt-5.5"
+MODEL="openrouter/anthropic/claude-opus-4.8"
 RESTART=1
 
 while [[ $# -gt 0 ]]; do
