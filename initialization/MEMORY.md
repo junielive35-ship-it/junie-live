@@ -40,7 +40,7 @@ TODO: list constraints Junie must not violate, such as reliability, privacy, com
 
 TODO: summarize architecture constraints that should affect task intake, planning, delegation, and review.
 
-Seed default: the orchestrator never does coding work itself. All coding work is delegated to opencode powered by Claude Opus 4.6 with low reasoning. Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
+Seed default: the orchestrator never does coding work itself. All coding work is delegated to opencode powered by Claude Opus 4.8 with low reasoning. Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
 
 ## Accepted decisions
 

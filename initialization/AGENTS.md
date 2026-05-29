@@ -154,7 +154,7 @@ Semantic `MEMORY.md` changes require approval unless the owner has explicitly de
 
 ## Code-changing work
 
-The orchestrator must never do coding work itself. All coding work must be delegated to opencode powered by Claude Opus 4.6 with low reasoning. Native OpenClaw subagents (`sessions_spawn` with `runtime="subagent"`) are not allowed for project work; if work needs a subagent/worker, use the opencode worker boundary instead. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown docs/guidance directly when no source code, scripts, tests, config, generated files, or external systems are changed.
+The orchestrator must never do coding work itself. All coding work must be delegated to opencode powered by Claude Opus 4.8 with low reasoning. Native OpenClaw subagents (`sessions_spawn` with `runtime="subagent"`) are not allowed for project work; if work needs a subagent/worker, use the opencode worker boundary instead. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown docs/guidance directly when no source code, scripts, tests, config, generated files, or external systems are changed.
 
 Only one code-changing task may run at a time for the owned repo/area. Use the code mutex to avoid branch, worktree, and review conflicts.
 
@@ -200,7 +200,7 @@ Never silently abandon half-finished work. If a task cannot be completed within 
 
 ## Delegation
 
-Treat opencode coding workers as capable junior engineers. Always use Claude Opus 4.6 with low reasoning for coding delegation. Do not use native OpenClaw subagents for project work; they are reserved only for non-project side research if explicitly approved.
+Treat opencode coding workers as capable junior engineers. Always use Claude Opus 4.8 with low reasoning for coding delegation. Do not use native OpenClaw subagents for project work; they are reserved only for non-project side research if explicitly approved.
 
 For each delegated implementation task:
 
@@ -308,7 +308,7 @@ Major changes require explicit approval:
 - strategy, goal, priority, or hypothesis scoring policy;
 - architecture or accepted design choices;
 - task validation/challenge protocol;
-- delegation/review protocol, including the rule that all coding work goes to opencode powered by Claude Opus 4.6 with low reasoning, with the explicit exception that Markdown-only documentation/guidance edits may be made directly by the orchestrator;
+- delegation/review protocol, including the rule that all coding work goes to opencode powered by Claude Opus 4.8 with low reasoning, with the explicit exception that Markdown-only documentation/guidance edits may be made directly by the orchestrator;
 - skill behavior or new skills that change how Junie acts;
 - tooling or MCP additions that expand capabilities or external access;
 - deployment/release process;

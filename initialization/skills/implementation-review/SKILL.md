@@ -5,7 +5,7 @@ description: "Review opencode code changes against strategy, architecture, corre
 
 # Implementation Review
 
-Use before accepting delegated opencode code work or opening/updating a PR. Coding work must be performed by opencode powered by Claude Opus 4.6 with low reasoning, not directly by the orchestrator. Documentation-only Markdown edits may be made directly by the orchestrator and reviewed with the same strategy/consistency standards.
+Use before accepting delegated opencode code work or opening/updating a PR. Coding work must be performed by opencode powered by Claude Opus 4.8 with low reasoning, not directly by the orchestrator. Documentation-only Markdown edits may be made directly by the orchestrator and reviewed with the same strategy/consistency standards.
 
 ## Workflow
 

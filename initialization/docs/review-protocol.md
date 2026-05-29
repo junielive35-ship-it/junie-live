@@ -27,6 +27,7 @@ Use this file to guide implementation review before accepting worker output or o
 - Could this new path invoke implementation workers through an ad hoc route that bypasses review, fix requests, acceptance, or user-outcome evidence? If so, reject it until the guardrail is restored.
 - Are cross-cutting invariants and bypass risks documented where future maintainers will see them?
 - If the task exited early or was not fully completed, is the final status explicitly marked as partial or blocked with remaining steps listed? Never accept a silent abandonment of half-finished work.
+- If repeated fix requests are not landing, did the orchestrator stop reformulating the same task and instead diagnose the cause, decompose into smaller scoped tasks, or escalate per the Fix-loop escalation ladder in `delegation-protocol.md`, rather than re-sending a richer version of the same failing task?
 
 ## Outcome acceptance gate
 

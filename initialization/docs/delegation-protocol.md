@@ -6,7 +6,7 @@ Use this file to guide opencode worker delegation for the assigned project. Nati
 
 - The orchestrator owns strategy, context, planning, delegation, final review, and acceptance.
 - The orchestrator must never do coding work itself.
-- All coding work is delegated to opencode powered by Claude Opus 4.6 with low reasoning.
+- All coding work is delegated to opencode powered by Claude Opus 4.8 with low reasoning.
 - Native OpenClaw subagents (`sessions_spawn` with `runtime="subagent"`) are forbidden for project work and must not be used as implementation workers.
 - If work needs a subagent/worker, use the opencode worker boundary; if the change is documentation-only Markdown, the orchestrator may edit it directly under the Markdown exception.
 - Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
@@ -58,6 +58,21 @@ The wake is delivered as a **heartbeat-class turn** in the orchestrator's real s
 - **Session is not the delivery channel.** Whether the orchestrator's reply reaches the user is governed solely by `heartbeat.target`. With `target: "none"` the turn runs but the reply is never delivered (this was the original supervisor-wake bug). Use `target: "last"` so the orchestrator's report reaches the chat that started the delegation, and suppress routine `HEARTBEAT_OK` ticks via channel heartbeat visibility (`showOk: false`) so periodic heartbeats stay silent.
 
 `hire-junie.sh` bakes this in: it registers the heartbeat with all fields set explicitly (no reliance on OpenClaw API defaults) — `every: 6h`, `target: last`, `includeSystemPromptSection: false`, `isolatedSession: false`, `lightContext: false`, `directPolicy: allow`, `skipWhenBusy: false` — and sets the Telegram account heartbeat visibility to `showOk: false, showAlerts: true, useIndicator: false`.
+
+## Fix-loop escalation
+
+The delegate → review → request-fixes flow is orchestrator-driven judgment, not a fixed-count loop. There is no enforced numeric retry budget; the orchestrator decides when to retry, restructure, or stop.
+
+The one heuristic worth making explicit, because it is easy to skip: do not just keep re-sending a richer version of the same task. If a fix request fails to land, switch strategy instead of reformulating harder.
+
+Ladder when a delegated task is not done properly:
+
+1. Request a fix with sharper detail, constraints, and the concrete failure evidence (roughly 1–2 focused attempts).
+2. If it still fails the same way, stop reformulating and diagnose *why*: ambiguous/under-specified outcome, too-large or mis-scoped task, missing context the worker needed, or a wrong overall approach.
+3. If scope or complexity is the cause, decompose the work into smaller, independently verifiable scoped tasks and delegate those.
+4. If the cause is an unclear spec, infeasibility, or a missing decision, do not keep delegating — block the task and surface it to the owner with a truthful partial/blocked report and the specific question.
+
+The goal is to recognize when to move from “retry harder” to “restructure or escalate,” rather than burning repeated worker runs on the same failing shape. Keep this judgment-based; do not turn it into a hard attempt counter unless the owner asks for one.
 
 ## Delegation brief template
 
