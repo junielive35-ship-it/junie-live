@@ -148,7 +148,8 @@ openclaw channels add \
 # so cleanup is safe under `set -u` regardless of where the script exits.
 patch_file=""
 marinator_patch=""
-cleanup() { rm -f "${patch_file:-}" "${marinator_patch:-}"; }
+load_paths_patch=""
+cleanup() { rm -f "${patch_file:-}" "${marinator_patch:-}" "${load_paths_patch:-}"; }
 trap cleanup EXIT
 
 patch_file="$(mktemp)"
@@ -213,7 +214,54 @@ cat >"$marinator_patch" <<JSON
 JSON
 openclaw config patch --file "$marinator_patch"
 
-# 2) Install the bundled plugin (copy, not link) from the initialized workspace
+# 2) Drop any plugins.load.paths entries that point at a marinator-delegation
+#    source directory BEFORE installing the bundled copy. Such an entry is
+#    "config-selected" and wins over a copy install, so OpenClaw would load the
+#    path-resolved plugin (this source repo's checkout) instead of the
+#    self-contained install and emit a "duplicate plugin id ... global plugin
+#    will be overridden by config plugin" warning. It must be removed first so
+#    the subsequent install records the plugin with a `global` origin from the
+#    start; removing it only after install leaves a stale config-origin entry in
+#    the plugin discovery cache that keeps shadowing the install until the next
+#    install/refresh. plugins.load.paths is an array and `config patch` replaces
+#    arrays wholesale, so read the current list, filter out marinator-delegation
+#    source paths, and write it back.
+load_paths_current="$(openclaw config get plugins.load.paths --json 2>/dev/null || printf '[]')"
+load_paths_filtered="$(python3 - "$load_paths_current" <<'PY'
+import json, os, sys
+try:
+    current = json.loads(sys.argv[1]) if sys.argv[1].strip() else []
+    if not isinstance(current, list):
+        current = []
+except Exception:
+    current = []
+def is_marinator(p):
+    return isinstance(p, str) and os.path.basename(os.path.normpath(p)) == "marinator-delegation"
+filtered = [p for p in current if not is_marinator(p)]
+print(json.dumps({"filtered": filtered, "removed": len(filtered) != len(current)}))
+PY
+)"
+if printf '%s' "$load_paths_filtered" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin)["removed"] else 1)'; then
+  load_paths_array="$(printf '%s' "$load_paths_filtered" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["filtered"]))')"
+  load_paths_patch="$(mktemp)"
+  cat >"$load_paths_patch" <<JSON
+{
+  plugins: {
+    load: {
+      paths: $load_paths_array
+    }
+  }
+}
+JSON
+  if openclaw config patch --replace-path plugins.load.paths --file "$load_paths_patch"; then
+    log "Removed conflicting marinator-delegation entry from plugins.load.paths"
+  else
+    err "failed to remove marinator-delegation entry from plugins.load.paths"
+    exit 1
+  fi
+fi
+
+# 3) Install the bundled plugin (copy, not link) from the initialized workspace
 #    so the instance is self-contained and does not depend on this source repo's
 #    path. The plugin now bundles its runner under marinator-delegation/scripts/,
 #    so a copy install carries everything it needs. `--force` overwrites any prior
@@ -227,7 +275,7 @@ else
   exit 1
 fi
 
-# 3) Best-effort verification: report plugin load status and tool contract.
+# 4) Best-effort verification: report plugin load status and tool contract.
 if plugin_status="$(openclaw plugins inspect marinator-delegation --json 2>/dev/null)"; then
   printf '%s\n' "$plugin_status" | python3 - <<'PY' || true
 import json, sys
@@ -271,6 +319,6 @@ log "Agent:            $AGENT_ID"
 log "Workspace:        $WORKSPACE"
 log "Telegram account: $TELEGRAM_ACCOUNT"
 log "Allowed admin id: $ADMIN_TELEGRAM_ID"
-log "Marinator plugin: $PLUGIN_DIR (linked)"
+log "Marinator plugin: $PLUGIN_DIR (installed copy)"
 log ""
 log "Next: open the Junie bot in Telegram and send /start."
