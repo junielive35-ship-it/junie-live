@@ -338,10 +338,18 @@ fi
 #    isolatedSession): a targeted wake must land in the real session so its
 #    enqueued system event is inspected and injected as a turn. Cost stays low
 #    via target "none" + the long interval, not via session isolation.
+#    This same block also pins the orchestrator's default thinking level to
+#    "medium" PER-AGENT (agents.list[].thinkingDefault), so a freshly hired
+#    instance never depends on the host's global agents.defaults.thinkingDefault
+#    (today it is only "medium" by coincidence of the host default). It is set
+#    here, in the same agents.list read-modify-write, because both fields live on
+#    the same per-agent entry and rewriting agents.list twice would add a
+#    needless corruption surface.
 #    agents.list is an array and `config patch` replaces arrays
-#    wholesale, so read the current list, merge the heartbeat object into the
-#    entry whose id == "$AGENT_ID" (preserving every other entry/field), and
-#    write it back. Idempotent: an existing heartbeat is overwritten in place.
+#    wholesale, so read the current list, merge the heartbeat object and
+#    thinkingDefault into the entry whose id == "$AGENT_ID" (preserving every
+#    other entry/field), and write it back. Idempotent: an existing heartbeat /
+#    thinkingDefault is overwritten in place.
 agents_list_current="$(openclaw config get agents.list --json 2>/dev/null || printf '[]')"
 agents_list_merged="$(AGENT_ID="$AGENT_ID" python3 - "$agents_list_current" <<'PY'
 import json, os, sys
@@ -385,6 +393,9 @@ heartbeat = {
 for entry in current:
     if isinstance(entry, dict) and entry.get("id") == agent_id:
         entry["heartbeat"] = heartbeat
+        # Pin orchestrator thinking explicitly per-agent so the hired instance
+        # does not inherit the host's global agents.defaults.thinkingDefault.
+        entry["thinkingDefault"] = "medium"
         break
 print(json.dumps(current))
 PY
@@ -398,7 +409,7 @@ cat >"$heartbeat_patch" <<JSON
 }
 JSON
 if openclaw config patch --replace-path agents.list --file "$heartbeat_patch"; then
-  log "Registered heartbeat wake-runner for agent $AGENT_ID (every 6h, target last, shared real session; routine HEARTBEAT_OK suppressed)"
+  log "Registered heartbeat wake-runner for agent $AGENT_ID (every 6h, target last, shared real session; routine HEARTBEAT_OK suppressed); pinned thinkingDefault=medium"
 else
   err "failed to register heartbeat wake-runner for agent $AGENT_ID"
   exit 1
