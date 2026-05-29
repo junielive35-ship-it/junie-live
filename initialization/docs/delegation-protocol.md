@@ -41,6 +41,24 @@ The plugin creates a resolved `spec.json` from the current OpenClaw delivery con
 
 A Marinator run must not remain in `running` after the worker process exits. The runner records `opencode.exit`, writes terminal `status.json` state, appends `events.jsonl`, and wakes Marinator for `completed`, `failed`, `timeout`, `killed`, or `stalled` outcomes. If the runner exits unexpectedly before a terminal state, it must fail closed and report `runner_exited_unexpectedly` rather than silently abandoning the task.
 
+## Executor isolation (runner talks only to the orchestrator)
+
+The executor layer (the opencode runner) communicates **only with the orchestrator**, never directly with the end user. The orchestrator is the sole party that messages the user. In future flows the orchestrator may also go back to the runner to request fixes/redos, and all of that must happen without user involvement.
+
+The runner signals the orchestrator by waking it: `openclaw system event --session-key <orchestrator_session_key> --mode now` (see `wake_marinator` in `delegate-coding-task.sh`). The orchestrator then reads `result.md` and the repo diff and decides what, if anything, to report to the user.
+
+Known debug-only exception (temporary): the current runner still calls `send_telegram` directly for progress summaries and terminal alerts. These are explicitly marked `DEBUG-ONLY (TEMPORARY)` in the runner and are treated as a user-facing progress log only. They technically violate the executor-isolation invariant and are slated to be removed once the orchestrator-driven delivery path is considered final. Do not add new direct runner-to-user sends.
+
+## How the orchestrator wake actually reaches the user
+
+The wake is delivered as a **heartbeat-class turn** in the orchestrator's real session. Two facts matter:
+
+- A registered per-agent heartbeat is required for the wake to run at all. `openclaw system event` only enqueues text on the target session's queue; the heartbeat runner is what drains that queue and runs a turn. So the agent must have a non-zero `heartbeat.every`. The wake itself fires immediately (`--mode now`, intent `immediate`), not on the periodic schedule.
+- The wake turn must run in the agent's **real shared session** (`isolatedSession: false`, `lightContext: false`). With an isolated session the pending system event is not inspected/injected and the wake is silently dropped until an unrelated inbound message drains it.
+- **Session is not the delivery channel.** Whether the orchestrator's reply reaches the user is governed solely by `heartbeat.target`. With `target: "none"` the turn runs but the reply is never delivered (this was the original supervisor-wake bug). Use `target: "last"` so the orchestrator's report reaches the chat that started the delegation, and suppress routine `HEARTBEAT_OK` ticks via channel heartbeat visibility (`showOk: false`) so periodic heartbeats stay silent.
+
+`hire-junie.sh` bakes this in: it registers the heartbeat with all fields set explicitly (no reliance on OpenClaw API defaults) — `every: 6h`, `target: last`, `includeSystemPromptSection: false`, `isolatedSession: false`, `lightContext: false`, `directPolicy: allow`, `skipWhenBusy: false` — and sets the Telegram account heartbeat visibility to `showOk: false, showAlerts: true, useIndicator: false`.
+
 ## Delegation brief template
 
 ```markdown

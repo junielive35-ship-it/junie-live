@@ -138,6 +138,12 @@ with open(path, 'w', encoding='utf-8') as fh:
 PYSTATUS
 }
 
+# DEBUG-ONLY (TEMPORARY): The runner must talk ONLY to the orchestrator, never
+# directly to the end user. These direct send_telegram calls are a temporary
+# debug aid and violate that invariant. The durable design routes all worker
+# progress/terminal events to the orchestrator via wake_marinator (system
+# event); the orchestrator is the sole party that messages the user. Remove
+# every send_telegram call once the orchestrator-driven delivery path is final.
 send_telegram() {
   local message=$1
   local args=(message send --channel "$delivery_channel" --target "$delivery_target" --message "$message")
@@ -240,7 +246,7 @@ except Exception:
   else
     summary="Marinator worker $job_id: opencode is still running; new log output was produced in the last interval."
   fi
-  send_telegram "$summary"
+  send_telegram "$summary" # DEBUG-ONLY (TEMPORARY): runner->user; should be a wake to the orchestrator instead
   append_event "progress_summary_sent" summary "$summary"
 }
 
@@ -362,7 +368,7 @@ while [[ ! -f "$exit_path" ]] && kill -0 "$waiter_pid" 2>/dev/null; do
     terminate_group "$opencode_pgid"
     wait "$waiter_pid" 2>/dev/null || true
     append_event "timeout" reason timeout
-    send_telegram "Marinator worker $job_id timed out and was stopped."
+    send_telegram "Marinator worker $job_id timed out and was stopped." # DEBUG-ONLY (TEMPORARY): runner->user; wake the orchestrator instead
     wake_marinator "timeout" "worker timed out and was stopped"
     exit 124
   fi
@@ -371,7 +377,7 @@ while [[ ! -f "$exit_path" ]] && kill -0 "$waiter_pid" 2>/dev/null; do
     terminate_group "$opencode_pgid"
     wait "$waiter_pid" 2>/dev/null || true
     append_event "stalled" reason no_progress
-    send_telegram "Marinator worker $job_id appears stalled with no log progress and was stopped."
+    send_telegram "Marinator worker $job_id appears stalled with no log progress and was stopped." # DEBUG-ONLY (TEMPORARY): runner->user; wake the orchestrator instead
     wake_marinator "stalled" "no log progress before no_progress timeout"
     exit 125
   fi
@@ -431,6 +437,6 @@ fi
 
 write_status "failed" exit_code "$exit_code"
 append_event "failed" exit_code "$exit_code"
-send_telegram "Marinator worker $job_id failed with exit code $exit_code."
+send_telegram "Marinator worker $job_id failed with exit code $exit_code." # DEBUG-ONLY (TEMPORARY): runner->user; wake the orchestrator instead
 wake_marinator "failed" "worker exited with code $exit_code"
 exit "$exit_code"
