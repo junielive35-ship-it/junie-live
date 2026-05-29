@@ -161,7 +161,12 @@ cat >"$patch_file" <<JSON
       accounts: {
         "$TELEGRAM_ACCOUNT": {
           dmPolicy: "allowlist",
-          allowFrom: ["$ADMIN_TELEGRAM_ID"]
+          allowFrom: ["$ADMIN_TELEGRAM_ID"],
+          heartbeat: {
+            showOk: false,
+            showAlerts: true,
+            useIndicator: false
+          }
         }
       }
     }
@@ -291,22 +296,35 @@ try:
 except Exception:
     current = []
 agent_id = os.environ["AGENT_ID"]
-# IMPORTANT: do NOT set isolatedSession here. For a targeted wake
-# (`system event --session-key <agent main session> --mode now`), the
-# heartbeat preflight only inspects and injects the session's pending
-# system events when the run targets the agent's REAL session. With
-# isolatedSession=true the runner resolves an isolated session key that
-# does NOT match the forced real-session key, so shouldInspectPendingEvents
-# becomes false and the enqueued wake text is never injected as a turn --
-# it stays parked until an unrelated inbound message drains it. That is
-# exactly the Marinator supervisor-wake bug. Keep the shared real session
-# (no isolatedSession, no lightContext) so wake events drain on idle.
-# Cost stays low because the periodic tick uses target "none" and a long
-# interval; it does not deliver to chat.
+# Heartbeat wake-runner config. Every field is set EXPLICITLY here so the
+# instance never depends on OpenClaw API defaults.
+#
+# - target "last": the orchestrator's wake-driven report is delivered to the
+#   last external channel (the chat that started the delegation). This is the
+#   fix; target "none" ran the wake turn but SILENTLY dropped the report so it
+#   never reached Telegram.
+# - isolatedSession False and lightContext False are REQUIRED. For a targeted
+#   wake (`system event --session-key <agent main session> --mode now`), the
+#   heartbeat preflight only inspects and injects the session's pending system
+#   events when the run targets the agent's REAL shared session. With
+#   isolatedSession=true the runner resolves an isolated session key that does
+#   NOT match the forced real-session key, so shouldInspectPendingEvents becomes
+#   false and the enqueued wake text is never injected as a turn -- it stays
+#   parked until an unrelated inbound message drains it. That is exactly the
+#   Marinator supervisor-wake bug. Keep the shared real session so wake events
+#   drain on idle.
+# - every "6h": keep the periodic tick rare. Routine ticks reply HEARTBEAT_OK
+#   and are suppressed by the channel visibility config (see the telegram
+#   heartbeat block above), so they do NOT spam chat.
+# - directPolicy "allow": permit DM delivery (Telegram direct).
 heartbeat = {
     "every": "6h",
-    "target": "none",
+    "target": "last",
     "includeSystemPromptSection": False,
+    "isolatedSession": False,
+    "lightContext": False,
+    "directPolicy": "allow",
+    "skipWhenBusy": False,
 }
 for entry in current:
     if isinstance(entry, dict) and entry.get("id") == agent_id:
@@ -324,7 +342,7 @@ cat >"$heartbeat_patch" <<JSON
 }
 JSON
 if openclaw config patch --replace-path agents.list --file "$heartbeat_patch"; then
-  log "Registered heartbeat wake-runner for agent $AGENT_ID (every 6h, target none, isolated)"
+  log "Registered heartbeat wake-runner for agent $AGENT_ID (every 6h, target last, shared real session; routine HEARTBEAT_OK suppressed)"
 else
   err "failed to register heartbeat wake-runner for agent $AGENT_ID"
   exit 1
