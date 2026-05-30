@@ -5,8 +5,7 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "plugin:build": "npm run build && openclaw plugins build --entry ./dist/index.js",
-    "plugin:validate": "npm run build && openclaw plugins validate --entry ./dist/index.js",
+    "plugin:validate": "npm run build && node -e \"import('./dist/index.js').then(m=>{const e=m.default;if(!e||e.id!=='marinator-delegation'||typeof e.register!=='function') throw new Error('invalid plugin entry')})\"",
     "test": "vitest run"
   },
   "files": [

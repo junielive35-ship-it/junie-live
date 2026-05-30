@@ -138,6 +138,116 @@ with open(path, 'w', encoding='utf-8') as fh:
 PYSTATUS
 }
 
+update_status_json() {
+  local updates_json=$1
+  python3 - "$status_path" "$updates_json" <<'PYSTATUSUPDATE'
+import json, sys, datetime
+path, updates_raw = sys.argv[1:]
+now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+try:
+    with open(path, 'r', encoding='utf-8') as fh:
+        record = json.load(fh)
+except FileNotFoundError:
+    record = {}
+updates = json.loads(updates_raw)
+record.update(updates)
+record['updated_at'] = now
+with open(path, 'w', encoding='utf-8') as fh:
+    json.dump(record, fh, ensure_ascii=False, indent=2)
+    fh.write('\n')
+PYSTATUSUPDATE
+}
+
+set_handoff_pending() {
+  update_status_json "$(python3 - "$orchestrator_session_key" <<'PY'
+import json, sys
+print(json.dumps({"handoff": {
+  "state": "pending",
+  "session_key": sys.argv[1],
+  "schedule_job_id": None,
+  "scheduled_at": None,
+  "consumed_by_run_id": None,
+  "consumed_at": None,
+  "last_error": None,
+}}))
+PY
+)"
+  append_event "handoff_pending" session_key "$orchestrator_session_key"
+}
+
+schedule_continuation() {
+  local continuation_at message cron_output cron_status schedule_job_id scheduled_at
+  continuation_at="5s"
+  scheduled_at=$(now_iso)
+  message="Marinator job $job_id finished. Read $status_path and $result_path, inspect the repo diff, and continue the review/fix/acceptance loop. Do not report success unless the requested user outcome is verified or explicitly blocked."
+  set +e
+  cron_output=$(openclaw cron add \
+    --name "marinator-continuation-$job_id" \
+    --at "$continuation_at" \
+    --session current \
+    --session-key "$orchestrator_session_key" \
+    --message "$message" \
+    --no-deliver \
+    --delete-after-run \
+    --json 2>&1)
+  cron_status=$?
+  set -e
+  if [[ "$cron_status" -eq 0 ]]; then
+    schedule_job_id=$(CRON_OUTPUT="$cron_output" python3 - <<'PY'
+import json, sys
+import os
+raw = os.environ.get("CRON_OUTPUT", "")
+try:
+    data = json.loads(raw)
+except Exception:
+    print("")
+    raise SystemExit
+for key in ("id", "job_id", "jobId"):
+    if isinstance(data, dict) and data.get(key):
+        print(data[key])
+        break
+else:
+    job = data.get("job") if isinstance(data, dict) else None
+    if isinstance(job, dict):
+        print(job.get("id") or job.get("job_id") or job.get("jobId") or "")
+    else:
+        print("")
+PY
+)
+    update_status_json "$(python3 - "$orchestrator_session_key" "$schedule_job_id" "$scheduled_at" <<'PY'
+import json, sys
+session_key, schedule_job_id, scheduled_at = sys.argv[1:]
+print(json.dumps({"handoff": {
+  "state": "scheduled",
+  "session_key": session_key,
+  "schedule_job_id": schedule_job_id or None,
+  "scheduled_at": scheduled_at,
+  "consumed_by_run_id": None,
+  "consumed_at": None,
+  "last_error": None,
+}}))
+PY
+)"
+    append_event "handoff_scheduled" session_key "$orchestrator_session_key" schedule_job_id "${schedule_job_id:-unknown}"
+  else
+    update_status_json "$(python3 - "$orchestrator_session_key" "$cron_output" <<'PY'
+import json, sys
+session_key, error = sys.argv[1:]
+print(json.dumps({"handoff": {
+  "state": "failed",
+  "session_key": session_key,
+  "schedule_job_id": None,
+  "scheduled_at": None,
+  "consumed_by_run_id": None,
+  "consumed_at": None,
+  "last_error": error[-2000:],
+}}))
+PY
+)"
+    append_event "handoff_schedule_failed" session_key "$orchestrator_session_key" error "$cron_output"
+  fi
+}
+
 # DEBUG-ONLY (TEMPORARY): The runner must talk ONLY to the orchestrator, never
 # directly to the end user. These direct send_telegram calls are a temporary
 # debug aid and violate that invariant. The durable design routes all worker
@@ -210,24 +320,60 @@ on_runner_exit() {
 }
 
 summarize_delta() {
-  local offset_file="$run_dir/.summary.offset"
-  local current_size previous_size delta_file summary_prompt summary_json summary
-  current_size=$(wc -c < "$stdout_log" | tr -d ' ')
-  previous_size=0
-  [[ -f "$offset_file" ]] && previous_size=$(cat "$offset_file" 2>/dev/null || echo 0)
-  if (( current_size <= previous_size )); then
-    return 0
-  fi
+  local stdout_offset_file="$run_dir/.summary.stdout.offset"
+  local stderr_offset_file="$run_dir/.summary.stderr.offset"
+  local stdout_size stderr_size previous_stdout_size previous_stderr_size delta_file context_file summary_prompt summary_json summary change_note
+  stdout_size=$(wc -c < "$stdout_log" | tr -d ' ')
+  stderr_size=$(wc -c < "$stderr_log" | tr -d ' ')
+  previous_stdout_size=0
+  previous_stderr_size=0
+  [[ -f "$stdout_offset_file" ]] && previous_stdout_size=$(cat "$stdout_offset_file" 2>/dev/null || echo 0)
+  [[ -f "$stderr_offset_file" ]] && previous_stderr_size=$(cat "$stderr_offset_file" 2>/dev/null || echo 0)
   delta_file="$run_dir/.summary.delta"
-  tail -c +$((previous_size + 1)) "$stdout_log" | tail -c 12000 > "$delta_file"
-  printf '%s\n' "$current_size" > "$offset_file"
+  context_file="$run_dir/.summary.context"
+  if (( stdout_size <= previous_stdout_size && stderr_size <= previous_stderr_size )); then
+    change_note="No new stdout or stderr bytes since the previous summary interval. Say that nothing changed if the supporting context also shows no movement."
+    : > "$delta_file"
+  else
+    change_note="New stdout/stderr output appeared since the previous summary interval."
+    {
+      if (( stdout_size > previous_stdout_size )); then
+        printf '## stdout delta\n'
+        tail -c +$((previous_stdout_size + 1)) "$stdout_log"
+        printf '\n'
+      fi
+      if (( stderr_size > previous_stderr_size )); then
+        printf '## stderr delta\n'
+        tail -c +$((previous_stderr_size + 1)) "$stderr_log"
+        printf '\n'
+      fi
+    } | tail -c 12000 > "$delta_file"
+  fi
+  printf '%s\n' "$stdout_size" > "$stdout_offset_file"
+  printf '%s\n' "$stderr_size" > "$stderr_offset_file"
+  {
+    printf '## change note\n%s\n\n' "$change_note"
+    printf '## status.json\n'
+    tail -c 4000 "$status_path" 2>/dev/null || true
+    printf '\n\n## recent events.jsonl\n'
+    tail -n 40 "$events_path" 2>/dev/null || true
+    printf '\n\n## runner.log tail\n'
+    tail -n 80 "$runner_log" 2>/dev/null || true
+    printf '\n\n## stdout/stderr delta\n'
+    cat "$delta_file" 2>/dev/null || true
+    printf '\n\n## stdout tail\n'
+    tail -n 80 "$stdout_log" 2>/dev/null || true
+    printf '\n\n## stderr tail\n'
+    tail -n 120 "$stderr_log" 2>/dev/null || true
+  } | tail -c 24000 > "$context_file"
   summary_prompt=$(cat <<PROMPT
-Summarize this opencode worker log delta for a Telegram progress update.
-Be concise, factual, under 700 characters. Mention current action, files/tests if visible, and blockers if any.
+Summarize this Marinator/opencode worker state for a Telegram debug progress update.
+Use the provided status, events, runner log, stdout, and stderr. Focus on worker actions and critical errors/blockers.
+Be concise, factual, under 700 characters. If the change note says there was no new stdout/stderr and the context shows no other movement, explicitly say nothing changed and that the worker still appears to be running.
 Job: $job_id
 
-Log delta:
-$(cat "$delta_file")
+Worker context:
+$(cat "$context_file")
 PROMPT
 )
   if summary_json=$(openclaw infer model run --gateway --model "$summary_model" --json --prompt "$summary_prompt" 2>>"$runner_log"); then
@@ -244,10 +390,14 @@ try:
 except Exception:
     print(raw[:700])' <<<"$summary_json")
   else
-    summary="Marinator worker $job_id: opencode is still running; new log output was produced in the last interval."
+    if [[ -s "$delta_file" ]]; then
+      summary="Marinator worker $job_id: opencode is still running; new log output was produced, but summary generation failed."
+    else
+      summary="Marinator worker $job_id: opencode is still running; nothing changed since the previous debug update, and summary generation failed."
+    fi
   fi
   send_telegram "$summary" # DEBUG-ONLY (TEMPORARY): runner->user; should be a wake to the orchestrator instead
-  append_event "progress_summary_sent" summary "$summary"
+  append_event "progress_summary_sent" summary "$summary" stdout_bytes "$stdout_size" stderr_bytes "$stderr_size"
 }
 
 terminate_group() {
@@ -262,8 +412,13 @@ build_opencode_args() {
   local prompt help_text
   prompt=$(cat "$prompt_file")
   OPENCODE_ARGS=(run)
+  help_text=$("$OPENCODE_BIN" run --help 2>/dev/null || true)
+  if grep -q -- '--dangerously-skip-permissions' <<<"$help_text"; then
+    OPENCODE_ARGS+=(--dangerously-skip-permissions)
+  else
+    append_event "opencode_skip_permissions_flag_unavailable"
+  fi
   if [[ -n "$opencode_previous_session_id" && "$opencode_previous_session_id" != "null" ]]; then
-    help_text=$("$OPENCODE_BIN" run --help 2>/dev/null || true)
     if grep -q -- '--session' <<<"$help_text"; then
       OPENCODE_ARGS+=(--session "$opencode_previous_session_id")
     elif grep -q -- '--resume' <<<"$help_text"; then
@@ -344,14 +499,17 @@ append_event "opencode_started" pid "$opencode_pid" pgid "$opencode_pgid"
 start_epoch=$(date +%s)
 last_summary_epoch=$start_epoch
 last_progress_epoch=$start_epoch
-last_size=0
+last_stdout_size=0
+last_stderr_size=0
 exit_code=""
 
 while [[ ! -f "$exit_path" ]] && kill -0 "$waiter_pid" 2>/dev/null; do
   now_epoch=$(date +%s)
-  current_size=$(wc -c < "$stdout_log" | tr -d ' ')
-  if (( current_size > last_size )); then
-    last_size=$current_size
+  current_stdout_size=$(wc -c < "$stdout_log" | tr -d ' ')
+  current_stderr_size=$(wc -c < "$stderr_log" | tr -d ' ')
+  if (( current_stdout_size > last_stdout_size || current_stderr_size > last_stderr_size )); then
+    last_stdout_size=$current_stdout_size
+    last_stderr_size=$current_stderr_size
     last_progress_epoch=$now_epoch
   fi
   if [[ -f "$control_dir/kill" ]]; then
@@ -428,15 +586,24 @@ if [[ "$exit_code" -eq 0 ]]; then
     echo '```'
     tail -n 80 "$stdout_log"
     echo '```'
+    echo
+    echo "## stderr tail"
+    echo '```'
+    tail -n 120 "$stderr_log"
+    echo '```'
   } > "$result_path"
   write_status "completed" exit_code "$exit_code" result_path "$result_path"
   append_event "completed" exit_code "$exit_code" result_path "$result_path"
+  set_handoff_pending
+  schedule_continuation
   wake_marinator "completed" "worker exited successfully; review result and diff"
   exit 0
 fi
 
 write_status "failed" exit_code "$exit_code"
 append_event "failed" exit_code "$exit_code"
+set_handoff_pending
+schedule_continuation
 send_telegram "Marinator worker $job_id failed with exit code $exit_code." # DEBUG-ONLY (TEMPORARY): runner->user; wake the orchestrator instead
 wake_marinator "failed" "worker exited with code $exit_code"
 exit "$exit_code"
