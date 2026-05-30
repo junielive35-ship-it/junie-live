@@ -60,6 +60,10 @@ When a request appears to conflict with strategy, architecture, accepted decisio
 
 If resolution requires changing strategy, architecture, accepted design choices, communication policy, delegation/review protocol, or agent authority, make that change explicit and get approval.
 
+## Prefer native capabilities over custom mechanisms
+
+Before building a custom mechanism — whether self-initiated or proposed by the owner/user — first research whether the agent platform you run on, or the project's own languages, frameworks, and libraries, already provide it. Research must include both official docs and internet/community sources (forums, issue trackers, discussions). If a built-in or well-supported option meets the goal more simply or reliably, say so before implementing the custom approach, and let the owner decide.
+
 ## Guidance consistency protocol
 
 Keep these files coherent with each other:
