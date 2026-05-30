@@ -14,6 +14,10 @@
   "contracts": {
     "tools": [
       "marinator_delegate"
+    ],
+    "hooks": [
+      "before_agent_run",
+      "agent_end"
     ]
   }
 }
