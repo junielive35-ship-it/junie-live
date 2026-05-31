@@ -17,10 +17,13 @@ def get_hermes_home() -> str:
     """Resolve the Hermes home directory.
 
     Priority:
-      1. get_hermes_home() from hermes SDK if importable
-      2. HERMES_HOME environment variable
+      1. HERMES_HOME environment variable (explicit test/profile override)
+      2. get_hermes_home() from hermes SDK if importable
       3. ~/.hermes
     """
+    env_home = os.environ.get("HERMES_HOME")
+    if env_home:
+        return env_home
     try:
         from hermes_constants import get_hermes_home as _sdk_home  # type: ignore
         return str(_sdk_home())
@@ -31,7 +34,7 @@ def get_hermes_home() -> str:
         return str(_sdk_home())
     except (ImportError, AttributeError):
         pass
-    return os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
+    return os.path.expanduser("~/.hermes")
 
 
 def get_profile_dir() -> str:

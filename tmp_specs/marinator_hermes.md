@@ -447,7 +447,9 @@ Rules:
 
 - acquire per-owner-session lock before calling resume;
 - mark wake event exactly once;
-- record stdout/stderr of the resume call under `run_dir`;
+- launch the resume helper asynchronously and immediately return to the wrapper supervision loop;
+- never block OpenCode supervision on `hermes chat --resume`; a resumed orchestrator may write `control/kill`, and the wrapper must keep polling that control file while resume is running;
+- record the resume helper pid and stdout/stderr of the resume call under `run_dir`;
 - never assume resume delivery to Telegram; headless continuation writes to the session transcript/stdout only.
 
 ## 11. Live Telegram behavior

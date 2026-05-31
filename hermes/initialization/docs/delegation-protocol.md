@@ -46,6 +46,8 @@ The runner signals the orchestrator by using Hermes process completion semantics
 - in live Telegram/gateway sessions, the wrapper is dispatched through `terminal(background=true, notify_on_complete=true)`, so Hermes wakes the owning session when the process exits;
 - in headless sessions, the wrapper resumes the owning Hermes session with `hermes -p <profile> chat --resume <owner_session_id>`.
 
+Headless resume is fire-and-forget: the wrapper must launch the resume helper asynchronously and immediately return to supervising OpenCode. A resumed orchestrator may decide to write `control/kill`; the wrapper must continue polling that control file while the resumed Hermes session is still thinking or using tools.
+
 The orchestrator then reads `status.json`, `result.md`, stdout/stderr logs, and the repo diff, and decides what, if anything, to report to the user.
 
 Known debug-only exception (temporary): the current runner can send periodic progress summaries via Hermes messaging when `enable_per_minute_reports=true`. These are user-facing progress logs only. They technically violate the strict executor-isolation invariant and should not become task acceptance, fix-loop, or completion signals. Do not add new direct runner-to-user sends; route substantive status, decisions, and completion through the orchestrator.
