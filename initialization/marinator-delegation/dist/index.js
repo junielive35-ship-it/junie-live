@@ -47,7 +47,7 @@ function safeJobId(jobId) {
     }
     return jobId;
 }
-function canonicalizeDeliveryTarget(channel, target, threadId) {
+export function canonicalizeDeliveryTarget(channel, target, threadId) {
     if (channel !== "telegram") {
         return threadId !== undefined ? { target, threadId } : { target };
     }
@@ -57,6 +57,25 @@ function canonicalizeDeliveryTarget(channel, target, threadId) {
     }
     const canonicalThreadId = threadId !== undefined ? threadId : match[2];
     return canonicalThreadId !== undefined ? { target: match[1], threadId: canonicalThreadId } : { target: match[1] };
+}
+function optionalNonEmpty(value) {
+    return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+export function resolveDeliverySpec(toolContext) {
+    const deliveryContext = toolContext?.deliveryContext;
+    const channel = optionalNonEmpty(deliveryContext?.channel);
+    const target = optionalNonEmpty(deliveryContext?.to);
+    if (!channel || !target) {
+        return null;
+    }
+    const { target: canonicalTarget, threadId } = canonicalizeDeliveryTarget(channel, target, deliveryContext?.threadId);
+    const accountId = optionalNonEmpty(deliveryContext?.accountId) ?? optionalNonEmpty(toolContext?.agentAccountId);
+    return {
+        channel,
+        target: canonicalTarget,
+        ...(threadId !== undefined ? { threadId } : {}),
+        ...(accountId ? { accountId } : {}),
+    };
 }
 function resolveWorkspaceDir(agentDir, workspaceDir) {
     if (workspaceDir && workspaceDir.trim())
@@ -250,11 +269,7 @@ function createMarinatorDelegateTool(toolContext) {
             const promptFile = path.resolve(requireNonEmpty(input.prompt_file, "prompt_file"));
             const workspaceDir = resolveWorkspaceDir(toolContext.agentDir, toolContext.workspaceDir);
             const orchestratorSessionKey = requireNonEmpty(toolContext.sessionKey, "toolContext.sessionKey");
-            const deliveryContext = toolContext.deliveryContext;
-            const deliveryChannel = requireNonEmpty(deliveryContext?.channel, "toolContext.deliveryContext.channel");
-            const deliveryTarget = requireNonEmpty(deliveryContext?.to, "toolContext.deliveryContext.to");
-            const { target: deliveryTargetCanonical, threadId } = canonicalizeDeliveryTarget(deliveryChannel, deliveryTarget, deliveryContext?.threadId);
-            const accountId = deliveryContext?.accountId ?? toolContext.agentAccountId;
+            const deliverySpec = resolveDeliverySpec(toolContext);
             const runDir = path.join(workspaceDir, ".openclaw", "state", "marinator", "runs", jobId);
             const specPath = path.join(runDir, "spec.json");
             const resolvedSpec = {
@@ -269,12 +284,14 @@ function createMarinatorDelegateTool(toolContext) {
                 no_progress_seconds: NO_PROGRESS_SECONDS,
                 timeout_seconds: TIMEOUT_SECONDS,
                 orchestrator_session_key: orchestratorSessionKey,
-                delivery: {
-                    channel: deliveryChannel,
-                    target: deliveryTargetCanonical,
-                    ...(threadId !== undefined ? { thread_id: threadId } : {}),
-                    ...(accountId ? { account_id: accountId } : {}),
-                },
+                ...(deliverySpec ? {
+                    delivery: {
+                        channel: deliverySpec.channel,
+                        target: deliverySpec.target,
+                        ...(deliverySpec.threadId !== undefined ? { thread_id: deliverySpec.threadId } : {}),
+                        ...(deliverySpec.accountId ? { account_id: deliverySpec.accountId } : {}),
+                    },
+                } : {}),
             };
             await mkdir(path.join(runDir, "control"), { recursive: true });
             await writeFile(specPath, `${JSON.stringify(resolvedSpec, null, 2)}\n`, "utf8");

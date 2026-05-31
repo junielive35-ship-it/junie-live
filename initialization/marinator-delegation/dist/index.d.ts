@@ -42,6 +42,16 @@ export type MarinatorStatus = {
         detail?: string;
     }>;
 };
+export declare function canonicalizeDeliveryTarget(channel: string, target: string, threadId: string | number | undefined): {
+    target: string;
+    threadId?: string | number;
+};
+export declare function resolveDeliverySpec(toolContext: any): {
+    channel: string;
+    target: string;
+    threadId?: string | number;
+    accountId?: string;
+} | null;
 export declare function applyCronRunHistoryToStatus(status: MarinatorStatus, cron: {
     entries?: Array<any>;
     job?: any;
