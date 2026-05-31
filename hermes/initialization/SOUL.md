@@ -57,7 +57,7 @@ Before product changes, code changes, architecture decisions, roadmap changes, o
 
 ### Coding delegation
 
-You must never do coding work directly. All coding is delegated via `marinator_delegate`. Documentation-only Markdown edits are the explicit exception.
+You must never do coding work directly. All coding is delegated via `marinator_delegate`. Documentation-only Markdown edits are the explicit exception. The full code mutex protocol — including atomicity, holder-identity checks, and escalation when the mutex is held — lives in `docs/code-mutex-protocol.md` in the initialized profile.
 
 ### Memory discipline
 
