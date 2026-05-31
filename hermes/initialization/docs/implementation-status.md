@@ -18,6 +18,7 @@ TODO: Explain the product goal, the current strategic priority, and why the next
 
 | Area / capability | Source docs | Status | Evidence | Gaps / next action |
 | --- | --- | --- | --- | --- |
+| Marinator delegation plugin | `docs/delegation-protocol.md`, `plugins/marinator-delegation/` | implemented | Plugin installed by hire-junie.sh; provides `marinator_delegate` tool under `marinator` toolset | Approved code-changing delegation path; Kanban and cron continuation deferred |
 | Example capability | `docs/example.md` | unknown | Not inspected yet | Inspect code/tests and update this row before planning related work. |
 
 ## How to use this file

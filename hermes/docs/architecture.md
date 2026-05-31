@@ -107,18 +107,19 @@ OpenClaw uses protocol docs (`delegation-protocol.md`, `review-protocol.md`) loa
 - Patchable in-session when issues are found
 - Managed by the curator for lifecycle
 
-### 5. delegate_task instead of opencode scripts
+### 5. marinator_delegate plugin instead of opencode scripts
 
-OpenClaw shells out to `opencode run` via bash scripts with complex timeout/retry logic. Hermes provides:
-- `delegate_task` for bounded subtasks (isolated context, terminal, tools)
-- Spawned `hermes` processes for long-running work
-- Hermes cron for scheduled/recurring work
+OpenClaw shells out to `opencode run` via bash scripts with complex timeout/retry logic. The Hermes Marinator plugin (`marinator_delegate`) replaces the direct `opencode` invocation with a supervised delegation tool:
+- Installed as a Hermes user plugin at `~/.hermes/profiles/junie-live/plugins/marinator-delegation/`
+- Registered under the `marinator` toolset, enabled for CLI and Telegram by `hire-junie.sh`
+- Creates a durable run directory (`~/.hermes/junie-live/state/marinator/runs/<job_id>/`) with spec, status, events, logs, and result artifacts
+- Spawns `marinator-worker.sh` which runs OpenCode in a separate process group with stdout/stderr capture, progress monitoring, stall detection (without auto-kill), and marker line emission
+- Live sessions wake via `notify_on_complete=true`; headless sessions continue via `hermes chat --resume`
+- The orchestrator reviews results, decides accept/fix/wait/kill/block, and verifies user-visible outcomes
+- Optional per-minute progress reports via Telegram when explicitly requested
+- Follow-up/fix loops pass `opencode_previous_session_id` to continue the previous OpenCode context
 
-Benefits:
-- No shell-script orchestration layer
-- Better error handling and reporting
-- Subagent summaries returned directly to the orchestrator
-- No need for custom worker binaries
+Kanban-backed Marinator and cron-bound session continuation are deferred for the MVP.
 
 ### 6. Native cron instead of system crontab
 
@@ -160,6 +161,7 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 | Session history | `~/.hermes/profiles/junie-live/state.db` | Hermes sessions |
 | Detailed docs | Target repo `docs/` or profile `docs/` | File read/write |
 | Code mutex | `~/.hermes/junie-live/state/code_mutex/` | `code-mutex.sh` |
+| Marinator runs | `~/.hermes/junie-live/state/marinator/runs/` | `marinator_delegate` plugin |
 | Backlog items | `~/.hermes/junie-live/state/backlog/` | Scripts/cron |
 | Operational logs | `~/.hermes/junie-live/state/logs/` | Scripts/cron |
 | Skills | `~/.hermes/profiles/junie-live/skills/` | skill_manage |
