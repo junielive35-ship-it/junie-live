@@ -211,16 +211,23 @@ schedule_continuation() {
   continuation_timeout_seconds=300
   scheduled_at=$(now_iso)
   message="Marinator job $job_id finished. Read $status_path and $result_path, inspect the repo diff, and continue the review/fix/acceptance loop. Do not report success unless the requested user outcome is verified or explicitly blocked."
+  local cron_args
+  cron_args=(
+    --name "marinator-continuation-$job_id"
+    --at "$continuation_at"
+    --session-key "$orchestrator_session_key"
+    --timeout-seconds "$continuation_timeout_seconds"
+    --delete-after-run
+    --json
+  )
+  if [[ "$orchestrator_session_key" == *":headless"* || "$orchestrator_session_key" == *":headless-"* || "$orchestrator_session_key" == *":headless_"* || "$orchestrator_session_key" == *"headless"* ]]; then
+    cron_args+=(--session current --message "$message" --no-deliver)
+  else
+    cron_args+=(--session main --system-event "$message")
+  fi
+
   set +e
-  cron_output=$(openclaw cron add \
-    --name "marinator-continuation-$job_id" \
-    --at "$continuation_at" \
-    --session main \
-    --session-key "$orchestrator_session_key" \
-    --system-event "$message" \
-    --timeout-seconds "$continuation_timeout_seconds" \
-    --delete-after-run \
-    --json 2>&1)
+  cron_output=$(openclaw cron add "${cron_args[@]}" 2>&1)
   cron_status=$?
   set -e
   if [[ "$cron_status" -eq 0 ]]; then
