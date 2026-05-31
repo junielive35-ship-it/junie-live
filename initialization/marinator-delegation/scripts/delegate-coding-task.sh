@@ -219,7 +219,6 @@ schedule_continuation() {
     --session-key "$orchestrator_session_key" \
     --system-event "$message" \
     --timeout-seconds "$continuation_timeout_seconds" \
-    --no-deliver \
     --delete-after-run \
     --json 2>&1)
   cron_status=$?
