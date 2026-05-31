@@ -117,7 +117,7 @@ OpenClaw shells out to `opencode run` via bash scripts with complex timeout/retr
 - Live sessions wake via `notify_on_complete=true`; headless sessions continue via `hermes chat --resume`
 - The orchestrator reviews results, decides accept/fix/wait/kill/block, and verifies user-visible outcomes
 - Optional per-minute progress reports via Telegram when explicitly requested
-- Follow-up/fix loops pass `opencode_previous_session_id` to continue the previous OpenCode context
+- Follow-up/fix loops set `is_follow_up: true`; the plugin resolves the previous OpenCode session internally and keeps raw session ids out of the LLM-facing API
 
 Kanban-backed Marinator and cron-bound session continuation are deferred for the MVP.
 

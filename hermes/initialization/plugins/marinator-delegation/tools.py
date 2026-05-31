@@ -10,6 +10,9 @@ import os
 import re
 from typing import Any
 
+# Valid OpenCode session id pattern: ses_<alphanumeric>
+_SES_ID_RE = re.compile(r"^ses_[A-Za-z0-9]+$")
+
 MARINATOR_DELEGATE_SCHEMA = {
     "name": "marinator_delegate",
     "description": "Delegate a code-changing task to the Junie Live Marinator/OpenCode worker.",
@@ -37,13 +40,14 @@ MARINATOR_DELEGATE_SCHEMA = {
                 "description": "Optional list of absolute paths to attach as context.",
                 "default": [],
             },
-            "opencode_previous_session_id": {
-                "type": ["string", "null"],
+            "is_follow_up": {
+                "type": "boolean",
                 "description": (
-                    "Optional OpenCode session id from a previous run, for follow-up/fix loops. "
-                    "When provided, the worker continues the previous OpenCode context."
+                    "If true, continue the most recent valid OpenCode session for this "
+                    "repo/task lineage. Defaults to false. The tool resolves session ids "
+                    "internally; do not supply session ids."
                 ),
-                "default": None,
+                "default": False,
             },
             "enable_per_minute_reports": {
                 "type": "boolean",
@@ -112,9 +116,20 @@ def _validate_inputs(params: dict) -> str | None:
         if not os.path.exists(att):
             return f"attachment does not exist: {att}"
 
+    # Backward compat: if older caller still passes opencode_previous_session_id,
+    # validate it strictly. Do not let raw paths reach OpenCode.
     prev_session = params.get("opencode_previous_session_id")
-    if prev_session is not None and not isinstance(prev_session, str):
-        return "opencode_previous_session_id must be a string or null"
+    if prev_session is not None:
+        if not isinstance(prev_session, str):
+            return "opencode_previous_session_id must be a string or null"
+        # Normalize empty and "null" string to None
+        if prev_session in ("", "null", "None"):
+            params["opencode_previous_session_id"] = None
+        elif not _SES_ID_RE.match(prev_session):
+            return (
+                f"Invalid opencode_previous_session_id '{prev_session}': "
+                "must match pattern ^ses_[A-Za-z0-9]+$"
+            )
 
     return None
 
@@ -126,7 +141,7 @@ def handle_marinator_delegate(params: dict, plugin_ctx: Any = None, **kwargs) ->
     """
     # Apply defaults for optional fields
     params.setdefault("attachments", [])
-    params.setdefault("opencode_previous_session_id", None)
+    params.setdefault("is_follow_up", False)
     params.setdefault("enable_per_minute_reports", True)
 
     error = _validate_inputs(params)
@@ -141,6 +156,7 @@ def handle_marinator_delegate(params: dict, plugin_ctx: Any = None, **kwargs) ->
             repo=params["repo"],
             prompt_file=params["prompt_file"],
             attachments=params.get("attachments", []),
+            is_follow_up=params.get("is_follow_up", False),
             opencode_previous_session_id=params.get("opencode_previous_session_id"),
             enable_per_minute_reports=params.get("enable_per_minute_reports", True),
             ctx=plugin_ctx,

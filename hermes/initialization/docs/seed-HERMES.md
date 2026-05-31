@@ -12,10 +12,6 @@ Meaningful work includes: product behavior changes, code changes, architecture/d
 
 Tiny lookups, formatting fixes, and local notes do not need the full strategic review.
 
-## Initialization mode
-
-If `~/.hermes/profiles/junie-live/INITIALIZATION.md` still exists, initialization is not complete and HERMES.md should not be in this repo yet. Read `INITIALIZATION.md` and finish initialization before normal work. (Junie's `SOUL.md`, auto-loaded from the profile, carries the same initialization gate as a safety net.)
-
 ## Context retrieval before meaningful work
 
 Before accepting, planning, delegating, or reviewing meaningful work:

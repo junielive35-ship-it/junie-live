@@ -134,7 +134,8 @@ def make_initial_status(
     repo: str,
     run_dir: str,
     opencode_bin: Optional[str] = None,
-    opencode_previous_session_id: Optional[str] = None,
+    resume_session_id: Optional[str] = None,
+    is_follow_up: bool = False,
     skip_permissions: bool = True,
 ) -> dict:
     """Create the initial status.json structure."""
@@ -148,12 +149,13 @@ def make_initial_status(
         },
         "repo": repo,
         "run_dir": run_dir,
+        "is_follow_up": is_follow_up,
         "opencode": {
             "bin": opencode_bin,
             "pid": None,
             "pgid": None,
             "exit_code": None,
-            "previous_session_id": opencode_previous_session_id,
+            "resume_session_id": resume_session_id,
             "session_id": None,
             "skip_permissions": skip_permissions,
         },

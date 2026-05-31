@@ -113,7 +113,7 @@ All code-changing work is executed via the `marinator_delegate` tool, which is i
   "repo": "/abs/path/to/repo",
   "prompt_file": "/abs/path/to/prompt.md",
   "attachments": ["/optional/path"],
-  "opencode_previous_session_id": null,
+  "is_follow_up": false,
   "enable_per_minute_reports": true
 }
 ```
@@ -122,7 +122,7 @@ All code-changing work is executed via the `marinator_delegate` tool, which is i
 - `repo`: absolute path to the target repository.
 - `prompt_file`: absolute path to a prompt file (`.md`) written by the orchestrator before calling the tool.
 - `attachments`: optional list of absolute paths to attach as context.
-- `opencode_previous_session_id`: optional; for follow-up/fix loops, pass the previous OpenCode session id.
+- `is_follow_up`: if true, continue the most recent valid OpenCode session for this repo/task lineage. Default false. The tool resolves session ids internally; do not supply session ids.
 - `enable_per_minute_reports`: defaults to `true` for debug visibility. Do not set to `false` unless the human explicitly asked to disable progress/debug messages.
 
 ### Workflow
@@ -136,14 +136,16 @@ All code-changing work is executed via the `marinator_delegate` tool, which is i
 
 ### Follow-up / fix loops
 
-When a worker result is rejected, delegate a fix run:
+When a worker result is rejected, delegate a fix run with `is_follow_up: true`.
+The tool resolves the prior OpenCode session id internally from the most recent
+Marinator run for the same repo. Do not supply session ids directly.
 
 ```json
 {
   "job_id": "fix-<original-job-id>-1",
   "repo": "/abs/path/to/repo",
   "prompt_file": "/abs/path/to/fix-prompt.md",
-  "opencode_previous_session_id": "<session_id from previous result>"
+  "is_follow_up": true
 }
 ```
 

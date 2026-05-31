@@ -8,6 +8,7 @@ OpenCode inline — that is the wrapper script's job.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -15,6 +16,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import state
+
+
+_SES_ID_RE = re.compile(r"^ses_[A-Za-z0-9]+$")
 
 
 def _session_env(name: str, default: str = "") -> str:
@@ -138,11 +142,53 @@ def _get_wrapper_script() -> str:
     )
 
 
+def _resolve_opencode_resume_session(repo: str, current_job_id: str) -> str | None:
+    """Find the most recent prior Marinator run for the same repo with a valid
+    OpenCode session id (ses_...). Excludes the current run. Returns the
+    session id string or None."""
+    marinator_base = state.get_marinator_base()
+    runs_base = os.path.join(marinator_base, "runs")
+    if not os.path.isdir(runs_base):
+        return None
+
+    candidates: list[tuple[float, str]] = []
+    try:
+        entries = os.listdir(runs_base)
+    except OSError:
+        return None
+
+    for entry in entries:
+        if entry == current_job_id:
+            continue
+        status_path = os.path.join(runs_base, entry, "status.json")
+        if not os.path.isfile(status_path):
+            continue
+        status = state.read_json(status_path)
+        if not isinstance(status, dict):
+            continue
+        if status.get("repo") != repo:
+            continue
+        session_id = status.get("opencode", {}).get("session_id")
+        if session_id and _SES_ID_RE.match(str(session_id)):
+            try:
+                mtime = os.path.getmtime(status_path)
+            except OSError:
+                mtime = 0.0
+            candidates.append((mtime, str(session_id)))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates[0][1]
+
+
 def start_job(
     job_id: str,
     repo: str,
     prompt_file: str,
     attachments: list[str] | None = None,
+    is_follow_up: bool = False,
     opencode_previous_session_id: str | None = None,
     enable_per_minute_reports: bool = True,
     ctx: Any = None,
@@ -163,6 +209,24 @@ def start_job(
                 "~/.opencode/bin/opencode."
             )
         }
+
+    # Resolve OpenCode resume session
+    resume_session_id: str | None = None
+    if is_follow_up:
+        resume_session_id = _resolve_opencode_resume_session(repo, job_id)
+        if not resume_session_id:
+            return {
+                "error": (
+                    "no_valid_opencode_session_for_follow_up: is_follow_up=true but no "
+                    "prior Marinator run for this repo has a valid OpenCode session id. "
+                    "Start with is_follow_up=false first."
+                ),
+                "job_id": job_id,
+            }
+    elif opencode_previous_session_id:
+        # Backward compat: old callers that still pass opencode_previous_session_id
+        # (already validated in tools.py)
+        resume_session_id = opencode_previous_session_id
 
     # Detect runtime mode
     runtime_mode, detected_from = _detect_runtime_mode()
@@ -199,7 +263,8 @@ def start_job(
         "prompt_file": prompt_dest,
         "attachments": copied_attachments,
         "opencode_bin": opencode_bin,
-        "opencode_previous_session_id": opencode_previous_session_id,
+        "opencode_resume_session_id": resume_session_id,
+        "is_follow_up": is_follow_up,
         "enable_per_minute_reports": enable_per_minute_reports,
         "runtime_mode": runtime_mode,
         "owner_session_id": owner_session_id,
@@ -223,7 +288,8 @@ def start_job(
         repo=repo,
         run_dir=run_dir,
         opencode_bin=opencode_bin,
-        opencode_previous_session_id=opencode_previous_session_id,
+        resume_session_id=resume_session_id,
+        is_follow_up=is_follow_up,
         skip_permissions=True,
     )
     state.atomic_write_json(status_path, initial_status)
@@ -234,6 +300,7 @@ def start_job(
         "job_id": job_id,
         "repo": repo,
         "runtime_mode": runtime_mode,
+        "is_follow_up": is_follow_up,
         "enable_per_minute_reports": enable_per_minute_reports,
     })
 
@@ -352,6 +419,7 @@ def start_job(
         "runtime_mode": runtime_mode,
         "enable_per_minute_reports": enable_per_minute_reports,
         "status_path": status_path,
+        "is_follow_up": is_follow_up,
         "message": (
             "Delegated coding task. I will review the result when "
             "Marinator wakes this session."

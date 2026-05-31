@@ -77,7 +77,7 @@ runtime_mode=$(json_get_default 'runtime_mode' 'headless')
 owner_session_id=$(json_get_default 'owner_session_id' '')
 hermes_profile=$(json_get_default 'hermes_profile' 'junie-live')
 enable_per_minute_reports=$(json_get_default 'enable_per_minute_reports' 'true')
-opencode_previous_session_id=$(json_get_default 'opencode_previous_session_id' '')
+opencode_resume_session_id=$(json_get_default 'opencode_resume_session_id' '')
 progress_delivery_enabled=$(json_get_default 'progress_delivery.enabled' 'false')
 progress_delivery_profile=$(json_get_default 'progress_delivery.profile' "$hermes_profile")
 progress_delivery_target=$(json_get_default 'progress_delivery.target' '')
@@ -284,20 +284,18 @@ headless_resume() {
 # ── Build OpenCode arguments ──
 
 build_opencode_args() {
-  local prompt help_text
+  local prompt
   prompt=$(cat "$prompt_file")
-  OPENCODE_ARGS=(run --dangerously-skip-permissions)
+  OPENCODE_ARGS=(run --format json --dangerously-skip-permissions)
 
-  if [[ -n "$opencode_previous_session_id" && "$opencode_previous_session_id" != "null" ]]; then
-    help_text=$("$opencode_bin" run --help 2>&1 || true)
-    if echo "$help_text" | grep -q -- '--session'; then
-      OPENCODE_ARGS+=(--session "$opencode_previous_session_id")
-    elif echo "$help_text" | grep -q -- '--resume'; then
-      OPENCODE_ARGS+=(--resume "$opencode_previous_session_id")
+  if [[ -n "$opencode_resume_session_id" && "$opencode_resume_session_id" != "null" ]]; then
+    # Strict validation: must match OpenCode session id pattern ses_<alphanumeric>
+    if [[ "$opencode_resume_session_id" =~ ^ses_[A-Za-z0-9]+$ ]]; then
+      OPENCODE_ARGS+=(--session "$opencode_resume_session_id")
     else
-      update_status_json '{"worker_state":"failed","attention.state":"needs_decision","attention.reason":"opencode_resume_not_supported"}'
-      append_event "failed" reason opencode_resume_not_supported
-      echo "MARINATOR_ATTENTION_REQUIRED job_id=$job_id reason=opencode_resume_not_supported run_dir=$run_dir status_path=$status_path"
+      update_status_json '{"worker_state":"failed","attention.state":"needs_decision","attention.reason":"opencode_resume_session_invalid"}'
+      append_event "failed" reason opencode_resume_session_invalid session_id "$opencode_resume_session_id"
+      echo "MARINATOR_ATTENTION_REQUIRED job_id=$job_id reason=opencode_resume_session_invalid run_dir=$run_dir status_path=$status_path"
       headless_resume "failed"
       exit 70
     fi
@@ -460,24 +458,32 @@ terminate_group() {
   kill -KILL -- "-$pgid" 2>/dev/null || true
 }
 
-# ── Extract OpenCode session id from logs ──
+# ── Extract OpenCode session id from JSON NDJSON logs ──
 
 extract_opencode_session_id() {
-  # Try to find session id from OpenCode stdout/stderr
-  local session_id=""
-  # Pattern 1: plain text — "Session: <id>", "session_id: <id>", "Session ID: <id>"
-  session_id=$(grep -oP '(?:Session(?:\s+ID)?|session_id)\s*[:=]\s*\K\S+' "$stdout_log" 2>/dev/null | tail -1 || true)
-  if [[ -z "$session_id" ]]; then
-    session_id=$(grep -oP '(?:Session(?:\s+ID)?|session_id)\s*[:=]\s*\K\S+' "$stderr_log" 2>/dev/null | tail -1 || true)
-  fi
-  # Pattern 2: JSON output — "sessionID":"ses_..."  or  "session_id":"ses_..."
-  if [[ -z "$session_id" ]]; then
-    session_id=$(grep -oP '"(?:sessionID|session_id)"\s*:\s*"\K[^"]+' "$stdout_log" 2>/dev/null | tail -1 || true)
-  fi
-  if [[ -z "$session_id" ]]; then
-    session_id=$(grep -oP '"(?:sessionID|session_id)"\s*:\s*"\K[^"]+' "$stderr_log" 2>/dev/null | tail -1 || true)
-  fi
-  printf '%s' "$session_id"
+  # With --format json, OpenCode streams NDJSON with top-level sessionID.
+  # Parse the last JSON line that has a valid "sessionID" field.
+  python3 - "$stdout_log" <<'PYSES' 2>/dev/null || true
+import json, sys, re
+ses_re = re.compile(r'^ses_[A-Za-z0-9]+$')
+last_id = ""
+try:
+    with open(sys.argv[1], 'r', encoding='utf-8', errors='replace') as fh:
+        for raw in fh:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                ev = json.loads(raw)
+                sid = ev.get("sessionID", "")
+                if ses_re.match(str(sid)):
+                    last_id = sid
+            except (json.JSONDecodeError, ValueError):
+                pass
+except FileNotFoundError:
+    pass
+print(last_id, end="")
+PYSES
 }
 
 # ── Exit trap: ensure non-terminal status never survives ──
@@ -682,9 +688,38 @@ if [[ -n "$opencode_session_id" ]]; then
   log_runner "OpenCode session id: $opencode_session_id"
 fi
 
+# ── Extract human-visible assistant text from NDJSON events ──
+
+extract_opencode_text() {
+  python3 - "$stdout_log" <<'PYTEXT' 2>/dev/null || true
+import json, sys
+parts = []
+try:
+    with open(sys.argv[1], 'r', encoding='utf-8', errors='replace') as fh:
+        for raw in fh:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                ev = json.loads(raw)
+                if ev.get("type") == "text":
+                    part = ev.get("part", {})
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        text = part.get("text", "")
+                        if text:
+                            parts.append(text)
+            except (json.JSONDecodeError, ValueError):
+                pass
+except FileNotFoundError:
+    pass
+print("\n".join(parts), end="")
+PYTEXT
+}
+
 # ── Write result and terminal status ──
 
 if [[ "$exit_code" -eq 0 ]]; then
+  opencode_text=$(extract_opencode_text)
   {
     echo "# Marinator worker result"
     echo
@@ -695,6 +730,12 @@ if [[ "$exit_code" -eq 0 ]]; then
       echo "- opencode_session_id: $opencode_session_id"
     fi
     echo
+    if [[ -n "$opencode_text" ]]; then
+      echo "## Assistant response"
+      echo
+      echo "$opencode_text"
+      echo
+    fi
     echo "## stdout tail"
     echo '```'
     tail -n 80 "$stdout_log" 2>/dev/null || true
@@ -715,6 +756,7 @@ if [[ "$exit_code" -eq 0 ]]; then
 fi
 
 # Failed
+opencode_text=$(extract_opencode_text)
 {
   echo "# Marinator worker result"
   echo
@@ -725,6 +767,12 @@ fi
     echo "- opencode_session_id: $opencode_session_id"
   fi
   echo
+  if [[ -n "$opencode_text" ]]; then
+    echo "## Assistant response"
+    echo
+    echo "$opencode_text"
+    echo
+  fi
   echo "## stdout tail"
   echo '```'
   tail -n 80 "$stdout_log" 2>/dev/null || true

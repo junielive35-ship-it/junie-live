@@ -54,4 +54,4 @@ marinator_delegate(
 )
 ```
 
-For follow-up/fix loops, pass `opencode_previous_session_id` to continue the prior OpenCode context.
+For follow-up/fix loops, set `is_follow_up: true`. The tool resolves the prior OpenCode session id internally from the most recent Marinator run for the same repo. Do not supply session ids directly.

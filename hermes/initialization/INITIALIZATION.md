@@ -22,6 +22,10 @@ Before normal work:
 
 If the owner asks for unrelated work before initialization is complete, explain that initialization is still pending and either continue initialization or ask whether to explicitly override the gate.
 
+### First response after hire or start
+
+If the current owner message does not already explicitly provide both target project/repo and area of responsibility, your next user-facing response MUST ask exactly those two questions and stop. Do not send a generic greeting, list `/help`, inspect the project first, propose actions, or do anything else before asking those two questions. Tell the owner they can reply with an audio message.
+
 ## Inputs you need
 
 Before initialization is complete, collect or infer these inputs:
@@ -44,7 +48,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - Check your installed skills with `skills_list`.
    - Read your profile docs at `~/.hermes/profiles/junie-live/docs/`.
    - Note: memory is empty on first run. You will populate it during initialization.
- 2. Ask the owner the two initialization questions. If the current owner message does not already explicitly provide both target project/repo and area of responsibility, your next user-facing response MUST ask exactly those two questions and stop. Do not inspect project state first. Tell the owner they can reply with an audio message.
+ 2. Ask the owner the two initialization questions. The rule above ("First response after hire or start") applies — no greeting, no `/help`, no project inspection before the two questions. Tell the owner they can reply with an audio message.
    1. Which project am I working on? (target repository path or project identity)
    2. What is my area of responsibility?
    - Tell the owner they can answer with an audio message.
@@ -118,7 +122,11 @@ If any required input is missing and cannot be safely inferred, ask one concise 
     - what changed at a high level;
     - unresolved non-blocking unknowns;
     - assumptions that may need future attention.
-15. Finalize:
+15. Clean up permanent files before finalizing:
+    - Check `HERMES.md` (installed in target repo), `AGENTS.md`, memory, and long-lived profile docs for any initialization-related guidance that was added during onboarding.
+    - Remove or avoid leaving initialization workflow text in those permanent files. They may keep only minimal non-temporary guardrails that remain valid after initialization (e.g. code mutex, delegation rules, strategy).
+    - See "## What not to leave in permanent files" below.
+16. Finalize:
     - Delete this file: `terminal(command="rm ~/.hermes/profiles/junie-live/INITIALIZATION.md")`
     - Update memory: `memory(action="replace", target="memory", old_text="NOT INITIALIZED", content="Initialization status: INITIALIZED. Target repo: <path>")`
 
@@ -129,6 +137,15 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 - Do not silently override contradictions.
 - Do not put full project documentation into memory; keep detailed knowledge in profile docs.
 - Do not send messages to external people or teams unless explicitly asked or clearly required and approved.
+
+## What not to leave in permanent files
+
+Files that survive after initialization (`HERMES.md`, `AGENTS.md`, memory, long-lived profile docs) must not carry initialization-only guidance.
+
+- Do not copy initialization workflow text (first-response rules, gate check procedures, initialization steps) into `HERMES.md`, `AGENTS.md`, memory, or profile docs.
+- If any initialization-related temporary notes were added to permanent files during onboarding, remove them before deleting `INITIALIZATION.md`.
+- Permanent files may keep only minimal non-temporary guardrails that remain valid after initialization (e.g. code mutex, delegation rules, strategy, challenge protocol).
+- `SOUL.md` already has the minimal initialization sentinel (check whether `INITIALIZATION.md` exists; if so, follow it). Do not expand it with init workflow text.
 
 ## Hermes-specific notes
 

@@ -101,6 +101,43 @@ else
   pass
 fi
 
+printf '\n=== SOUL.md: warns about profile-scoped \$HOME pitfall ===\n'
+if grep -qi 'profile.*HOME.*rewrite\|rewrite.*\$HOME\|HOME.*profile.*dir\|\$HOME.*bogus\|profile.*session.*\$HOME' "$SOUL_MD" 2>/dev/null; then
+  pass
+else
+  fail "SOUL.md does not mention the profile-scoped \$HOME pitfall"
+fi
+
+printf '\n=== SOUL.md: prioritizes \$HERMES_HOME before \$HOME fallback ===\n'
+if grep -q 'HERMES_HOME.*first\|resolve.*through.*HERMES_HOME\|Always resolve.*HERMES_HOME' "$SOUL_MD" 2>/dev/null; then
+  pass
+else
+  fail "SOUL.md does not explicitly prioritize \$HERMES_HOME before \$HOME fallback"
+fi
+
+printf '\n=== SOUL.md: does NOT contain a large shell snippet ===\n'
+if grep -q 'pdir="\${HERMES_PROFILE_DIR:-}"' "$SOUL_MD" 2>/dev/null || grep -q 'INITIALIZATION=present' "$SOUL_MD" 2>/dev/null; then
+  fail "SOUL.md still contains a large shell snippet (pdir or INITIALIZATION=present)"
+else
+  pass
+fi
+
+printf '\n=== INITIALIZATION.md: forbids generic greeting before the two questions ===\n'
+INIT_MD="$ROOT/initialization/INITIALIZATION.md"
+if grep -qi 'no.*generic.*greeting\|no.*/help\|do not send.*greeting\|do not.*greet.*before\|MUST ask.*stop' "$INIT_MD" 2>/dev/null; then
+  pass
+else
+  fail "INITIALIZATION.md does not forbid generic greeting before the two questions"
+fi
+
+printf '\n=== seed-HERMES.md: no Initialization mode section ===\n'
+SEED_MD="$ROOT/initialization/docs/seed-HERMES.md"
+if grep -q '## Initialization mode' "$SEED_MD" 2>/dev/null; then
+  fail "seed-HERMES.md still has an Initialization mode section"
+else
+  pass
+fi
+
 printf '\n=== Seed/guidance files: no \044HERMES_PROFILE_DIR mutex references ===\n'
 # Guidance/seed files that instruct agents about mutex/profile operations should
 # not reference $HERMES_PROFILE_DIR (which may be unset in tool subprocesses).

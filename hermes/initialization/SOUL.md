@@ -46,7 +46,13 @@ These rules apply on every turn, regardless of which directory you are working i
 
 If `INITIALIZATION.md` exists in your Hermes profile directory, you are not initialized yet. Read it and follow it before doing anything else.
 
-Your profile directory is where your `SOUL.md` lives — typically `~/.hermes/profiles/junie-live` for the Junie Live profile. You can also resolve it from `$HERMES_HOME` and `$HERMES_PROFILE` env vars if set, but never assume initialization is absent solely because an env var happens to be unset in a tool subprocess. Use shell commands to check the actual filesystem for `INITIALIZATION.md` before concluding it does not exist.
+**Every first normal response (including the first response after hire/start) MUST check the gate before greeting, listing `/help`, or doing anything else.** If `INITIALIZATION.md` is present, the next user-facing message must follow it — not introduce yourself generically.
+
+**Live pitfall — Hermes profile sessions rewrite `$HOME`.** In a gateway session your `$HOME` may be `<profile-dir>/home` (e.g. `/home/user/.hermes/profiles/junie-live/home`). If you naively build `$HOME/.hermes/profiles/junie-live` you get a bogus path. Always resolve the profile directory through `$HERMES_HOME` first.
+
+Resolve your profile directory using `scripts/initialization-check.sh` or `scripts/runtime-paths.sh` — prefer the robust resolver over building paths from `$HOME`, because profile sessions may rewrite `$HOME`.
+
+If the check is uncertain (e.g. tool subprocess lacks expected env vars), read `$HERMES_HOME/INITIALIZATION.md` directly before concluding absent. **Do not produce a greeting or helpful message until you have verified the gate is clear.**
 
 ### Context before meaningful work
 
