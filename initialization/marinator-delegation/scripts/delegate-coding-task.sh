@@ -62,8 +62,8 @@ update_interval_seconds=$(json_get_default 'update_interval_seconds' '300')
 no_progress_seconds=$(json_get_default 'no_progress_seconds' '900')
 timeout_seconds=$(json_get_default 'timeout_seconds' '7200')
 orchestrator_session_key=$(json_get 'orchestrator_session_key')
-delivery_channel=$(json_get 'delivery.channel')
-delivery_target=$(json_get 'delivery.target')
+delivery_channel=$(json_get_default 'delivery.channel' '')
+delivery_target=$(json_get_default 'delivery.target' '')
 delivery_thread_id=$(json_get_default 'delivery.thread_id' '')
 delivery_account_id=$(json_get_default 'delivery.account_id' '')
 opencode_previous_session_id=$(json_get_default 'opencode_previous_session_id' '')
@@ -285,6 +285,10 @@ PY
 # every send_telegram call once the orchestrator-driven delivery path is final.
 send_telegram() {
   local message=$1
+  if [[ -z "$delivery_channel" || -z "$delivery_target" ]]; then
+    append_event "telegram_send_skipped" reason "no delivery target" message "$message"
+    return
+  fi
   local args=(message send --channel "$delivery_channel" --target "$delivery_target" --message "$message")
   if [[ -n "$delivery_thread_id" ]]; then
     args+=(--thread-id "$delivery_thread_id")

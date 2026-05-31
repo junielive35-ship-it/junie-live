@@ -362,4 +362,53 @@ exit 0
     expect(eventNames.indexOf("handoff_pending")).toBeGreaterThan(eventNames.indexOf("failed"));
     expect(eventNames.indexOf("handoff_scheduled")).toBeGreaterThan(eventNames.indexOf("handoff_pending"));
   });
+
+  it("starts runner and schedules durable handoff when delivery spec is absent", async () => {
+    const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "marinator-runner-test-"));
+    const binDir = path.join(workspaceDir, "bin");
+    const repoDir = path.join(workspaceDir, "repo");
+    const runDir = path.join(workspaceDir, "run");
+    const promptFile = path.join(workspaceDir, "prompt.txt");
+    const jobFile = path.join(workspaceDir, "job.json");
+    await mkdir(binDir, { recursive: true });
+    await mkdir(repoDir, { recursive: true });
+    await mkdir(runDir, { recursive: true });
+    await writeFile(promptFile, "headless setup should not require delivery", "utf8");
+    await writeFakeOpenclaw(binDir);
+
+    const opencodeBin = path.join(binDir, "opencode");
+    await writeFile(opencodeBin, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == "run" && "\${2:-}" == "--help" ]]; then
+  exit 0
+fi
+exit 0
+`, "utf8");
+    await chmod(opencodeBin, 0o755);
+
+    await writeFile(jobFile, `${JSON.stringify({
+      job_id: "job-headless-runner-test",
+      repo: repoDir,
+      prompt_file: promptFile,
+      run_dir: runDir,
+      update_interval_seconds: 300,
+      no_progress_seconds: 300,
+      timeout_seconds: 30,
+      orchestrator_session_key: "agent:junie-live:headless",
+    }, null, 2)}
+`, "utf8");
+
+    await execFileAsync(path.resolve("scripts/delegate-coding-task.sh"), ["--job", jobFile], {
+      cwd: path.resolve("."),
+      env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ""}`, OPENCODE_BIN: opencodeBin },
+      timeout: 10_000,
+    });
+
+    const eventNames = (await readEvents(runDir)).map((event) => event.event);
+    expect(eventNames).toContain("started");
+    expect(eventNames).toContain("opencode_started");
+    expect(eventNames).toContain("completed");
+    expect(eventNames).toContain("handoff_scheduled");
+  });
+
 });
