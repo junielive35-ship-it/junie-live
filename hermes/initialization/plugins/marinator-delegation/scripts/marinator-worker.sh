@@ -81,6 +81,9 @@ opencode_previous_session_id=$(json_get_default 'opencode_previous_session_id' '
 progress_delivery_enabled=$(json_get_default 'progress_delivery.enabled' 'false')
 progress_delivery_profile=$(json_get_default 'progress_delivery.profile' "$hermes_profile")
 progress_delivery_target=$(json_get_default 'progress_delivery.target' '')
+progress_summary_model="${MARINATOR_PROGRESS_SUMMARY_MODEL:-$(json_get_default 'progress_summary_model' 'openai/gpt-4.1-mini')}"
+progress_summary_provider="${MARINATOR_PROGRESS_SUMMARY_PROVIDER:-$(json_get_default 'progress_summary_provider' 'openrouter')}"
+progress_summary_profile="${MARINATOR_PROGRESS_SUMMARY_PROFILE:-$(json_get_default 'progress_summary_profile' "$hermes_profile")}"
 
 # OpenCode unattended mode: allow every permission class and every external
 # directory. `--dangerously-skip-permissions` only auto-approves permissions
@@ -302,12 +305,13 @@ PYATT
   OPENCODE_ARGS+=("$prompt")
 }
 
-# ── Progress summary (simplified for Hermes MVP) ──
+# ── Progress summary (LLM-generated when enabled, byte-delta fallback otherwise) ──
 
 summarize_delta() {
   local stdout_offset_file="$run_dir/.summary.stdout.offset"
   local stderr_offset_file="$run_dir/.summary.stderr.offset"
   local stdout_size stderr_size previous_stdout_size previous_stderr_size
+  local delta_file context_file summary_prompt summary change_note elapsed llm_output
 
   stdout_size=$(wc -c < "$stdout_log" | tr -d ' ')
   stderr_size=$(wc -c < "$stderr_log" | tr -d ' ')
@@ -316,26 +320,99 @@ summarize_delta() {
   [[ -f "$stdout_offset_file" ]] && previous_stdout_size=$(cat "$stdout_offset_file" 2>/dev/null || echo 0)
   [[ -f "$stderr_offset_file" ]] && previous_stderr_size=$(cat "$stderr_offset_file" 2>/dev/null || echo 0)
 
-  local change_note summary
+  delta_file="$run_dir/.summary.delta"
+  context_file="$run_dir/.summary.context"
+
+  # Build delta (new bytes since last interval)
   if (( stdout_size <= previous_stdout_size && stderr_size <= previous_stderr_size )); then
-    change_note="no new output"
+    change_note="No new stdout or stderr bytes since the previous summary interval."
+    : > "$delta_file"
   else
-    change_note="new output: stdout=$((stdout_size - previous_stdout_size))B stderr=$((stderr_size - previous_stderr_size))B"
+    change_note="New stdout/stderr output appeared since the previous summary interval."
+    {
+      if (( stdout_size > previous_stdout_size )); then
+        printf '## stdout delta\n'
+        tail -c +$((previous_stdout_size + 1)) "$stdout_log"
+        printf '\n'
+      fi
+      if (( stderr_size > previous_stderr_size )); then
+        printf '## stderr delta\n'
+        tail -c +$((previous_stderr_size + 1)) "$stderr_log"
+        printf '\n'
+      fi
+    } | tail -c 12000 > "$delta_file"
   fi
 
   printf '%s\n' "$stdout_size" > "$stdout_offset_file"
   printf '%s\n' "$stderr_size" > "$stderr_offset_file"
 
-  local elapsed=$(( $(date +%s) - start_epoch ))
-  summary="MARINATOR_PROGRESS job_id=$job_id elapsed=${elapsed}s summary=$change_note total_stdout=${stdout_size}B total_stderr=${stderr_size}B"
+  elapsed=$(( $(date +%s) - start_epoch ))
 
-  log_runner "$summary"
-  append_event "progress_summary" summary "$change_note" stdout_bytes "$stdout_size" stderr_bytes "$stderr_size" elapsed "$elapsed"
-
-  # Send via Telegram only when explicitly enabled
-  if [[ "$enable_per_minute_reports" == "true" ]]; then
-    send_progress "Marinator [$job_id] ${elapsed}s: $change_note"
+  # Fast path when per-minute reports are disabled — just log byte counts
+  if [[ "$enable_per_minute_reports" != "true" ]]; then
+    log_runner "MARINATOR_PROGRESS job_id=$job_id elapsed=${elapsed}s summary=$change_note total_stdout=${stdout_size}B total_stderr=${stderr_size}B"
+    append_event "progress_summary" summary "$change_note" stdout_bytes "$stdout_size" stderr_bytes "$stderr_size" elapsed "$elapsed"
+    return 0
   fi
+
+  # Build context file (status, events, runner log, delta, stdout/stderr tails)
+  {
+    printf '## change note\n%s\n\n' "$change_note"
+    printf '## status.json\n'
+    tail -c 4000 "$status_path" 2>/dev/null || true
+    printf '\n\n## recent events.jsonl\n'
+    tail -n 40 "$events_path" 2>/dev/null || true
+    printf '\n\n## runner.log tail\n'
+    tail -n 80 "$runner_log" 2>/dev/null || true
+    printf '\n\n## stdout/stderr delta\n'
+    cat "$delta_file" 2>/dev/null || true
+    printf '\n\n## stdout tail\n'
+    tail -n 80 "$stdout_log" 2>/dev/null || true
+    printf '\n\n## stderr tail\n'
+    tail -n 120 "$stderr_log" 2>/dev/null || true
+  } | tail -c 24000 > "$context_file"
+
+  # Construct LLM prompt
+  summary_prompt=$(cat <<PROMPT
+Summarize this Marinator/OpenCode worker state for a Telegram debug progress update. Use the provided status, events, runner log, stdout, and stderr. Focus on worker actions and critical errors/blockers. Be concise, factual, under 700 characters. If the change note says there was no new stdout/stderr and the context shows no other movement, explicitly say nothing changed and that the worker still appears to be running.
+
+Job: $job_id
+
+Worker context:
+$(cat "$context_file")
+PROMPT
+)
+
+  # Call Hermes LLM (quiet, no toolsets, pure text completion)
+  summary=""
+  if llm_output=$(timeout 45 hermes -p "$progress_summary_profile" chat -Q -t '' \
+    --provider "$progress_summary_provider" \
+    -m "$progress_summary_model" \
+    -q "$summary_prompt" 2>>"$runner_log"); then
+    summary=$(printf '%s' "$llm_output" | python3 -c '
+import sys
+lines = sys.stdin.read().strip().splitlines()
+out = [l for l in lines if not l.startswith("session_id:")]
+print("\n".join(out).strip()[:700])
+' 2>/dev/null || true)
+  fi
+
+  # Fallback if LLM call failed or returned empty
+  if [[ -z "$summary" ]]; then
+    if [[ -s "$delta_file" ]]; then
+      summary="Marinator worker $job_id: OpenCode is still running; new log output was produced, but summary generation failed."
+    else
+      summary="Marinator worker $job_id: OpenCode is still running; nothing changed since the previous update, and summary generation failed."
+    fi
+    log_runner "progress_summary_failed reason llm_call_failed"
+    append_event "progress_summary_failed" reason "llm_call_failed"
+  fi
+
+  log_runner "MARINATOR_PROGRESS job_id=$job_id elapsed=${elapsed}s summary=$change_note total_stdout=${stdout_size}B total_stderr=${stderr_size}B"
+  append_event "progress_summary_sent" summary "$summary" stdout_bytes "$stdout_size" stderr_bytes "$stderr_size" elapsed "$elapsed"
+
+  # Send via Telegram — the LLM-generated text IS the message
+  send_progress "$summary"
 }
 
 # ── Stall detection (no auto-kill) ──
