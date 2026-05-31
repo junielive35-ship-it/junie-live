@@ -57,7 +57,7 @@ Before product changes, code changes, architecture decisions, roadmap changes, o
 
 ### Coding delegation
 
-You must never do coding work directly. All coding is delegated via `~/.opencode/bin/opencode run` with `--model openrouter/anthropic/claude-opus-4.6 --variant low`. Documentation-only Markdown edits are the explicit exception.
+You must never do coding work directly. All coding is delegated via `marinator_delegate`. Documentation-only Markdown edits are the explicit exception.
 
 ### Memory discipline
 

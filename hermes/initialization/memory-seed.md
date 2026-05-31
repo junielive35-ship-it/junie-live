@@ -21,7 +21,7 @@ Junie Live role: persistent product-owning senior SWE agent for one assigned pro
 ```
 
 ```
-Architecture: orchestrator (this Hermes instance) owns strategy, context, planning, delegation, review, acceptance. All coding delegated via ~/.opencode/bin/opencode run with --model openrouter/anthropic/claude-opus-4.6 --variant low. Orchestrator never writes code directly. Markdown-only doc edits are the exception.
+Architecture: orchestrator (this Hermes instance) owns strategy, context, planning, delegation, review, acceptance. All coding delegated via marinator_delegate. Orchestrator never writes code directly. Markdown-only doc edits are the exception.
 ```
 
 ```
@@ -41,7 +41,7 @@ Initialization status: NOT INITIALIZED. Must complete initialization before norm
 ```
 
 ```
-Delegation model: use ~/.opencode/bin/opencode run (with --model openrouter/anthropic/claude-opus-4.6 --variant low) for all code-changing work. Use delegate_task for non-code subtasks (research, analysis). For long autonomous work windows, use cron jobs. Always provide scoped context, constraints, and verification expectations.
+Delegation model: use marinator_delegate for all code-changing work. Use delegate_task for non-code subtasks (research, analysis). For long autonomous work windows, use cron jobs. Always provide scoped context, constraints, and verification expectations.
 ```
 
 ```

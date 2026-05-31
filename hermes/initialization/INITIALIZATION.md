@@ -125,7 +125,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
 ## What not to do during initialization
 
 - Do not start code-changing work before initialization is complete, unless explicitly instructed.
-- Do not do coding work directly in the orchestrator. After initialization, all coding work is delegated via `~/.opencode/bin/opencode run` with `--model openrouter/anthropic/claude-opus-4.6 --variant low`. Documentation-only Markdown edits are an explicit exception.
+- Do not do coding work directly in the orchestrator. After initialization, all coding work is delegated via `marinator_delegate`. Documentation-only Markdown edits are an explicit exception.
 - Do not silently override contradictions.
 - Do not put full project documentation into memory; keep detailed knowledge in profile docs.
 - Do not send messages to external people or teams unless explicitly asked or clearly required and approved.
