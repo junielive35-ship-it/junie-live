@@ -18,9 +18,16 @@ set -euo pipefail
 #   Stale-by-age locks (holder.json present but old) are NOT auto-recovered;
 #   they still require manual release.
 
-STATE_DIR="${JUNIE_STATE_DIR:-${HOME}/.hermes/junie-live/state}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/runtime-paths.sh" ]]; then
+  source "$SCRIPT_DIR/runtime-paths.sh"
+  STATE_DIR="${JUNIE_STATE_DIR:-$(hermes_state_root_default)}"
+else
+  STATE_DIR="${JUNIE_STATE_DIR:-${HOME}/.hermes/profiles/junie-live/junie-live/state}"
+fi
 MUTEX_DIR=""
 STALE_MINUTES=30
+FORCE=false
 
 usage() {
   cat <<'EOF'
@@ -31,13 +38,14 @@ Usage:
   code-mutex.sh check-stale     Check for stale mutex
 
 Options:
-  --mutex-dir DIR         Mutex directory (default: ~/.hermes/junie-live/state/code_mutex)
-  --holder ID             Holder identifier (required for acquire)
+  --mutex-dir DIR         Mutex directory (default: profile-local state/code_mutex)
+  --holder ID             Holder identifier (required for acquire; optional for release)
   --reason TEXT           Reason for acquiring (required for acquire)
   --repo DIR              Repository path (for acquire metadata)
   --branch BRANCH         Branch name (for acquire metadata)
   --stale-minutes N       Minutes before mutex is considered stale (default: 30)
   --auto-recover          (check-stale) Auto-remove BROKEN mutex (dir exists, no holder.json)
+  --force                 (release) Release even if --holder does not match current holder
 EOF
 }
 
@@ -62,6 +70,7 @@ while [[ $# -gt 0 ]]; do
     --branch) BRANCH="$2"; shift 2 ;;
     --stale-minutes) STALE_MINUTES="$2"; shift 2 ;;
     --auto-recover) AUTO_RECOVER=true; shift ;;
+    --force) FORCE=true; shift ;;
     *) printf 'Unknown: %s\n' "$1" >&2; usage; exit 2 ;;
   esac
 done
@@ -114,6 +123,18 @@ JSON
 
   release)
     if [[ -d "$MUTEX_DIR" ]]; then
+      # When --holder is provided, verify identity before releasing
+      if [[ -n "$HOLDER" && -f "$HOLDER_FILE" && "$FORCE" != true ]]; then
+        stored_holder=$(grep -o '"holder_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$HOLDER_FILE" | head -1 | sed 's/.*"holder_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+        if [[ -n "$stored_holder" && "$stored_holder" != "$HOLDER" ]]; then
+          printf 'mutex=HELD\n'
+          printf 'result=holder_mismatch\n'
+          printf 'expected_holder=%s\n' "$HOLDER"
+          printf 'current_holder=%s\n' "$stored_holder"
+          printf 'hint=use --force to release anyway\n'
+          exit 1
+        fi
+      fi
       rm -rf "$MUTEX_DIR"
       printf 'mutex=RELEASED\n'
     else

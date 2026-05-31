@@ -144,7 +144,7 @@ def start_job(
     prompt_file: str,
     attachments: list[str] | None = None,
     opencode_previous_session_id: str | None = None,
-    enable_per_minute_reports: bool = False,
+    enable_per_minute_reports: bool = True,
     ctx: Any = None,
 ) -> dict:
     """Create run directory, write spec/status/events, and spawn the wrapper.

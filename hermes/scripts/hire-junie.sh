@@ -103,7 +103,7 @@ command -v hermes >/dev/null || { err "hermes CLI not found in PATH"; exit 1; }
 
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 PROFILE_DIR="$HERMES_HOME/profiles/$PROFILE"
-STATE_DIR="$HERMES_HOME/junie-live/state"
+STATE_DIR="$PROFILE_DIR/junie-live/state"
 BACKUP_DIR="$HERMES_HOME/backups"
 
 # ── Step 1: Back up any existing profile + state ──
@@ -111,7 +111,10 @@ if [[ "$BACKUP" -eq 1 ]]; then
   ts="$(date +%Y%m%d-%H%M%S)"
   items=()
   [[ -e "$PROFILE_DIR" ]] && items+=("profiles/$PROFILE")
-  [[ -e "$STATE_DIR" ]] && items+=("junie-live/state")
+  # Back up both old and new state locations for compatibility
+  OLD_STATE="$HERMES_HOME/junie-live/state"
+  [[ -e "$OLD_STATE" ]] && items+=("junie-live/state")
+  [[ -e "$STATE_DIR" ]] && items+=("profiles/$PROFILE/junie-live/state")
   if [[ "${#items[@]}" -gt 0 ]]; then
     mkdir -p "$BACKUP_DIR"
     backup="$BACKUP_DIR/${PROFILE}-before-hire-$ts.tgz"
@@ -203,6 +206,13 @@ fi
 
 # Junie-live operational state (backlog, mutex, reflections, overnight,
 # logs) — stale state from a previous initialization.
+# Clear both old and new state locations for compatibility.
+OLD_STATE="$HERMES_HOME/junie-live/state"
+if [[ -d "$OLD_STATE" ]]; then
+  rm -rf -- "$OLD_STATE"
+  runtime_cleared=$((runtime_cleared + 1))
+  log "  Cleared: $OLD_STATE (legacy)"
+fi
 if [[ -d "$STATE_DIR" ]]; then
   rm -rf -- "$STATE_DIR"
   runtime_cleared=$((runtime_cleared + 1))
@@ -223,6 +233,20 @@ log "  Cleared $runtime_cleared runtime state entries"
 [[ -f "$PROFILE_DIR/INITIALIZATION.md" ]] || { err "copied profile missing INITIALIZATION.md: $PROFILE_DIR"; exit 1; }
 if [[ -e "$PROFILE_DIR/BOOTSTRAP.md" ]]; then
   err "copied profile unexpectedly contains BOOTSTRAP.md: $PROFILE_DIR/BOOTSTRAP.md"
+  exit 1
+fi
+
+# Verify the initialization sentinel files are in place
+if [[ -f "$PROFILE_DIR/INITIALIZATION.md" ]]; then
+  log "  INITIALIZATION.md sentinel present."
+else
+  err "INITIALIZATION.md missing after seed copy."
+  exit 1
+fi
+if [[ -f "$PROFILE_DIR/docs/tools.md" ]]; then
+  log "  docs/tools.md present (seed TODOs intact for agent to resolve)."
+else
+  err "docs/tools.md missing after seed copy."
   exit 1
 fi
 

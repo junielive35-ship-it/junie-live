@@ -34,9 +34,27 @@ def get_hermes_home() -> str:
     return os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
 
 
+def get_profile_dir() -> str:
+    """Resolve the Hermes profile directory.
+
+    Priority:
+      1. HERMES_PROFILE_DIR env var (explicit override)
+      2. If get_hermes_home() already points at profiles/<profile>, use it directly.
+      3. Otherwise, append profiles/<profile> to get_hermes_home().
+    """
+    explicit = os.environ.get("HERMES_PROFILE_DIR")
+    if explicit:
+        return explicit
+    home = Path(get_hermes_home()).expanduser()
+    profile = os.environ.get("HERMES_PROFILE", "junie-live")
+    if home.name == profile and home.parent.name == "profiles":
+        return str(home)
+    return str(home / "profiles" / profile)
+
+
 def get_marinator_base() -> str:
-    """Return the base directory for Marinator state."""
-    return os.path.join(get_hermes_home(), "junie-live", "state", "marinator")
+    """Return the base directory for Marinator state (profile-local)."""
+    return os.path.join(get_profile_dir(), "junie-live", "state", "marinator")
 
 
 def get_run_dir(job_id: str) -> str:

@@ -153,7 +153,7 @@ This rule has product-level weight. Junie Live's premise is that Hermes provides
 
 The orchestrator must never do coding work itself. All coding work must be delegated via `marinator_delegate`, or via `delegate_task` for non-code-changing subtasks only. Documentation-only Markdown changes are the explicit exception.
 
-Only one code-changing task may run at a time for this repo. The code mutex at `~/.hermes/junie-live/state/code_mutex/` prevents parallel code-changing work.
+Only one code-changing task may run at a time for this repo. The code mutex at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) prevents parallel code-changing work. Managed by `$HERMES_PROFILE_DIR/scripts/code-mutex.sh`.
 
 Before starting queued code work, check the mutex state. If held, do not start — ask the owner whether to wait, abort, or override.
 
