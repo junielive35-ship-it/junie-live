@@ -5,7 +5,7 @@ Source inputs: OpenClaw root implementation, current `hermes/` baseline, `tmp_sp
 
 ## First 50-line summary
 
-Marinator on Hermes keeps the same product contract as OpenClaw: one orchestrator session owns task validation, decomposition, coding-worker delegation, review, fix requests, verification, acceptance, reporting, and reflection. The orchestrator never writes code directly; code-changing work still goes to OpenCode (`/home/Danila.Savenkov/.opencode/bin/opencode`) with Opus 4.6 / low reasoning.
+Marinator on Hermes keeps the same product contract as OpenClaw: one orchestrator session owns task validation, decomposition, coding-worker delegation, review, fix requests, verification, acceptance, reporting, and reflection. The orchestrator never writes code directly; code-changing work still goes to OpenCode (`/home/Danila.Savenkov/.opencode/bin/opencode`) using OpenCode's configured default model/settings.
 
 Hermes changes the runtime substrate, not the delegation protocol:
 
@@ -110,7 +110,7 @@ orchestrator turn
   -> marinator_delegate(...)
   -> terminal(background=true, watch_patterns=[...]) starts wrapper
   -> turn may end naturally
-  -> wrapper emits progress lines and rare watch markers
+  -> wrapper sends optional progress reports through Telegram send_message and emits rare watch markers
   -> Hermes watcher routes events to the same live session
   -> orchestrator continues review/fix/acceptance
 ```
@@ -149,6 +149,10 @@ $HERMES_HOME/junie-live/state/marinator/
     result.md
     opencode.stdout.log
     opencode.stderr.log
+    opencode.pid
+    opencode.pgid
+    opencode.exit
+    opencode-waiter.pid
     runner.log
     control/
       kill
@@ -174,6 +178,15 @@ $HERMES_HOME/junie-live/state/marinator/
   },
   "repo": "/abs/path/to/repo",
   "run_dir": "/abs/path/to/run_dir",
+  "opencode": {
+    "bin": "/home/Danila.Savenkov/.opencode/bin/opencode",
+    "pid": null,
+    "pgid": null,
+    "exit_code": null,
+    "previous_session_id": null,
+    "session_id": null,
+    "skip_permissions": true
+  },
   "worker_state": "queued|running|completed|failed|attention_required|cancelled",
   "attention": {
     "state": "none|suspected_stall|needs_decision",
@@ -211,7 +224,7 @@ Progress line, every ~60s:
 MARINATOR_PROGRESS job_id=<id> elapsed=<s> summary=<short factual summary>
 ```
 
-`MARINATOR_PROGRESS` is **operator-visible debug output**. It must not be included in `watch_patterns`. It is disabled by default and only sent when `enable_per_minute_reports=true`. Deliver it through standard Hermes Telegram `send_message`. The orchestrator should only be explicitly woken by rare semantic events (`ATTENTION_REQUIRED`, `DONE`) plus the durable run artifacts it chooses to inspect.
+`MARINATOR_PROGRESS` is **operator-visible debug output**. It must not be printed to wrapper stdout and must not be included in `watch_patterns`. It is disabled by default and only sent when `enable_per_minute_reports=true`. Deliver it through standard Hermes Telegram `send_message`. The orchestrator should only be explicitly woken by rare semantic events (`ATTENTION_REQUIRED`, `DONE`) plus the durable run artifacts it chooses to inspect.
 
 Attention marker, rare and watch-matched:
 
@@ -234,9 +247,71 @@ Watch patterns for live gateway mode:
 ]
 ```
 
-Do not include `MARINATOR_PROGRESS` in watch patterns. Progress is debug visibility, not an agent wake request.
+Do not include `MARINATOR_PROGRESS` in watch patterns. Progress is debug visibility, not an agent wake request. Optional progress reports are controlled only by the `marinator_delegate.enable_per_minute_reports` tool argument; do not add a Hermes YAML/config knob for them.
 
-## 7. Stall / no-progress policy
+Do not set both `notify_on_complete=true` and `watch_patterns` for the same background process in MVP; current Hermes ignores watch patterns when both are provided.
+
+## 7. OpenCode invocation and supervision contract
+
+Reference implementation: `initialization/marinator-delegation/scripts/delegate-coding-task.sh` in the OpenClaw seed. The Hermes wrapper should preserve its useful OpenCode runner semantics while replacing only the OpenClaw-specific continuation/delivery path.
+
+OpenCode binary resolution:
+
+1. use `OPENCODE_BIN` if provided;
+2. otherwise use `opencode` from `PATH` when available;
+3. otherwise use `/home/Danila.Savenkov/.opencode/bin/opencode` when executable;
+4. otherwise fail with `opencode_not_found`.
+
+OpenCode is launched from the target repo directory as an isolated process group:
+
+```bash
+cd "$repo"
+setsid "$OPENCODE_BIN" "${OPENCODE_ARGS[@]}" >"$stdout_log" 2>"$stderr_log" &
+```
+
+The wrapper records:
+
+- `opencode.pid`;
+- `opencode.pgid`;
+- `opencode.exit`;
+- `opencode-waiter.pid`;
+- `opencode.stdout.log`;
+- `opencode.stderr.log`.
+
+Run OpenCode headlessly with permission prompts skipped. Treat `--dangerously-skip-permissions` as a required OpenCode capability for this integration, not as an optional feature to probe for:
+
+```bash
+opencode run --dangerously-skip-permissions <prompt>
+```
+
+This skip-permissions flag applies only to the delegated worker, not to the Hermes orchestrator. Safety is enforced by Marinator's bounded run, durable logs, mutex/protocol, orchestrator review, fix loop, and verification-before-reporting contract.
+
+Follow-up/fix workers may continue the previous OpenCode context. If `opencode_previous_session_id` is provided:
+
+1. inspect `opencode run --help`;
+2. prefer `opencode run --session <id>` when supported;
+3. fallback to `opencode run --resume <id>` when supported;
+4. otherwise fail fast with `opencode_resume_not_supported` and wake the orchestrator.
+
+The wrapper must capture the OpenCode session id produced by the run using the same extraction approach as the OpenClaw implementation, store it in `status.json.opencode.session_id`, include it in `result.md`, and return enough metadata for the orchestrator to pass it as `opencode_previous_session_id` in a follow-up/fix `marinator_delegate` call.
+
+Progress supervision mirrors the OpenClaw runner:
+
+- compare `opencode.stdout.log` and `opencode.stderr.log` byte sizes in the monitor loop;
+- update `last_progress_epoch` whenever either log grows;
+- every `update_interval_seconds` (default target for Hermes MVP: ~60s when reports are enabled), build a progress context from:
+  - `status.json` tail;
+  - recent `events.jsonl` lines;
+  - `runner.log` tail;
+  - stdout/stderr delta since the previous summary;
+  - stdout/stderr tail;
+- summarize that context into a concise human debug report;
+- send the report through standard Hermes Telegram `send_message` only when `enable_per_minute_reports=true`;
+- always append the summary/evidence to `events.jsonl` even when Telegram reports are disabled.
+
+No-progress detection should use the same log-growth signal, but unlike the current OpenClaw wrapper it must not kill OpenCode automatically. On suspected stall, record evidence, emit `MARINATOR_ATTENTION_REQUIRED`, and keep supervising unless the orchestrator writes an explicit control action.
+
+## 8. Stall / no-progress policy
 
 The wrapper may detect suspected stall, but must not kill OpenCode automatically.
 
@@ -265,7 +340,7 @@ The orchestrator decides:
 - start a follow-up/fix worker;
 - mark blocked.
 
-## 8. `marinator_delegate` Hermes tool behavior
+## 9. `marinator_delegate` Hermes tool behavior
 
 Inputs:
 
@@ -283,6 +358,8 @@ Inputs:
 Runtime mode is auto-detected. The tool never asks the orchestrator, LLM, or user to choose live vs headless. A debug-only environment override such as `MARINATOR_FORCE_MODE=live_gateway|headless` may exist for tests, but it must not be part of the normal tool schema.
 
 `enable_per_minute_reports` defaults to `false`. Set it to `true` only when the user explicitly asked to receive once-per-minute progress reports. The flag controls human-visible debug progress only; it must not affect orchestrator wake semantics.
+
+`opencode_previous_session_id` is optional and is used for follow-up/fix delegation. When present, the wrapper continues the previous OpenCode session via `--session` or `--resume` as described in section 7.
 
 Behavior:
 
@@ -315,7 +392,7 @@ Return shape:
 }
 ```
 
-## 9. Headless resume helper
+## 10. Headless resume helper
 
 Wrapper calls this only when no live loop can be relied on.
 
@@ -336,7 +413,7 @@ Rules:
 - record stdout/stderr of the resume call under `run_dir`;
 - never assume resume delivery to Telegram; headless continuation writes to the session transcript/stdout only.
 
-## 10. Live Telegram behavior
+## 11. Live Telegram behavior
 
 The live Telegram UX has two separate channels:
 
@@ -362,25 +439,6 @@ Operator-visible debug progress:
 
 Do not patch Hermes or add a special no-mirror messaging path for this MVP. Use standard Hermes Telegram send only, and only when `enable_per_minute_reports=true`.
 
-## 11. Configuration
-
-Recommended Hermes profile config for MVP:
-
-```yaml
-display:
-  background_process_notifications: result
-```
-
-Reason:
-
-- progress summaries are not emitted through background-process stdout/watch handling;
-- attention/done markers use watch patterns for orchestrator-visible semantic events;
-- raw OpenCode logs are not printed to wrapper stdout.
-
-Leave this at `result` for MVP. Per-minute debug reports, when explicitly enabled by the user, are sent through standard Hermes Telegram send, not through background-process stdout/watch output.
-
-Do not set both `notify_on_complete=true` and `watch_patterns` for the same background process in MVP; current Hermes ignores watch patterns when both are provided.
-
 ## 12. Kanban decision
 
 Kanban is explicitly deferred for this MVP.
@@ -398,7 +456,7 @@ Do not implement Marinator as Kanban tasks unless a later product decision chang
 
 Implement `marinator_delegate` as a Hermes user plugin shipped with the Junie Live Hermes initialization, not as a core Hermes patch, not as an MCP server, and not as a standalone temporary shell wrapper.
 
-The source of truth for the public tool schema is section 8 of this spec. The implementation should preserve that schema unless the spec is explicitly updated.
+The source of truth for the public tool schema is section 9 of this spec. The implementation should preserve that schema unless the spec is explicitly updated.
 
 Source location in this repo:
 
@@ -412,7 +470,7 @@ Installed profile location after `hire-junie.sh`:
 ~/.hermes/profiles/junie-live/plugins/marinator-delegation/
 ```
 
-`hire-junie.sh` copies the plugin into the Junie Live Hermes profile, enables the plugin, and enables its `marinator` toolset for CLI and Telegram. After initialization, Junie should see one new tool:
+`hire-junie.sh` copies the plugin into the Junie Live Hermes profile, enables the plugin, and enables its `marinator` toolset for CLI and Telegram. Hot-swapping the plugin into an already-running Junie/Hermes session is not required for this MVP; it is acceptable that the tool only becomes available as part of the normal `hire-junie.sh` initialization flow and after the relevant Hermes gateway/CLI session is restarted or reset. After initialization, Junie should see one new tool:
 
 ```text
 marinator_delegate
@@ -558,15 +616,16 @@ unless explicitly porting shared constants/docs.
 
 1. Validate `spec.json`.
 2. Resolve OpenCode absolute path: `/home/Danila.Savenkov/.opencode/bin/opencode` by default.
-3. Run OpenCode with configured model/variant:
-   - model: `openrouter/anthropic/claude-opus-4.6` unless updated by owner;
-   - variant: `low`.
-4. Redirect OpenCode stdout/stderr to files.
-5. If `enable_per_minute_reports=true`, send curated progress summaries every ~60s through standard Hermes Telegram `send_message`; if false, keep summaries in `events.jsonl` only.
-6. Detect suspected stall without killing.
-7. Emit `MARINATOR_ATTENTION_REQUIRED` once per attention state.
-8. On OpenCode exit, write `result.md`, update status, emit `MARINATOR_DONE`.
-9. If detected runtime mode is `headless`, call resume helper for attention/done events.
+3. Run OpenCode with its configured default model/settings and `--dangerously-skip-permissions`. Do not pass model/variant flags from Marinator in MVP.
+4. Support `opencode_previous_session_id` via `opencode run --session <id>` or `--resume <id>`; fail with `opencode_resume_not_supported` if neither is available.
+5. Redirect OpenCode stdout/stderr to files and record pid/pgid/waiter/exit artifacts.
+6. Capture the resulting OpenCode session id when available and store it in `status.json`/`result.md` for follow-up fix loops.
+7. Monitor stdout/stderr byte growth, update progress timestamps, and summarize deltas using the OpenClaw runner pattern.
+8. If `enable_per_minute_reports=true`, send curated progress summaries every ~60s through standard Hermes Telegram `send_message`; if false, keep summaries in `events.jsonl` only.
+9. Detect suspected stall without killing.
+10. Emit `MARINATOR_ATTENTION_REQUIRED` once per attention state.
+11. On OpenCode exit, write `result.md`, update status, emit `MARINATOR_DONE`.
+12. If detected runtime mode is `headless`, call resume helper for attention/done events.
 
 ### Phase 3 — implement Hermes `marinator_delegate`
 
@@ -635,18 +694,17 @@ MVP is done when:
 
 1. `marinator_delegate` exists in the Hermes implementation.
 2. Coding work is started through OpenCode, not performed by the orchestrator.
-3. Live Telegram sessions receive progress and attention/done events without direct wrapper-to-Telegram sends.
+3. Live Telegram sessions receive attention/done events through watch patterns; optional per-minute progress reports are sent through standard Hermes Telegram `send_message` only when `enable_per_minute_reports=true`.
 4. Headless sessions continue via `hermes chat --resume` and inspect `run_dir` correctly.
 5. Suspected stall wakes the orchestrator but does not kill OpenCode automatically.
 6. Orchestrator can explicitly kill/cancel/wait based on context.
-7. `run_dir` contains durable `spec.json`, `status.json`, `events.jsonl`, logs, and `result.md`.
+7. `run_dir` contains durable `spec.json`, `status.json`, `events.jsonl`, logs, pid/pgid/exit artifacts, and `result.md`.
 8. The first fix loop is demonstrated: worker result rejected -> fix delegated -> re-reviewed.
-9. Documentation/status files state that Kanban and cron-bound session continuation are deferred.
+9. OpenCode is invoked with `--dangerously-skip-permissions` and supports follow-up/fix runs via `opencode_previous_session_id` when the OpenCode CLI exposes `--session` or `--resume`.
+10. Progress supervision follows the OpenClaw runner pattern: stdout/stderr byte-growth tracking, delta summaries, and durable event/log artifacts.
+11. Documentation/status files state that Kanban and cron-bound session continuation are deferred.
 
-## 17. Open questions for implementation
+## 17. Open questions before implementation
 
-1. Exact Hermes plugin/tool mechanism for registering `marinator_delegate` in the user's installed Hermes profile.
+1. Exact Hermes plugin/tool mechanism for registering `marinator_delegate` in the user's installed Hermes profile during `hire-junie.sh` initialization. Hot-swap into an already-running session is not required.
 2. Whether Hermes watch events from gateway currently produce an agent reasoning turn in the desired live Telegram path or only a visible notification; Phase 0 must verify this behavior before committing to final UX.
-3. Whether to add a small Hermes patch allowing structured `watch_patterns` and `notify_on_complete` together without generic spam risk.
-4. Whether the wrapper should keep supervising after suspected stall or exit with OpenCode detached and rely on orchestrator controls.
-5. Whether OpenCode supports reliable steering/resume for already-running sessions; if not, MVP only supports wait/kill/follow-up worker.
