@@ -13,10 +13,10 @@ Hermes changes the runtime substrate, not the delegation protocol:
 live Telegram/CLI/TUI orchestrator session
   -> calls marinator_delegate
   -> marinator_delegate writes run_dir/spec/prompt
-  -> starts a Marinator wrapper with terminal(background=true, watch_patterns=[...])
-  -> wrapper runs opencode, captures logs, emits curated progress markers
-  -> Hermes live session receives progress/watch events through native background-process routing
-  -> orchestrator reviews terminal events and decides wait/kill/steer/fix/accept
+  -> starts a Marinator wrapper with terminal(background=true, notify_on_complete=true)
+  -> wrapper runs opencode, captures logs, writes ATTENTION/DONE markers to logs
+  -> Hermes live session reliably wakes on wrapper completion/failure
+  -> orchestrator reads durable run_dir and decides wait/kill/steer/fix/accept
 ```
 
 For headless one-shot sessions, there is no live event loop to drain background notifications after the parent `hermes chat -q` exits. Headless Marinator therefore uses the already-validated primitive:
@@ -26,7 +26,7 @@ wrapper/watchdog event
   -> hermes -p <profile> chat --resume <owner_session_id> -q "inspect run_dir ..."
 ```
 
-Do **not** port OpenClaw's `system event` / raw-Cron continuation machinery as the main path. In Hermes, live sessions use `terminal(background=true)` + `watch_patterns`; headless sessions use `hermes chat --resume`.
+Do **not** port OpenClaw's `system event` / raw-Cron continuation machinery as the main path. In Hermes, live sessions use `terminal(background=true, notify_on_complete=true)` for reliable completion/failure wake; headless sessions use `hermes chat --resume`. `watch_patterns` markers are still emitted for future upstream support, but are not the reliable MVP wake path.
 
 Do **not** make the wrapper kill OpenCode on suspected stall. Suspected stall is evidence, not a decision. The wrapper records/prints `MARINATOR_ATTENTION_REQUIRED`; the orchestrator decides whether to wait, steer, kill, ask the user, or delegate a fix.
 
@@ -42,7 +42,7 @@ The custom code that remains is intentionally small: a Hermes `marinator_delegat
    - user-visible outcome evidence gates "done";
    - fix loops remain in the same orchestrator session.
 2. Replace OpenClaw-specific continuation mechanisms with Hermes-native primitives:
-   - live interactive sessions: `terminal(background=true, watch_patterns=...)`;
+   - live interactive sessions: `terminal(background=true, notify_on_complete=true)`;
    - headless one-shot sessions: `hermes chat --resume <session_id> -q ...`.
 3. Keep the MVP linear. No Kanban board abstraction for the delegation protocol.
 4. Keep worker observability:
@@ -89,15 +89,15 @@ Validated:
 
 - `hermes chat --resume <session_id> -q "...inspect run_dir..."` works for headless continuation.
 - The same CLI resume can read a Telegram-backed session transcript, but CLI stdout is not gateway delivery; live Telegram should use gateway/background-process routing instead.
-- Hermes `terminal(background=true, notify_on_complete=true)` wakes live gateway/CLI/TUI loops on completion.
-- Hermes `watch_patterns` can wake/notify while a background process is still running, but has hard spam protection and is mutually exclusive with `notify_on_complete`.
+- Hermes `terminal(background=true, notify_on_complete=true)` wakes live gateway/CLI/TUI loops on completion/failure; spike confirmed it triggers a full agent turn where tools can be called.
+- Hermes `watch_patterns` can wake/notify while a background process is still running, but current live Telegram delivery is not prompt/reliable enough for Marinator. It has hard spam protection and is mutually exclusive with `notify_on_complete`.
 
 Important constraints:
 
 - Headless one-shot sessions have no live loop after the parent process exits; automatic background notifications are not enough there.
-- Watch patterns are for rare markers, not frequent progress streaming.
-- Progress visibility is operator-only debug output; it must not enter the orchestrator transcript or trigger model turns.
-- Attention/done events should use rare watch markers.
+- Watch patterns are for rare markers, not frequent progress streaming. They are emitted for future upstream support but are not the reliable MVP wake path.
+- Progress visibility must not use `watch_patterns` or trigger worker/orchestrator wake. Standard `send_message` may mirror; this is accepted for MVP.
+- Live completion/failure wake uses `notify_on_complete`; orchestrator must read durable `run_dir` artifacts rather than trusting only notification text/exit code.
 
 ## 4. Runtime model
 
@@ -108,10 +108,10 @@ A live session is a Hermes gateway/CLI/TUI process that remains alive and drains
 ```text
 orchestrator turn
   -> marinator_delegate(...)
-  -> terminal(background=true, watch_patterns=[...]) starts wrapper
+  -> terminal(background=true, notify_on_complete=true) starts wrapper
   -> turn may end naturally
-  -> wrapper sends optional progress reports through Telegram send_message and emits rare watch markers
-  -> Hermes watcher routes events to the same live session
+  -> wrapper sends optional progress reports through Telegram send_message and logs rare watch markers
+  -> Hermes completion watcher routes completion/failure to the same live session
   -> orchestrator continues review/fix/acceptance
 ```
 
@@ -224,7 +224,7 @@ Progress line, every ~60s:
 MARINATOR_PROGRESS job_id=<id> elapsed=<s> summary=<short factual summary>
 ```
 
-`MARINATOR_PROGRESS` is **operator-visible debug output**. It must not be printed to wrapper stdout and must not be included in `watch_patterns`. It is disabled by default and only sent when `enable_per_minute_reports=true`. Deliver it through standard Hermes Telegram `send_message`. The orchestrator should only be explicitly woken by rare semantic events (`ATTENTION_REQUIRED`, `DONE`) plus the durable run artifacts it chooses to inspect.
+`MARINATOR_PROGRESS` is **operator-visible debug output**. It must not be printed to wrapper stdout and must not be included in `watch_patterns`. It is disabled by default and only sent when `enable_per_minute_reports=true`. Deliver it through profile-aware standard Hermes Telegram `send_message`. It must not wake the orchestrator.
 
 Attention marker, rare and watch-matched:
 
@@ -232,13 +232,13 @@ Attention marker, rare and watch-matched:
 MARINATOR_ATTENTION_REQUIRED job_id=<id> reason=<reason> run_dir=<path> status_path=<path>
 ```
 
-Done marker, rare and watch-matched:
+Done marker, rare marker for logs and future watch support:
 
 ```text
 MARINATOR_DONE job_id=<id> state=<completed|failed> exit_code=<n> run_dir=<path> result_path=<path>
 ```
 
-Watch patterns for live gateway mode:
+Watch patterns to emit/support for live gateway mode once upstream delivery is reliable:
 
 ```python
 [
@@ -249,9 +249,9 @@ Watch patterns for live gateway mode:
 
 Do not include `MARINATOR_PROGRESS` in watch patterns. Progress is debug visibility, not an agent wake request. Optional progress reports are controlled only by the `marinator_delegate.enable_per_minute_reports` tool argument; do not add a Hermes YAML/config knob for them.
 
-Known MVP caveat: current Hermes `watch_patterns` delivery is not fully reliable/prompt in live Telegram sessions. The spike showed that a watch event can reach the same session and trigger an orchestrator turn, but delivery may be delayed until a later gateway queue drain instead of waking immediately. This is likely an upstream background-notification delivery bug/limitation, not a Marinator-specific issue. For MVP, use `watch_patterns` for `MARINATOR_ATTENTION_REQUIRED` / `MARINATOR_DONE` anyway, but keep the durable `run_dir` ledger authoritative and document this as a known delivery-risk until upstream provides event-driven watch delivery.
+Known MVP caveat: current Hermes `watch_patterns` delivery is not fully reliable/prompt in live Telegram sessions. The spike showed that a watch event can reach the same session and trigger an orchestrator turn, but delivery may be delayed until a later gateway queue drain instead of waking immediately. This is likely an upstream background-notification delivery bug/limitation, not a Marinator-specific issue. For MVP, the wrapper still writes `MARINATOR_ATTENTION_REQUIRED` / `MARINATOR_DONE` marker lines to logs/stdout so Marinator automatically benefits if/when upstream provides event-driven watch delivery, but live wake must rely on `notify_on_complete` until then.
 
-Do not set both `notify_on_complete=true` and `watch_patterns` for the same background process in MVP; current Hermes ignores watch patterns when both are provided.
+Do not set both `notify_on_complete=true` and `watch_patterns` in the same Hermes terminal tool call in MVP; current Hermes ignores watch patterns when both are provided. The wrapper may still print marker lines, but `marinator_delegate` starts the wrapper with `notify_on_complete=true` and no `watch_patterns` for the reliable MVP live path.
 
 ## 7. OpenCode invocation and supervision contract
 
@@ -360,9 +360,11 @@ On suspected stall:
 
 1. write `status.json.attention.state="suspected_stall"`;
 2. append `attention_required` event;
-3. emit `MARINATOR_ATTENTION_REQUIRED ...`;
+3. emit `MARINATOR_ATTENTION_REQUIRED ...` marker lines for logs/future watch support;
 4. keep OpenCode running unless the orchestrator later writes `control/kill` or equivalent;
 5. continue low-frequency monitoring/progress if possible.
+
+In live MVP, suspected stall is not guaranteed to interrupt the orchestrator immediately. It is visible through requested per-minute debug reports, durable `run_dir` state, eventual completion/failure wake, or future upstream reliable `watch_patterns` delivery.
 
 The orchestrator decides:
 
@@ -407,7 +409,7 @@ Behavior:
 5. Detect runtime mode from Hermes context:
    - `live_gateway` when `HERMES_SESSION_PLATFORM` and `HERMES_SESSION_CHAT_ID` are present;
    - `headless` otherwise for MVP purposes.
-6. Start wrapper with `terminal(background=true, watch_patterns=[...])` in all modes.
+6. In `live_gateway`, start wrapper with `terminal(background=true, notify_on_complete=true)` and no `watch_patterns` in the tool call. In `headless`, start the wrapper in background and rely on the wrapper's `hermes chat --resume` continuation helper.
 7. Store `enable_per_minute_reports` in `spec.json`.
 8. If `enable_per_minute_reports=true`, resolve `progress_delivery` from runtime session metadata and store only non-secret routing metadata in `spec.json`. If routing cannot be resolved, store disabled/skipped progress delivery and continue.
 9. For `headless`, include `owner_session_id` and resume command details in `spec.json`; wrapper must call `hermes chat --resume` for done/attention events.
@@ -458,8 +460,8 @@ The live Telegram UX has two separate channels:
 Orchestrator-visible milestones:
 
 - “Delegated job `<job_id>` to OpenCode.”
-- “Worker needs attention; reviewing logs” after `MARINATOR_ATTENTION_REQUIRED`.
-- “Worker finished; reviewing result/diff” after `MARINATOR_DONE`.
+- “Worker needs attention; reviewing logs” after the completion wake and `status.json.attention` indicates attention is required.
+- “Worker finished; reviewing result/diff” after `notify_on_complete` wakes the session and `status.json`/`result.md` confirms terminal state.
 - if rejected: “Not accepted because ... delegating fixes.”
 - final report only after outcome evidence is verified.
 
@@ -468,9 +470,10 @@ Operator-visible debug progress:
 - every ~60s the wrapper may send/emit a concise `MARINATOR_PROGRESS` summary;
 - this channel is disabled by default and is active only when `enable_per_minute_reports=true`;
 - set `enable_per_minute_reports=true` only when the user explicitly requested once-per-minute progress reports;
+- when disabled, live Telegram has no in-progress status stream; it wakes on completion/failure only. Mid-run progress visibility becomes available only through explicitly requested debug messages, and future reliable upstream `watch_patterns` delivery may allow more live attention/progress semantics later;
 - these messages are for human debugging (“OpenCode is doing something”);
 - they must not be watch-matched;
-- they are sent with the standard Hermes Telegram `send_message` path.
+- they are sent with the profile-aware standard Hermes Telegram `send_message` path.
 
 Do not patch Hermes or add a special no-mirror messaging path for this MVP. Use standard Hermes Telegram send only, and only when `enable_per_minute_reports=true`.
 
@@ -624,20 +627,13 @@ unless explicitly porting shared constants/docs.
 
 ## 15. Implementation plan
 
-### Phase 0 — verify current Hermes primitives
+### Phase 0 — completed spikes / accepted evidence
 
-1. Add a tiny local spike script that prints `MARINATOR_PROGRESS`, `MARINATOR_ATTENTION_REQUIRED`, and `MARINATOR_DONE` on timers.
-2. Run it from a live Telegram session with `terminal(background=true, watch_patterns=[...])`.
-3. Verify semantic watch events:
-   - `ATTENTION_REQUIRED` / `DONE` wake/notify the same session;
-   - no duplicate flood occurs;
-   - marker cadence avoids spam-window suppression.
-4. Separately verify opt-in debug progress delivery:
-   - with `enable_per_minute_reports=false`, no per-minute Telegram reports are sent;
-   - with `enable_per_minute_reports=true`, `MARINATOR_PROGRESS` is visible to the human;
-   - the progress message is sent through standard Hermes Telegram `send_message`;
-   - it is not emitted through `watch_patterns` or background-process stdout notification flow.
-5. Run the same from headless and verify wrapper-triggered `hermes chat --resume` works with a test `run_dir`.
+1. Plugin registration PASS: a profile plugin under `$HERMES_HOME/plugins/marinator-delegation/` can register `marinator_delegate` under the `marinator` toolset after `hermes -p junie-live plugins enable marinator-delegation` and restart/reset.
+2. Headless resume PASS: `hermes chat --resume <owner_session_id> -q ...` restores the prior headless context, sees the stored `run_dir`, and can inspect artifacts.
+3. Live `notify_on_complete` PASS: `terminal(background=true, notify_on_complete=true)` wakes the live Telegram session on success and failure, and the resulting turn can call tools such as `read_file`.
+4. `watch_patterns` PARTIAL / known limitation: marker lines can reach the same live Telegram session and trigger an orchestrator turn, but delivery may be delayed/opportunistic. Do not use it as the reliable MVP wake mechanism until upstream provides event-driven delivery.
+5. Progress delivery PASS with constraints: profile-aware standard Hermes `send_message` can send progress through the correct Junie Live bot when invoked via `hermes -p junie-live ...` and an explicit runtime-resolved target. Directly importing `send_message_tool` from an inherited worker env can use the wrong bot and is not accepted.
 
 ### Phase 1 — implement run ledger helpers
 
@@ -659,8 +655,8 @@ unless explicitly porting shared constants/docs.
 8. Resolve progress delivery from runtime Hermes session metadata when `enable_per_minute_reports=true`; never accept chat ids/tokens as LLM-provided public tool parameters.
 9. If `enable_per_minute_reports=true` and a target was resolved, send curated progress summaries every ~60s through profile-aware standard Hermes Telegram `send_message`; if false or unresolved, keep summaries in `events.jsonl` only.
 10. Detect suspected stall without killing.
-11. Emit `MARINATOR_ATTENTION_REQUIRED` once per attention state.
-12. On OpenCode exit, write `result.md`, update status, emit `MARINATOR_DONE`.
+11. Emit/write `MARINATOR_ATTENTION_REQUIRED` marker lines once per attention state for logs/future watch support, but do not rely on them for reliable live wake in MVP.
+12. On OpenCode exit, write `result.md`, update status, emit/write `MARINATOR_DONE`, and let `notify_on_complete` wake live sessions.
 13. If detected runtime mode is `headless`, call resume helper for attention/done events.
 
 ### Phase 3 — implement Hermes `marinator_delegate`
@@ -669,7 +665,7 @@ unless explicitly porting shared constants/docs.
 2. Validate inputs.
 3. Auto-detect runtime mode from Hermes session environment; do not expose mode selection as a public parameter.
 4. Write `spec.json` and prompt artifacts.
-5. Start wrapper with Hermes terminal background + watch patterns.
+5. Start wrapper with Hermes terminal background. Use `notify_on_complete=true` for `live_gateway`; do not pass `watch_patterns` in the MVP tool call while `notify_on_complete` is enabled.
 6. Return `job_id/run_dir/process_session_id` immediately.
 7. Ensure orchestrator prompt receives explicit instruction to review future terminal events.
 
@@ -703,7 +699,7 @@ bash hermes/scripts/verify.sh
 3. Live Telegram E2E:
 
 ```text
-Telegram request -> marinator_delegate -> progress -> attention/done marker -> orchestrator review -> final report
+Telegram request -> marinator_delegate -> optional requested progress -> notify_on_complete completion/failure wake -> orchestrator reads run_dir -> review/fix/final report
 ```
 
 4. Headless E2E:
@@ -715,7 +711,7 @@ hermes chat -q starts Marinator -> parent exits -> wrapper calls --resume -> res
 5. Suspected stall E2E:
 
 ```text
-wrapper detects no progress -> does not kill -> wakes orchestrator -> orchestrator decides kill/wait
+wrapper detects no progress -> does not kill -> records attention evidence/marker -> live MVP may wait for completion wake or explicit user/debug review; headless resume/fallback can wake orchestrator -> orchestrator decides kill/wait
 ```
 
 6. Duplicate wake guard:
@@ -730,9 +726,9 @@ MVP is done when:
 
 1. `marinator_delegate` exists in the Hermes implementation.
 2. Coding work is started through OpenCode, not performed by the orchestrator.
-3. Live Telegram sessions use `watch_patterns` for `MARINATOR_ATTENTION_REQUIRED` / `MARINATOR_DONE`, with the known current-Hermes caveat that watch delivery may be delayed/opportunistic rather than guaranteed prompt. Optional per-minute progress reports are sent through profile-aware standard Hermes Telegram `send_message` only when `enable_per_minute_reports=true` and runtime routing metadata was resolved.
+3. Live Telegram sessions use `notify_on_complete=true` for reliable completion/failure wake. `MARINATOR_ATTENTION_REQUIRED` / `MARINATOR_DONE` marker lines are still emitted for logs and future upstream `watch_patterns` support, but current-Hermes watch delivery is a known caveat, not the reliable MVP wake path. Optional per-minute progress reports are sent through profile-aware standard Hermes Telegram `send_message` only when `enable_per_minute_reports=true` and runtime routing metadata was resolved.
 4. Headless sessions continue via `hermes chat --resume` and inspect `run_dir` correctly.
-5. Suspected stall wakes the orchestrator but does not kill OpenCode automatically.
+5. Suspected stall records attention evidence and marker lines but does not kill OpenCode automatically. In live MVP, immediate attention wake is best-effort/future-upstream via `watch_patterns`; reliable wake is on completion/failure. In headless, the resume/fallback path can wake the orchestrator.
 6. Orchestrator can explicitly kill/cancel/wait based on context.
 7. `run_dir` contains durable `spec.json`, `status.json`, `events.jsonl`, logs, pid/pgid/exit artifacts, and `result.md`.
 8. The first fix loop is demonstrated: worker result rejected -> fix delegated -> re-reviewed.
@@ -742,5 +738,5 @@ MVP is done when:
 
 ## 17. Known limitations before implementation
 
-1. `watch_patterns` are the MVP live attention/done wake path, but current Hermes delivery may be delayed until a later gateway queue drain. Track upstream fixes around event-driven background-process watch delivery; if/when fixed, Marinator should benefit without changing its wrapper contract.
+1. `watch_patterns` marker lines are emitted for live attention/done, but current Hermes delivery may be delayed until a later gateway queue drain. They are not the reliable MVP wake path while `notify_on_complete=true` is active. Track upstream fixes around event-driven background-process watch delivery; if/when fixed, Marinator should benefit without changing its marker contract.
 2. Hot-swap plugin installation is not required. `marinator_delegate` only needs to become available through the normal `hire-junie.sh` initialization flow plus gateway/CLI restart or reset.
