@@ -1,8 +1,9 @@
 """Runner module for Marinator delegation.
 
 Owns runtime detection, run-dir creation, spec.json writing, and spawning
-the marinator-worker.sh wrapper through subprocess. Does not run OpenCode
-inline — that is the wrapper script's job.
+the marinator-worker.sh wrapper. Live gateway sessions use Hermes terminal
+background semantics; headless/fallback sessions use subprocess. Does not run
+OpenCode inline — that is the wrapper script's job.
 """
 
 import json
@@ -14,6 +15,25 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import state
+
+
+def _session_env(name: str, default: str = "") -> str:
+    """Read Hermes session metadata from contextvars, falling back to env.
+
+    Gateway sessions store HERMES_SESSION_* values in gateway.session_context
+    contextvars, not process-global os.environ. Plugin tools run inside the
+    same Hermes process, so env-only detection misclassifies live Telegram
+    calls as headless.
+    """
+    try:
+        from gateway.session_context import get_session_env  # type: ignore
+
+        value = get_session_env(name, default)
+        if value is not None:
+            return str(value)
+    except Exception:
+        pass
+    return os.environ.get(name, default)
 
 
 def _resolve_opencode_bin() -> Optional[str]:
@@ -48,8 +68,8 @@ def _detect_runtime_mode() -> tuple[str, dict]:
 
     Returns (mode, detected_from) where mode is 'live_gateway' or 'headless'.
     """
-    platform = os.environ.get("HERMES_SESSION_PLATFORM", "")
-    chat_id = os.environ.get("HERMES_SESSION_CHAT_ID", "")
+    platform = _session_env("HERMES_SESSION_PLATFORM", "")
+    chat_id = _session_env("HERMES_SESSION_CHAT_ID", "")
 
     # Allow debug override
     force_mode = os.environ.get("MARINATOR_FORCE_MODE", "")
@@ -82,9 +102,9 @@ def _resolve_progress_delivery(enable: bool) -> dict:
             "source": "disabled",
         }
 
-    platform = os.environ.get("HERMES_SESSION_PLATFORM", "")
-    chat_id = os.environ.get("HERMES_SESSION_CHAT_ID", "")
-    thread_id = os.environ.get("HERMES_SESSION_THREAD_ID", "")
+    platform = _session_env("HERMES_SESSION_PLATFORM", "")
+    chat_id = _session_env("HERMES_SESSION_CHAT_ID", "")
+    thread_id = _session_env("HERMES_SESSION_THREAD_ID", "")
     profile = os.environ.get("HERMES_PROFILE", "junie-live")
 
     if not platform or not chat_id:
@@ -147,9 +167,9 @@ def start_job(
     # Detect runtime mode
     runtime_mode, detected_from = _detect_runtime_mode()
 
-    # Resolve owner session metadata
-    owner_session_id = os.environ.get("HERMES_SESSION_ID", "")
-    owner_session_key = os.environ.get("HERMES_SESSION_KEY", "")
+    # Resolve owner session metadata from gateway contextvars when present.
+    owner_session_id = _session_env("HERMES_SESSION_ID", "")
+    owner_session_key = _session_env("HERMES_SESSION_KEY", "")
     hermes_profile = os.environ.get("HERMES_PROFILE", "junie-live")
 
     # Create run directory
@@ -229,8 +249,8 @@ def start_job(
     runner_log = os.path.join(run_dir, "runner.log")
     process_session_id: Optional[str] = None
 
-    # ── Live gateway path: dispatch via ctx.dispatch_tool ──
-    if runtime_mode == "live_gateway" and ctx and hasattr(ctx, "dispatch_tool"):
+    # ── Live gateway path: dispatch via Hermes terminal(background, notify_on_complete) ──
+    if runtime_mode == "live_gateway":
         import shlex
 
         shell_cmd = (
@@ -247,7 +267,16 @@ def start_job(
         }
 
         try:
-            result = ctx.dispatch_tool("terminal", dispatch_args)
+            if ctx is not None and hasattr(ctx, "dispatch_tool"):
+                result = ctx.dispatch_tool("terminal", dispatch_args)
+            else:
+                # PluginContext.dispatch_tool is unavailable in some test/plugin
+                # loading contexts. The registry path still runs the real
+                # terminal tool in-process, so gateway session contextvars are
+                # preserved for notify_on_complete routing.
+                from tools.registry import registry  # type: ignore
+
+                result = registry.dispatch("terminal", dispatch_args)
 
             # Parse JSON result if possible
             if isinstance(result, str):
@@ -256,45 +285,46 @@ def start_job(
                 except (json.JSONDecodeError, TypeError):
                     pass
 
+            dispatch_error = None
             if isinstance(result, dict):
                 process_session_id = result.get(
                     "session_id", result.get("process_session_id")
                 )
+                dispatch_error = result.get("error")
+
+            if dispatch_error or not process_session_id:
+                raise RuntimeError(
+                    f"terminal dispatch did not start a background process: {result}"
+                )
 
             state.update_status(status_path, {
                 "worker_state": "running",
-                "wrapper.dispatch_method": "dispatch_tool",
+                "wrapper.dispatch_method": "terminal",
+                "wrapper.process_session_id": process_session_id,
             })
             state.append_event(events_path, "wrapper_started", {
-                "dispatch_method": "dispatch_tool",
+                "dispatch_method": "terminal",
                 "wrapper_script": wrapper_script,
                 "process_session_id": process_session_id,
+                "notify_on_complete": True,
             })
 
         except Exception as e:
-            # Record dispatch failure and fall back to subprocess
+            state.update_status(status_path, {
+                "worker_state": "failed",
+                "wake.last_error": f"live terminal dispatch failed: {e}",
+            })
             state.append_event(events_path, "wrapper_start_failed", {
                 "error": str(e),
-                "dispatch_method": "dispatch_tool",
-                "fallback": "subprocess",
+                "dispatch_method": "terminal",
+                "fallback": "none",
             })
-            process_session_id = _spawn_wrapper_subprocess(
-                wrapper_script=wrapper_script,
-                run_dir=run_dir,
-                job_id=job_id,
-                spec_path=spec_path,
-                repo=repo,
-                runner_log=runner_log,
-                status_path=status_path,
-                events_path=events_path,
-                fallback_reason=str(e),
-            )
-            if process_session_id is None:
-                return {
-                    "error": f"dispatch_tool and subprocess both failed: {e}",
-                    "job_id": job_id,
-                    "run_dir": run_dir,
-                }
+            return {
+                "error": f"live_gateway terminal dispatch failed: {e}",
+                "job_id": job_id,
+                "run_dir": run_dir,
+                "runtime_mode": runtime_mode,
+            }
 
     # ── Headless / fallback path: subprocess.Popen ──
     else:
