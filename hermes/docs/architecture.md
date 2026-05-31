@@ -126,7 +126,7 @@ Kanban-backed Marinator and cron-bound session continuation are deferred for the
 OpenClaw generates crontab entries and OpenClaw cron definitions. Hermes cron:
 - Created and managed from within sessions
 - Delivery targets (Telegram, local, etc.) built in
-- Per-job model/provider override
+- Per-job model/provider/reasoning override
 - Script + agent hybrid mode
 - No system crontab dependency
 
