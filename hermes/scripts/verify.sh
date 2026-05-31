@@ -54,7 +54,7 @@ if [[ -n "$offenders" ]]; then
 fi
 
 log "directory structure"
-for required_dir in initialization initialization/docs initialization/skills scripts docs; do
+for required_dir in initialization initialization/docs initialization/skills scripts docs initialization/plugins/marinator-delegation initialization/plugins/marinator-delegation/scripts; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
 done
 
@@ -64,7 +64,13 @@ for required_file in \
     initialization/INITIALIZATION.md \
     initialization/memory-seed.md \
     initialization/docs/seed-HERMES.md \
-    initialization/docs/tools.md; do
+    initialization/docs/tools.md \
+    initialization/plugins/marinator-delegation/plugin.yaml \
+    initialization/plugins/marinator-delegation/__init__.py \
+    initialization/plugins/marinator-delegation/tools.py \
+    initialization/plugins/marinator-delegation/runner.py \
+    initialization/plugins/marinator-delegation/state.py \
+    initialization/plugins/marinator-delegation/scripts/marinator-worker.sh; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 
@@ -75,6 +81,18 @@ for skill_dir in initialization/skills/*/; do
   grep -q '^---$' "$skill_file" || fail "skill missing frontmatter: $skill_file"
   grep -q '^name: ' "$skill_file" || fail "skill missing name in frontmatter: $skill_file"
   grep -q '^description: ' "$skill_file" || fail "skill missing description in frontmatter: $skill_file"
+done
+
+log "marinator plugin bash syntax"
+for plugin_script in initialization/plugins/*/scripts/*.sh; do
+  [[ -f "$plugin_script" ]] || continue
+  bash -n "$plugin_script" || fail "bash syntax error in $plugin_script"
+done
+
+log "marinator plugin python syntax"
+for plugin_py in initialization/plugins/*/*.py; do
+  [[ -f "$plugin_py" ]] || continue
+  python3 -m py_compile "$plugin_py" || fail "python syntax error in $plugin_py"
 done
 
 log "all checks passed"

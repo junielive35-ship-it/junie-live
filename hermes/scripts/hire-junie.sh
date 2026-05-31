@@ -144,6 +144,7 @@ SEED_OWNED_PATHS=(
   memory-seed.md
   docs
   skills
+  plugins
   # Historical names — kept here so a re-hire over an older install cleans them
   persona.md
 )
@@ -161,7 +162,7 @@ log "  Removed $seed_removed prior seed entries"
 
 log "Installing seed files..."
 cp -a "$SEED_DIR/." "$PROFILE_DIR/"
-log "  Copied: SOUL.md, INITIALIZATION.md, memory-seed.md, skills, docs (incl. seed-HERMES.md)"
+log "  Copied: SOUL.md, INITIALIZATION.md, memory-seed.md, skills, docs (incl. seed-HERMES.md), plugins"
 
 # ── Step 3b: Clear runtime state that would contradict fresh initialization ──
 # On re-hire the agent needs to re-initialize from scratch. Memory stores
@@ -224,6 +225,34 @@ fi
 # ── Step 4: Create state directories ──
 log "Creating state directories..."
 mkdir -p "$STATE_DIR"/{backlog/items,reflections,overnight,logs}
+mkdir -p "$STATE_DIR"/marinator/runs
+
+# ── Step 4b: Enable Marinator delegation plugin + toolsets ──
+# The plugin source was copied from initialization/plugins/ into
+# $PROFILE_DIR/plugins/ during seed installation. Now enable it and its
+# toolsets for CLI and Telegram so marinator_delegate is available.
+if [[ -d "$PROFILE_DIR/plugins/marinator-delegation" ]]; then
+  log "Enabling Marinator delegation plugin..."
+
+  # Enable via plugins enable if available, otherwise config set fallback
+  if hermes -p "$PROFILE" plugins enable marinator-delegation >/dev/null 2>&1; then
+    log "  Plugin enabled via 'plugins enable'"
+  elif hermes -p "$PROFILE" config set plugins.enabled '["marinator-delegation"]' >/dev/null 2>&1; then
+    log "  Plugin enabled via config set fallback"
+  else
+    log "  WARNING: could not enable marinator-delegation plugin; enable manually after hire"
+  fi
+
+  # Enable marinator toolset for CLI and Telegram
+  for platform in cli telegram; do
+    for toolset in marinator terminal file; do
+      hermes -p "$PROFILE" tools enable --platform "$platform" "$toolset" >/dev/null 2>&1 || true
+    done
+  done
+  log "  Toolsets enabled: marinator, terminal, file (cli + telegram)"
+else
+  log "  WARNING: plugins/marinator-delegation not found in seed; skipping plugin setup"
+fi
 
 # ── Step 5: Configure Telegram + forward provider keys into profile .env ──
 # Junie runs under its own Hermes profile, which loads ONLY

@@ -64,6 +64,18 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 - Administrator / owner contact for held or stale mutex decisions: TODO
 - Status-check convention (how often to poll, where to surface stuck holders): TODO
 
+## Marinator delegation
+
+- **Tool:** `marinator_delegate` (Hermes plugin, `marinator` toolset)
+- **Plugin location:** `~/.hermes/profiles/junie-live/plugins/marinator-delegation/`
+- **Run ledger:** `~/.hermes/junie-live/state/marinator/runs/<job_id>/`
+- **Run artifacts:** `spec.json`, `status.json`, `events.jsonl`, `result.md`, `opencode.stdout.log`, `opencode.stderr.log`, `runner.log`, `control/`, `locks/`
+- **Worker script:** `plugins/marinator-delegation/scripts/marinator-worker.sh`
+- **Runtime modes:** `live_gateway` (Telegram, uses `notify_on_complete`) or `headless` (uses `hermes chat --resume`)
+- **Stall policy:** suspected stalls are recorded but never auto-killed; the orchestrator decides via `control/kill`
+- **Progress reports:** disabled by default; `enable_per_minute_reports=true` only when user explicitly requests
+- **Deferred:** Kanban-backed Marinator, cron-bound session continuation
+
 ## Deployment / release
 
 - Release process (manual? CI on tag? merge-to-main?): TODO
