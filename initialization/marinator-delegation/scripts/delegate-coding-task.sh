@@ -412,12 +412,8 @@ build_opencode_args() {
   local prompt help_text
   prompt=$(cat "$prompt_file")
   OPENCODE_ARGS=(run)
-  help_text=$("$OPENCODE_BIN" run --help 2>/dev/null || true)
-  if grep -q -- '--dangerously-skip-permissions' <<<"$help_text"; then
-    OPENCODE_ARGS+=(--dangerously-skip-permissions)
-  else
-    append_event "opencode_skip_permissions_flag_unavailable"
-  fi
+  help_text=$("$OPENCODE_BIN" run --help 2>&1 || true)
+  OPENCODE_ARGS+=(--dangerously-skip-permissions)
   if [[ -n "$opencode_previous_session_id" && "$opencode_previous_session_id" != "null" ]]; then
     if grep -q -- '--session' <<<"$help_text"; then
       OPENCODE_ARGS+=(--session "$opencode_previous_session_id")
