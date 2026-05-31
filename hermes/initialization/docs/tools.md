@@ -58,9 +58,9 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 ## Code mutex
 
 - Protected repository / feature-area scope: TODO
-- Mutex directory: `~/.hermes/junie-live/state/code_mutex/`
-- Holder metadata file: `~/.hermes/junie-live/state/code_mutex/holder.json`
-- Mutex commands: `scripts/code-mutex.sh status` / `acquire` / `release` / `check-stale`
+- Mutex directory: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local)
+- Holder metadata file: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/holder.json`
+- Mutex commands: `$HERMES_PROFILE_DIR/scripts/code-mutex.sh status` / `acquire` / `release [--holder ID] [--force]` / `check-stale`
 - Administrator / owner contact for held or stale mutex decisions: TODO
 - Status-check convention (how often to poll, where to surface stuck holders): TODO
 
@@ -68,12 +68,12 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 
 - **Tool:** `marinator_delegate` (Hermes plugin, `marinator` toolset)
 - **Plugin location:** `~/.hermes/profiles/junie-live/plugins/marinator-delegation/`
-- **Run ledger:** `~/.hermes/junie-live/state/marinator/runs/<job_id>/`
+- **Run ledger:** `~/.hermes/profiles/junie-live/junie-live/state/marinator/runs/<job_id>/` (profile-local)
 - **Run artifacts:** `spec.json`, `status.json`, `events.jsonl`, `result.md`, `opencode.stdout.log`, `opencode.stderr.log`, `runner.log`, `control/`, `locks/`
 - **Worker script:** `plugins/marinator-delegation/scripts/marinator-worker.sh`
 - **Runtime modes:** `live_gateway` (Telegram, uses `notify_on_complete`) or `headless` (uses `hermes chat --resume`)
 - **Stall policy:** suspected stalls are recorded but never auto-killed; the orchestrator decides via `control/kill`
-- **Progress reports:** disabled by default; `enable_per_minute_reports=true` only when user explicitly requests
+- **Progress reports:** enabled by default (debug visibility); `enable_per_minute_reports=false` only when user explicitly asks to disable
 - **Deferred:** Kanban-backed Marinator, cron-bound session continuation
 
 ## Deployment / release

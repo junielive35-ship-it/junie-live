@@ -9,7 +9,7 @@ Use this file to guide coding-worker delegation for the assigned project.
 - All coding work is delegated via `marinator_delegate` (the Marinator delegation tool), which starts a supervised OpenCode worker run and wakes the owning Hermes session for review. Direct `opencode run` invocation from the orchestrator is replaced by this tool.
 - Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Workers get scoped tasks, not the whole project history by default.
-- Code-changing workers run sequentially under the code mutex. The mutex state lives at `~/.hermes/junie-live/state/code_mutex/`. See `docs/code-mutex-protocol.md` for the full mutex invariants (atomicity, holder identity, escalation when held, no `delegate_task` substitution).
+- Code-changing workers run sequentially under the code mutex. The mutex state lives at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local). See `docs/code-mutex-protocol.md` for the full mutex invariants (atomicity, holder identity, escalation when held, no `delegate_task` substitution).
 - Markdown-only direct edits still need normal strategic/context review and must follow approval rules for semantic changes.
 - Prompts should include relevant goal, constraints, architecture notes, verification expectations, and non-goals.
 - Prompts must include the requested user outcome in concrete terms and ask the worker to report `outcome_status=done|partial|blocked`, with gaps if not done.
@@ -56,7 +56,7 @@ All code-changing work is executed via the `marinator_delegate` tool, which is i
   "prompt_file": "/abs/path/to/prompt.md",
   "attachments": ["/optional/path"],
   "opencode_previous_session_id": null,
-  "enable_per_minute_reports": false
+  "enable_per_minute_reports": true
 }
 ```
 
@@ -65,7 +65,7 @@ All code-changing work is executed via the `marinator_delegate` tool, which is i
 - `prompt_file`: absolute path to a prompt file (.md) written by the orchestrator before calling the tool.
 - `attachments`: optional list of absolute paths to attach as context.
 - `opencode_previous_session_id`: optional; for follow-up/fix loops, pass the previous OpenCode session id.
-- `enable_per_minute_reports`: set to `true` only when the user explicitly asked for progress reports.
+- `enable_per_minute_reports`: defaults to `true` for debug visibility. Do not set to `false` unless the human explicitly asked to disable progress/debug messages.
 
 ### Workflow
 

@@ -2,7 +2,9 @@
 
 ## Purpose
 
-Only one code-changing task runs at a time for the owned repo or area. The mutex prevents branch, worktree, and review conflicts when delegating to OpenCode (via `marinator_delegate`). Hermes Junie Live's mutex is a file-based lock under `~/.hermes/junie-live/state/code_mutex/`, managed by `scripts/code-mutex.sh`.
+Only one code-changing task runs at a time for the owned repo or area. The mutex prevents branch, worktree, and review conflicts when delegating to OpenCode (via `marinator_delegate`). Hermes Junie Live's mutex is a file-based lock under a profile-local state directory, managed by `$HERMES_PROFILE_DIR/scripts/code-mutex.sh`.
+
+Canonical (default) mutex directory: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/`
 
 ## Invariants
 
@@ -35,12 +37,12 @@ Substituting `delegate_task` for `marinator_delegate` to bypass mutex acquisitio
 
 ## Mechanics (quick reference)
 
-- **Mutex directory:** `~/.hermes/junie-live/state/code_mutex/`
-- **Holder metadata:** `~/.hermes/junie-live/state/code_mutex/holder.json`
-- **Commands** (deployed by `hire-junie.sh` to the profile):
+- **Mutex directory (default):** `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/`
+- **Holder metadata:** `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/holder.json`
+- **Commands** (deployed by `hire-junie.sh` to the profile, at `$HERMES_PROFILE_DIR/scripts/code-mutex.sh`):
   - `scripts/code-mutex.sh status` — show current state
   - `scripts/code-mutex.sh acquire --holder ID --reason TEXT [--repo DIR]`
-  - `scripts/code-mutex.sh release`
+  - `scripts/code-mutex.sh release [--holder ID] [--force]`
   - `scripts/code-mutex.sh check-stale [--stale-minutes N] [--auto-recover]`
 - **Status states:** `FREE` / `HELD` / `STALE` / `BROKEN`
 - **Auto-recover** (for `check-stale --auto-recover` only): silently removes a `BROKEN` mutex (directory exists, `holder.json` missing). Stale-by-age locks with a present `holder.json` are not auto-recovered by design — they require an owner decision, because the existing holder might still be working; age is evidence, not authority.
@@ -56,4 +58,4 @@ Substituting `delegate_task` for `marinator_delegate` to bypass mutex acquisitio
 
 - `delegation-protocol.md` — Marinator delegation rules and worker contract.
 - `tools.md` — operational quick reference for mutex commands and escalation contacts.
-- `scripts/code-mutex.sh` — the implementation in the installed profile.
+- `$HERMES_PROFILE_DIR/scripts/code-mutex.sh` — the implementation in the installed profile.

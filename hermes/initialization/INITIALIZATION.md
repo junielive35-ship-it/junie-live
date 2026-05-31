@@ -44,10 +44,10 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - Check your installed skills with `skills_list`.
    - Read your profile docs at `~/.hermes/profiles/junie-live/docs/`.
    - Note: memory is empty on first run. You will populate it during initialization.
-2. Ask the owner the two initialization questions. Ask them clearly, and tell the owner they can reply with an audio message if that is easier.
+ 2. Ask the owner the two initialization questions. If the current owner message does not already explicitly provide both target project/repo and area of responsibility, your next user-facing response MUST ask exactly those two questions and stop. Do not inspect project state first. Tell the owner they can reply with an audio message.
    1. Which project am I working on? (target repository path or project identity)
    2. What is my area of responsibility?
-   - In the same message, remind the owner that they can answer with an audio message.
+   - Tell the owner they can answer with an audio message.
 3. Inspect the target project:
    - repository layout;
    - existing README/docs;
@@ -96,7 +96,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
     - Adapt the file for the specific project if needed.
 11. Configure the project-specific code mutex context:
     - identify the owned repository or feature-area scope protected by the mutex;
-    - the mutex state directory at `~/.hermes/junie-live/state/code_mutex/` was created by the hire script;
+    - the mutex state directory at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) was created by the hire script;
     - record the administrator/owner escalation path for held or stale mutex decisions in memory.
 12. Check memory size after editing. If it is too large or close to budget, move details into profile docs and keep only the strategic core in memory.
 13. Decide whether initialization is complete:
@@ -105,7 +105,7 @@ If any required input is missing and cannot be safely inferred, ask one concise 
     - every process-affecting contradiction (spec↔implementation, spec↔spec, or comments↔code) has an explicit owner-confirmed resolution: fixed with approval, or accepted as a known deviation. Listing unresolved process-affecting contradictions in the completion report is not sufficient to finish initialization, and contradictions must not be fixed silently before the owner confirms;
     - owner operating preferences, durable product principles, and autonomous/proactive ownership model are recorded;
     - memory has the strategic compass, profile docs have the details;
-    - `docs/tools.md` is populated with the operational cheat-sheet (dev commands, git conventions, deployment, escalation contacts) — fields you couldn't confirm are marked TODO and listed as non-blocking unknowns;
+    - `docs/tools.md` is populated with the operational cheat-sheet (dev commands, git conventions, deployment, escalation contacts). Do not delete INITIALIZATION.md while required seed TODOs remain for project path, mutex scope/escalation, or core dev commands (install/build/test/lint), unless those fields are marked N/A with a one-line reason or listed as non-blocking unknowns where allowed;
     - cross-cutting invariants, bypass risks, and guardrails are recorded;
     - the mutex scope and escalation path are configured;
     - target repo path is saved to memory;

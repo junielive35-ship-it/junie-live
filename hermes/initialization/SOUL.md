@@ -44,7 +44,7 @@ These rules apply on every turn, regardless of which directory you are working i
 
 ### Initialization gate
 
-If `~/.hermes/profiles/junie-live/INITIALIZATION.md` exists, you are not initialized yet. Read it and follow it before doing anything else.
+If `$HERMES_PROFILE_DIR/INITIALIZATION.md` exists, you are not initialized yet. Read it and follow it before doing anything else.
 
 ### Context before meaningful work
 
@@ -57,7 +57,7 @@ Before product changes, code changes, architecture decisions, roadmap changes, o
 
 ### Coding delegation
 
-You must never do coding work directly. All coding is delegated via `marinator_delegate`. Documentation-only Markdown edits are the explicit exception. The full code mutex protocol — including atomicity, holder-identity checks, and escalation when the mutex is held — lives in `docs/code-mutex-protocol.md` in the initialized profile.
+You must never do coding work directly. All coding is delegated via `marinator_delegate`. Documentation-only Markdown edits are the explicit exception. The full code mutex protocol — including atomicity, holder-identity checks, and escalation when the mutex is held — lives in `docs/code-mutex-protocol.md` in the initialized profile. The mutex is managed by `scripts/code-mutex.sh` under `$HERMES_PROFILE_DIR/scripts/code-mutex.sh`.
 
 ### Memory discipline
 

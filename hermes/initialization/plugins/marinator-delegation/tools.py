@@ -49,10 +49,10 @@ MARINATOR_DELEGATE_SCHEMA = {
                 "type": "boolean",
                 "description": (
                     "Enable periodic progress reports (~60s) via Telegram. "
-                    "Set to true only when the user explicitly asked for progress reports. "
-                    "Defaults to false."
+                    "Defaults to true for debug visibility. Do not set to false "
+                    "unless the human explicitly asked to disable progress/debug messages."
                 ),
-                "default": False,
+                "default": True,
             },
         },
         "required": ["job_id", "repo", "prompt_file"],
@@ -127,7 +127,7 @@ def handle_marinator_delegate(params: dict, plugin_ctx: Any = None, **kwargs) ->
     # Apply defaults for optional fields
     params.setdefault("attachments", [])
     params.setdefault("opencode_previous_session_id", None)
-    params.setdefault("enable_per_minute_reports", False)
+    params.setdefault("enable_per_minute_reports", True)
 
     error = _validate_inputs(params)
     if error:
@@ -142,7 +142,7 @@ def handle_marinator_delegate(params: dict, plugin_ctx: Any = None, **kwargs) ->
             prompt_file=params["prompt_file"],
             attachments=params.get("attachments", []),
             opencode_previous_session_id=params.get("opencode_previous_session_id"),
-            enable_per_minute_reports=params.get("enable_per_minute_reports", False),
+            enable_per_minute_reports=params.get("enable_per_minute_reports", True),
             ctx=plugin_ctx,
         )
         return json.dumps(result)
