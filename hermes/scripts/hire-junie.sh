@@ -29,6 +29,8 @@ Options:
   --model MODEL               Main model for the profile. Default: openai/gpt-5.5
                               (provider-relative ID; combined with --provider).
   --provider NAME             Inference provider for the profile. Default: openrouter
+  --reasoning LEVEL            Reasoning effort for the model. Default: medium.
+                              Allowed: none|minimal|low|medium|high|xhigh.
   --no-restart                Configure everything but do not start/restart gateway.
   --no-backup                 Skip the pre-hire backup (not recommended).
   --no-forward-keys           Do not forward LLM provider API keys from \$HERMES_HOME/.env into
@@ -54,8 +56,9 @@ TOKEN="${JUNIE_TELEGRAM_BOT_TOKEN:-}"
 ADMIN_TELEGRAM_ID=""
 PROFILE="junie-live"
 SEED_DIR=""
-MODEL="openai/gpt-5.5 "
+MODEL="openai/gpt-5.5"
 PROVIDER="openrouter"
+REASONING="medium"
 RESTART=1
 BACKUP=1
 FORWARD_KEYS=1
@@ -71,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --seed-dir) need_value "$1" "${2:-}"; SEED_DIR="$2"; shift 2 ;;
     --model) need_value "$1" "${2:-}"; MODEL="$2"; shift 2 ;;
     --provider) need_value "$1" "${2:-}"; PROVIDER="$2"; shift 2 ;;
+    --reasoning) need_value "$1" "${2:-}"; case "$2" in none|minimal|low|medium|high|xhigh) ;; *) err "invalid --reasoning value: $2 (allowed: none|minimal|low|medium|high|xhigh)"; usage; exit 2 ;; esac; REASONING="$2"; shift 2 ;;
     --no-restart) RESTART=0; shift ;;
     --no-backup) BACKUP=0; shift ;;
     --no-forward-keys) FORWARD_KEYS=0; shift ;;
@@ -325,10 +329,11 @@ elif [[ "$FORWARD_KEYS" -eq 1 ]]; then
   log "    echo 'OPENROUTER_API_KEY=...' >> $PROFILE_ENV"
 fi
 
-# ── Step 6: Set model + provider in profile config ──
-log "Setting model: $MODEL (provider: $PROVIDER)"
+# ── Step 6: Set model + provider + reasoning effort in profile config ──
+log "Setting model: $MODEL (provider: $PROVIDER, reasoning: $REASONING)"
 hermes -p "$PROFILE" config set model.default "$MODEL" 2>/dev/null || true
 hermes -p "$PROFILE" config set model.provider "$PROVIDER" 2>/dev/null || true
+hermes -p "$PROFILE" config set agent.reasoning_effort "$REASONING" 2>/dev/null || true
 
 # ── Step 7: Install and start gateway (Ubuntu / Linux + systemd) ──
 # `hermes gateway install` asks two yes/no questions on Linux (start now?
@@ -375,6 +380,6 @@ log "Profile dir:      $PROFILE_DIR"
 log "State dir:        $STATE_DIR"
 [[ "$BACKUP" -eq 1 && -n "${backup:-}" ]] && log "Backup:           $backup"
 log "Telegram admin:   $ADMIN_TELEGRAM_ID"
-log "Model:            $MODEL (provider: $PROVIDER)"
+log "Model:            $MODEL (provider: $PROVIDER, reasoning: $REASONING)"
 log ""
 log "Next: open the Junie bot in Telegram and send /start."
