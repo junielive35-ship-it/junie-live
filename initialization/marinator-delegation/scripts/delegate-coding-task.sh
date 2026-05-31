@@ -314,6 +314,18 @@ Orchestrator: review result_path and the repo diff, then either re-delegate a fi
   fi
 }
 
+terminal_handoff_done=0
+terminal_handoff() {
+  local event=$1
+  local message=$2
+  if [[ "$terminal_handoff_done" -eq 0 ]]; then
+    terminal_handoff_done=1
+    set_handoff_pending
+    schedule_continuation
+  fi
+  wake_marinator "$event" "$message"
+}
+
 # Terminal states never need a stale-running rescue from the exit trap.
 TERMINAL_STATES_RE='^(completed|failed|timeout|killed|stalled)$'
 
@@ -344,7 +356,7 @@ on_runner_exit() {
     fi
     write_status "failed" reason runner_exited_unexpectedly exit_code "$rc" || true
     append_event "failed" reason runner_exited_unexpectedly exit_code "$rc" || true
-    wake_marinator "failed" "runner exited unexpectedly (rc=$rc) without a terminal status; treating worker as failed" || true
+    terminal_handoff "failed" "runner exited unexpectedly (rc=$rc) without a terminal status; treating worker as failed" || true
   fi
   exit "$rc"
 }
@@ -452,7 +464,7 @@ build_opencode_args() {
     else
       write_status "failed" reason opencode_resume_not_supported
       append_event "failed" reason opencode_resume_not_supported
-      wake_marinator "failed" "opencode_previous_session_id was provided, but this opencode CLI exposes no --session/--resume option"
+      terminal_handoff "failed" "opencode_previous_session_id was provided, but this opencode CLI exposes no --session/--resume option"
       exit 70
     fi
   fi
@@ -462,19 +474,19 @@ build_opencode_args() {
 if [[ ! -d "$repo" ]]; then
   write_status "failed" reason repo_not_found repo "$repo"
   append_event "failed" reason repo_not_found repo "$repo"
-  wake_marinator "failed" "repo not found"
+  terminal_handoff "failed" "repo not found"
   exit 66
 fi
 if [[ ! -f "$prompt_file" ]]; then
   write_status "failed" reason prompt_file_not_found prompt_file "$prompt_file"
   append_event "failed" reason prompt_file_not_found prompt_file "$prompt_file"
-  wake_marinator "failed" "prompt file not found"
+  terminal_handoff "failed" "prompt file not found"
   exit 66
 fi
 if ! command -v "$OPENCODE_BIN" >/dev/null 2>&1 && [[ ! -x "$OPENCODE_BIN" ]]; then
   write_status "failed" reason opencode_not_found
   append_event "failed" reason opencode_not_found
-  wake_marinator "failed" "opencode binary not found in PATH"
+  terminal_handoff "failed" "opencode binary not found in PATH"
   exit 69
 fi
 
@@ -515,7 +527,7 @@ done
 if [[ -z "$opencode_pid" ]]; then
   write_status "failed" reason opencode_pid_not_recorded
   append_event "failed" reason opencode_pid_not_recorded
-  wake_marinator "failed" "opencode process did not record a pid"
+  terminal_handoff "failed" "opencode process did not record a pid"
   exit 70
 fi
 opencode_pgid=$opencode_pid
@@ -544,7 +556,7 @@ while [[ ! -f "$exit_path" ]] && kill -0 "$waiter_pid" 2>/dev/null; do
     wait "$waiter_pid" 2>/dev/null || true
     write_status "killed" reason control_kill
     append_event "killed" reason control_kill
-    wake_marinator "killed" "worker killed by Marinator control file"
+    terminal_handoff "killed" "worker killed by Marinator control file"
     exit 130
   fi
   if (( now_epoch - start_epoch >= timeout_seconds )); then
@@ -553,7 +565,7 @@ while [[ ! -f "$exit_path" ]] && kill -0 "$waiter_pid" 2>/dev/null; do
     wait "$waiter_pid" 2>/dev/null || true
     append_event "timeout" reason timeout
     send_telegram "Marinator worker $job_id timed out and was stopped." # DEBUG-ONLY (TEMPORARY): runner->user; wake the orchestrator instead
-    wake_marinator "timeout" "worker timed out and was stopped"
+    terminal_handoff "timeout" "worker timed out and was stopped"
     exit 124
   fi
   if (( now_epoch - last_progress_epoch >= no_progress_seconds )); then
@@ -562,7 +574,7 @@ while [[ ! -f "$exit_path" ]] && kill -0 "$waiter_pid" 2>/dev/null; do
     wait "$waiter_pid" 2>/dev/null || true
     append_event "stalled" reason no_progress
     send_telegram "Marinator worker $job_id appears stalled with no log progress and was stopped." # DEBUG-ONLY (TEMPORARY): runner->user; wake the orchestrator instead
-    wake_marinator "stalled" "no log progress before no_progress timeout"
+    terminal_handoff "stalled" "no log progress before no_progress timeout"
     exit 125
   fi
   if (( now_epoch - last_summary_epoch >= update_interval_seconds )); then
@@ -620,16 +632,12 @@ if [[ "$exit_code" -eq 0 ]]; then
   } > "$result_path"
   write_status "completed" exit_code "$exit_code" result_path "$result_path"
   append_event "completed" exit_code "$exit_code" result_path "$result_path"
-  set_handoff_pending
-  schedule_continuation
-  wake_marinator "completed" "worker exited successfully; review result and diff"
+  terminal_handoff "completed" "worker exited successfully; review result and diff"
   exit 0
 fi
 
 write_status "failed" exit_code "$exit_code"
 append_event "failed" exit_code "$exit_code"
-set_handoff_pending
-schedule_continuation
 send_telegram "Marinator worker $job_id failed with exit code $exit_code." # DEBUG-ONLY (TEMPORARY): runner->user; wake the orchestrator instead
-wake_marinator "failed" "worker exited with code $exit_code"
+terminal_handoff "failed" "worker exited with code $exit_code"
 exit "$exit_code"
