@@ -12,7 +12,10 @@ set -euo pipefail
 # Usage:
 #   initialization-check.sh [--profile-dir DIR]
 #
-# Default profile dir: ~/.hermes/profiles/junie-live
+# Default profile dir: resolved via runtime-paths.sh (or ~/.hermes/profiles/junie-live)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_PATHS="$SCRIPT_DIR/runtime-paths.sh"
 
 PROFILE_DIR=""
 
@@ -24,7 +27,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$PROFILE_DIR" ]]; then
-  PROFILE_DIR="${HERMES_HOME:-$HOME/.hermes}/profiles/${HERMES_PROFILE:-junie-live}"
+  if [[ -f "$RUNTIME_PATHS" ]]; then
+    source "$RUNTIME_PATHS"
+    PROFILE_DIR="$(hermes_profile_dir_default)"
+  else
+    PROFILE_DIR="${HERMES_HOME:-$HOME/.hermes}/profiles/${HERMES_PROFILE:-junie-live}"
+  fi
 fi
 
 errcode=0

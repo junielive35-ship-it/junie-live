@@ -87,7 +87,7 @@ hermes/
 
 8. **Telegram** — Hermes gateway provides native Telegram integration with DM allowlisting, the same as the OpenClaw version.
 
-9. **Code Mutex** — A lightweight state-file mutex under `~/.hermes/junie-live/state/code_mutex/` prevents parallel code-changing work. Same atomic-`mkdir` primitive as OpenClaw, just under `~/.hermes/`.
+9. **Code Mutex** — A lightweight state-file mutex under `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` prevents parallel code-changing work. Same atomic-`mkdir` primitive as OpenClaw.
 
 ## Current implementation status
 

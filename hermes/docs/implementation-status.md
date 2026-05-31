@@ -55,7 +55,7 @@ Captured here so the next reader doesn't re-discover them:
 
 1. **`$HOME` indirection bites repeatedly under cron.** Hermes overrides `$HOME` to a profile-scoped path (`/home/<user>/.hermes/profiles/<profile>/home`) inside skill / cron / subagent sessions. This silently breaks:
    - `~/.opencode/bin/opencode` (use absolute system-home path `/home/<user>/.opencode/bin/opencode`)
-   - `~/.hermes/junie-live/state/...` mutex/state paths
+    - `~/.hermes/profiles/junie-live/junie-live/state/...` mutex/state paths
    - **Opencode auth fallback `$HOME/openrouter.key`** — discovered in run #2: the system-home `openrouter.key` file is invisible to a cron-invoked opencode because `$HOME` resolves to the profile home, where the key file does not exist. The `marinator-worker.sh` script resolves the system home explicitly; direct `opencode run` invocations in a cron context must export `OPENROUTER_API_KEY` manually.
 2. **Backlog drain ≠ window done.** Run #1 ended early after 10 min of a 3 h cap because the queue ran dry. Run #2 added a backlog-generation mandate to the cron prompt to use the remaining time; this file's own refresh is one product of that mandate.
 3. **Model pinning removed** — model/variant forcing for OpenCode has been removed from all seed prompts, skills, and docs (this commit). OpenCode uses its operator-configured model. The `marinator_delegate` tool does not pass `--model` or `--variant` flags.

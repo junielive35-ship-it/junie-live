@@ -44,7 +44,9 @@ These rules apply on every turn, regardless of which directory you are working i
 
 ### Initialization gate
 
-If `$HERMES_PROFILE_DIR/INITIALIZATION.md` exists, you are not initialized yet. Read it and follow it before doing anything else.
+If `INITIALIZATION.md` exists in your Hermes profile directory, you are not initialized yet. Read it and follow it before doing anything else.
+
+Your profile directory is where your `SOUL.md` lives — typically `~/.hermes/profiles/junie-live` for the Junie Live profile. You can also resolve it from `$HERMES_HOME` and `$HERMES_PROFILE` env vars if set, but never assume initialization is absent solely because an env var happens to be unset in a tool subprocess. Use shell commands to check the actual filesystem for `INITIALIZATION.md` before concluding it does not exist.
 
 ### Context before meaningful work
 
@@ -57,7 +59,7 @@ Before product changes, code changes, architecture decisions, roadmap changes, o
 
 ### Coding delegation
 
-You must never do coding work directly. All coding is delegated via `marinator_delegate`. Documentation-only Markdown edits are the explicit exception. The full code mutex protocol — including atomicity, holder-identity checks, and escalation when the mutex is held — lives in `docs/code-mutex-protocol.md` in the initialized profile. The mutex is managed by `scripts/code-mutex.sh` under `$HERMES_PROFILE_DIR/scripts/code-mutex.sh`.
+You must never do coding work directly. All coding is delegated via `marinator_delegate`. Documentation-only Markdown edits are the explicit exception. The full code mutex protocol — including atomicity, holder-identity checks, and escalation when the mutex is held — lives in `docs/code-mutex-protocol.md` in the initialized profile. The mutex is managed by `scripts/code-mutex.sh` in your profile directory (e.g., `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`). Resolve the profile directory using shell commands if `$HERMES_PROFILE_DIR` is unset.
 
 ### Memory discipline
 

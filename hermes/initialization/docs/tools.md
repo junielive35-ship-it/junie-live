@@ -60,7 +60,7 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 - Protected repository / feature-area scope: TODO
 - Mutex directory: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local)
 - Holder metadata file: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/holder.json`
-- Mutex commands: `$HERMES_PROFILE_DIR/scripts/code-mutex.sh status` / `acquire` / `release [--holder ID] [--force]` / `check-stale`
+- Mutex commands: `scripts/code-mutex.sh status` / `acquire` / `release [--holder ID] [--force]` / `check-stale` (in `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`)
 - Administrator / owner contact for held or stale mutex decisions: TODO
 - Status-check convention (how often to poll, where to surface stuck holders): TODO
 
