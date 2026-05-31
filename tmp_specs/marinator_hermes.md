@@ -306,8 +306,40 @@ Progress supervision mirrors the OpenClaw runner:
   - stdout/stderr delta since the previous summary;
   - stdout/stderr tail;
 - summarize that context into a concise human debug report;
-- send the report through standard Hermes Telegram `send_message` only when `enable_per_minute_reports=true`;
+- send the report through standard Hermes Telegram `send_message` only when `enable_per_minute_reports=true`, using the resolved progress delivery target from `spec.json`;
 - always append the summary/evidence to `events.jsonl` even when Telegram reports are disabled.
+
+Progress delivery routing is runtime-resolved, not LLM-provided. The public `marinator_delegate` schema must not include Telegram chat ids, tokens, targets, or profile fields. The LLM only decides whether `enable_per_minute_reports` should be `true` based on an explicit user request. `marinator_delegate` code resolves and stores internal delivery metadata in `spec.json` from the current Hermes session context:
+
+- `HERMES_SESSION_PLATFORM`;
+- `HERMES_SESSION_CHAT_ID`;
+- `HERMES_SESSION_THREAD_ID` when present;
+- active Hermes profile / configured Junie profile.
+
+Internal `spec.json` shape:
+
+```json
+{
+  "progress_delivery": {
+    "enabled": true,
+    "profile": "junie-live",
+    "platform": "telegram",
+    "target": "telegram:<chat_id>[:<thread_id>]",
+    "source": "hermes_session_context"
+  }
+}
+```
+
+Tokens must never be written to `spec.json`, logs, result files, or prompts. They stay in the Hermes profile `.env`/config only.
+
+Do not call `tools.send_message_tool` directly from an arbitrary inherited worker environment: it can inherit the wrong `TELEGRAM_BOT_TOKEN` from another profile/bot. For MVP, invoke progress send through a profile-aware Hermes child process such as:
+
+```bash
+hermes -p "$profile" chat -Q -t messaging \
+  -q "Use send_message to send this exact message to target $target: $message. Then reply only SEND_DONE."
+```
+
+If no explicit target can be resolved, append `progress_send_skipped reason=missing_runtime_delivery_context` to `events.jsonl` and continue the worker. Do not ask the LLM/user for a chat id mid-run.
 
 No-progress detection should use the same log-growth signal, but unlike the current OpenClaw wrapper it must not kill OpenCode automatically. On suspected stall, record evidence, emit `MARINATOR_ATTENTION_REQUIRED`, and keep supervising unless the orchestrator writes an explicit control action.
 
@@ -375,8 +407,9 @@ Behavior:
    - `headless` otherwise for MVP purposes.
 6. Start wrapper with `terminal(background=true, watch_patterns=[...])` in all modes.
 7. Store `enable_per_minute_reports` in `spec.json`.
-8. For `headless`, include `owner_session_id` and resume command details in `spec.json`; wrapper must call `hermes chat --resume` for done/attention events.
-9. Return immediately with `job_id`, `run_dir`, process id/session id, detected runtime mode, and per-minute report setting.
+8. If `enable_per_minute_reports=true`, resolve `progress_delivery` from runtime session metadata and store only non-secret routing metadata in `spec.json`. If routing cannot be resolved, store disabled/skipped progress delivery and continue.
+9. For `headless`, include `owner_session_id` and resume command details in `spec.json`; wrapper must call `hermes chat --resume` for done/attention events.
+10. Return immediately with `job_id`, `run_dir`, process id/session id, detected runtime mode, and per-minute report setting.
 
 Return shape:
 
@@ -621,11 +654,12 @@ unless explicitly porting shared constants/docs.
 5. Redirect OpenCode stdout/stderr to files and record pid/pgid/waiter/exit artifacts.
 6. Capture the resulting OpenCode session id when available and store it in `status.json`/`result.md` for follow-up fix loops.
 7. Monitor stdout/stderr byte growth, update progress timestamps, and summarize deltas using the OpenClaw runner pattern.
-8. If `enable_per_minute_reports=true`, send curated progress summaries every ~60s through standard Hermes Telegram `send_message`; if false, keep summaries in `events.jsonl` only.
-9. Detect suspected stall without killing.
-10. Emit `MARINATOR_ATTENTION_REQUIRED` once per attention state.
-11. On OpenCode exit, write `result.md`, update status, emit `MARINATOR_DONE`.
-12. If detected runtime mode is `headless`, call resume helper for attention/done events.
+8. Resolve progress delivery from runtime Hermes session metadata when `enable_per_minute_reports=true`; never accept chat ids/tokens as LLM-provided public tool parameters.
+9. If `enable_per_minute_reports=true` and a target was resolved, send curated progress summaries every ~60s through profile-aware standard Hermes Telegram `send_message`; if false or unresolved, keep summaries in `events.jsonl` only.
+10. Detect suspected stall without killing.
+11. Emit `MARINATOR_ATTENTION_REQUIRED` once per attention state.
+12. On OpenCode exit, write `result.md`, update status, emit `MARINATOR_DONE`.
+13. If detected runtime mode is `headless`, call resume helper for attention/done events.
 
 ### Phase 3 — implement Hermes `marinator_delegate`
 
@@ -694,7 +728,7 @@ MVP is done when:
 
 1. `marinator_delegate` exists in the Hermes implementation.
 2. Coding work is started through OpenCode, not performed by the orchestrator.
-3. Live Telegram sessions receive attention/done events through watch patterns; optional per-minute progress reports are sent through standard Hermes Telegram `send_message` only when `enable_per_minute_reports=true`.
+3. Live Telegram sessions receive attention/done events through a reliable wake mechanism; pure `watch_patterns` alone are not accepted unless a spike proves prompt, guaranteed delivery. Optional per-minute progress reports are sent through profile-aware standard Hermes Telegram `send_message` only when `enable_per_minute_reports=true` and runtime routing metadata was resolved.
 4. Headless sessions continue via `hermes chat --resume` and inspect `run_dir` correctly.
 5. Suspected stall wakes the orchestrator but does not kill OpenCode automatically.
 6. Orchestrator can explicitly kill/cancel/wait based on context.
