@@ -175,9 +175,40 @@ PY
   append_event "handoff_pending" session_key "$orchestrator_session_key"
 }
 
+extract_cron_job_id() {
+  python3 - <<'PY'
+import json, os
+raw = os.environ.get("CRON_OUTPUT", "")
+# The CLI can print warnings before the JSON object. Decode the last valid JSON
+# object/array found in the output instead of assuming stdout is pure JSON.
+for start in [idx for idx, ch in enumerate(raw) if ch in "{"] [::-1]:
+    try:
+        data = json.loads(raw[start:])
+        break
+    except Exception:
+        data = None
+else:
+    data = None
+if not isinstance(data, dict):
+    print("")
+    raise SystemExit
+for key in ("id", "job_id", "jobId"):
+    value = data.get(key)
+    if value:
+        print(value)
+        raise SystemExit
+job = data.get("job")
+if isinstance(job, dict):
+    print(job.get("id") or job.get("job_id") or job.get("jobId") or "")
+else:
+    print("")
+PY
+}
+
 schedule_continuation() {
-  local continuation_at message cron_output cron_status schedule_job_id scheduled_at
+  local continuation_at continuation_timeout_seconds message cron_output cron_status schedule_job_id scheduled_at
   continuation_at="5s"
+  continuation_timeout_seconds=300
   scheduled_at=$(now_iso)
   message="Marinator job $job_id finished. Read $status_path and $result_path, inspect the repo diff, and continue the review/fix/acceptance loop. Do not report success unless the requested user outcome is verified or explicitly blocked."
   set +e
@@ -187,40 +218,39 @@ schedule_continuation() {
     --session current \
     --session-key "$orchestrator_session_key" \
     --message "$message" \
+    --timeout-seconds "$continuation_timeout_seconds" \
     --no-deliver \
     --delete-after-run \
     --json 2>&1)
   cron_status=$?
   set -e
   if [[ "$cron_status" -eq 0 ]]; then
-    schedule_job_id=$(CRON_OUTPUT="$cron_output" python3 - <<'PY'
+    schedule_job_id=$(CRON_OUTPUT="$cron_output" extract_cron_job_id)
+    if [[ -z "$schedule_job_id" ]]; then
+      update_status_json "$(python3 - "$orchestrator_session_key" "$cron_output" <<'PY'
 import json, sys
-import os
-raw = os.environ.get("CRON_OUTPUT", "")
-try:
-    data = json.loads(raw)
-except Exception:
-    print("")
-    raise SystemExit
-for key in ("id", "job_id", "jobId"):
-    if isinstance(data, dict) and data.get(key):
-        print(data[key])
-        break
-else:
-    job = data.get("job") if isinstance(data, dict) else None
-    if isinstance(job, dict):
-        print(job.get("id") or job.get("job_id") or job.get("jobId") or "")
-    else:
-        print("")
+session_key, error = sys.argv[1:]
+print(json.dumps({"handoff": {
+  "state": "failed",
+  "session_key": session_key,
+  "schedule_job_id": None,
+  "scheduled_at": None,
+  "consumed_by_run_id": None,
+  "consumed_at": None,
+  "last_error": ("cron add succeeded but job id could not be parsed: " + error)[-2000:],
+}}))
 PY
-)
+)"
+      append_event "handoff_schedule_id_missing" session_key "$orchestrator_session_key" error "$cron_output"
+      return
+    fi
     update_status_json "$(python3 - "$orchestrator_session_key" "$schedule_job_id" "$scheduled_at" <<'PY'
 import json, sys
 session_key, schedule_job_id, scheduled_at = sys.argv[1:]
 print(json.dumps({"handoff": {
   "state": "scheduled",
   "session_key": session_key,
-  "schedule_job_id": schedule_job_id or None,
+  "schedule_job_id": schedule_job_id,
   "scheduled_at": scheduled_at,
   "consumed_by_run_id": None,
   "consumed_at": None,
@@ -228,7 +258,7 @@ print(json.dumps({"handoff": {
 }}))
 PY
 )"
-    append_event "handoff_scheduled" session_key "$orchestrator_session_key" schedule_job_id "${schedule_job_id:-unknown}"
+    append_event "handoff_scheduled" session_key "$orchestrator_session_key" schedule_job_id "$schedule_job_id"
   else
     update_status_json "$(python3 - "$orchestrator_session_key" "$cron_output" <<'PY'
 import json, sys

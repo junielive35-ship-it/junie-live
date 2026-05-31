@@ -89,6 +89,8 @@ async function listRunStatusPaths(workspaceDir) {
 }
 function addAnomaly(status, type, detail) {
     status.anomalies = status.anomalies ?? [];
+    if (status.anomalies.some((item) => item.type === type && item.detail === detail))
+        return;
     status.anomalies.push({ type, detected_at: new Date().toISOString(), ...(detail ? { detail } : {}) });
 }
 export async function handleBeforeAgentRun(_event, ctx) {
@@ -149,7 +151,7 @@ export async function reconcileMarinatorStatuses(workspaceDir, now = new Date(),
             continue;
         const handoff = status.handoff;
         if (handoff?.state === "scheduled" && handoff.scheduled_at && now.getTime() - Date.parse(handoff.scheduled_at) > staleMs) {
-            addAnomaly(status, "handoff_scheduled_not_consumed", `scheduled_at=${handoff.scheduled_at}`);
+            addAnomaly(status, "handoff_scheduled_not_consumed", `scheduled_at=${handoff.scheduled_at} schedule_job_id=${handoff.schedule_job_id ?? "unknown"}`);
         }
         if (handoff?.state === "consumed" && status.active_run?.state === "active" && status.active_run.startedAt && now.getTime() - Date.parse(status.active_run.startedAt) > staleMs) {
             addAnomaly(status, "active_run_not_ended", `startedAt=${status.active_run.startedAt}`);
