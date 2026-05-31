@@ -95,4 +95,7 @@ for plugin_py in initialization/plugins/*/*.py; do
   python3 -m py_compile "$plugin_py" || fail "python syntax error in $plugin_py"
 done
 
+log "initialization gate regression tests"
+"$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
+
 log "all checks passed"

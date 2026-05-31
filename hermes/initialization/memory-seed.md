@@ -25,7 +25,7 @@ Architecture: orchestrator (this Hermes instance) owns strategy, context, planni
 ```
 
 ```
-Code mutex: only one code-changing task at a time. Mutex state at ~/.hermes/profiles/junie-live/junie-live/state/code_mutex/ (profile-local; $HERMES_PROFILE_DIR/junie-live/state/code_mutex/). Acquire before code work, release after done/blocked/cancelled. If held, ask owner.
+Code mutex: only one code-changing task at a time. Mutex state at ~/.hermes/profiles/junie-live/junie-live/state/code_mutex/ (profile-local). Acquire before code work, release after done/blocked/cancelled. If held, ask owner.
 ```
 
 ```

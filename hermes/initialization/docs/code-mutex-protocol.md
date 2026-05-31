@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Only one code-changing task runs at a time for the owned repo or area. The mutex prevents branch, worktree, and review conflicts when delegating to OpenCode (via `marinator_delegate`). Hermes Junie Live's mutex is a file-based lock under a profile-local state directory, managed by `$HERMES_PROFILE_DIR/scripts/code-mutex.sh`.
+Only one code-changing task runs at a time for the owned repo or area. The mutex prevents branch, worktree, and review conflicts when delegating to OpenCode (via `marinator_delegate`). Hermes Junie Live's mutex is a file-based lock under a profile-local state directory, managed by `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`.
 
 Canonical (default) mutex directory: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/`
 
@@ -39,7 +39,7 @@ Substituting `delegate_task` for `marinator_delegate` to bypass mutex acquisitio
 
 - **Mutex directory (default):** `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/`
 - **Holder metadata:** `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/holder.json`
-- **Commands** (deployed by `hire-junie.sh` to the profile, at `$HERMES_PROFILE_DIR/scripts/code-mutex.sh`):
+- **Commands** (deployed by `hire-junie.sh` to the profile, at `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`):
   - `scripts/code-mutex.sh status` — show current state
   - `scripts/code-mutex.sh acquire --holder ID --reason TEXT [--repo DIR]`
   - `scripts/code-mutex.sh release [--holder ID] [--force]`
@@ -58,4 +58,4 @@ Substituting `delegate_task` for `marinator_delegate` to bypass mutex acquisitio
 
 - `delegation-protocol.md` — Marinator delegation rules and worker contract.
 - `tools.md` — operational quick reference for mutex commands and escalation contacts.
-- `$HERMES_PROFILE_DIR/scripts/code-mutex.sh` — the implementation in the installed profile.
+- `~/.hermes/profiles/junie-live/scripts/code-mutex.sh` — the implementation in the installed profile.

@@ -112,7 +112,7 @@ OpenClaw uses protocol docs (`delegation-protocol.md`, `review-protocol.md`) loa
 OpenClaw shells out to `opencode run` via bash scripts with complex timeout/retry logic. The Hermes Marinator plugin (`marinator_delegate`) replaces the direct `opencode` invocation with a supervised delegation tool:
 - Installed as a Hermes user plugin at `~/.hermes/profiles/junie-live/plugins/marinator-delegation/`
 - Registered under the `marinator` toolset, enabled for CLI and Telegram by `hire-junie.sh`
-- Creates a durable run directory (`~/.hermes/junie-live/state/marinator/runs/<job_id>/`) with spec, status, events, logs, and result artifacts
+- Creates a durable run directory (`~/.hermes/profiles/junie-live/junie-live/state/marinator/runs/<job_id>/`) with spec, status, events, logs, and result artifacts
 - Spawns `marinator-worker.sh` which runs OpenCode in a separate process group with stdout/stderr capture, progress monitoring, stall detection (without auto-kill), and marker line emission
 - Live sessions wake via `notify_on_complete=true`; headless sessions continue via `hermes chat --resume`
 - The orchestrator reviews results, decides accept/fix/wait/kill/block, and verifies user-visible outcomes
@@ -136,7 +136,7 @@ OpenClaw uses an atomic `mkdir` lock directory. The Hermes version uses the same
 - Atomic `mkdir` as the lock operation (succeeds for exactly one caller)
 - `holder.json` inside the directory for human-readable metadata
 - Same conceptual model, same implementation primitive
-- Only the default path differs: `~/.hermes/junie-live/state/code_mutex/` instead of `.openclaw/state/code_mutex/`
+- Only the default path differs: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` instead of `.openclaw/state/code_mutex/`
 
 ### 8. Minimal target-repo footprint
 
@@ -160,10 +160,10 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 | Strategic context | Hermes memory stores | memory tool |
 | Session history | `~/.hermes/profiles/junie-live/state.db` | Hermes sessions |
 | Detailed docs | Target repo `docs/` or profile `docs/` | File read/write |
-| Code mutex | `~/.hermes/junie-live/state/code_mutex/` | `code-mutex.sh` |
-| Marinator runs | `~/.hermes/junie-live/state/marinator/runs/` | `marinator_delegate` plugin |
-| Backlog items | `~/.hermes/junie-live/state/backlog/` | Scripts/cron |
-| Operational logs | `~/.hermes/junie-live/state/logs/` | Scripts/cron |
+| Code mutex | `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` | `code-mutex.sh` |
+| Marinator runs | `~/.hermes/profiles/junie-live/junie-live/state/marinator/runs/` | `marinator_delegate` plugin |
+| Backlog items | `~/.hermes/profiles/junie-live/junie-live/state/backlog/` | Scripts/cron |
+| Operational logs | `~/.hermes/profiles/junie-live/junie-live/state/logs/` | Scripts/cron |
 | Skills | `~/.hermes/profiles/junie-live/skills/` | skill_manage |
 | Identity (personality + safety-net rules) | `~/.hermes/profiles/junie-live/SOUL.md` | Manual/hire script |
 | Project operating protocol | `<target-repo>/HERMES.md` (copied from seed during init) | Manual/Junie during init |

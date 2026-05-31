@@ -13,8 +13,8 @@ Documentation-only Markdown edits are an explicit exception and may be handled d
 
 ## Workflow
 
-1. Check repo status and code mutex. The mutex is held when `$HERMES_PROFILE_DIR/junie-live/state/code_mutex/holder.json` exists (profile-local; default: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/holder.json`).
-2. Acquire the mutex by running `$HERMES_PROFILE_DIR/scripts/code-mutex.sh acquire --holder "junie:<task-id>" --reason "<description>"`.
+1. Check repo status and code mutex. The mutex is held when `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/holder.json` exists (profile-local).
+2. Acquire the mutex by running `~/.hermes/profiles/junie-live/scripts/code-mutex.sh acquire --holder "junie:<task-id>" --reason "<description>"`.
 3. Restate objective, constraints, and non-goals.
 4. Identify affected components and likely files.
 5. Split work into sequential scoped tasks when useful.
