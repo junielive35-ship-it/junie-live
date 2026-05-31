@@ -227,38 +227,58 @@ headless_resume() {
     return 0
   fi
 
-  # Exactly-once guard
+  # Exactly-once guard. This belongs in the supervisor process so duplicate
+  # attention/terminal paths cannot spawn duplicate resume helpers.
   if ! marker_once "resume_$event"; then
     log_runner "headless_resume: marker resume_$event already exists, skipping duplicate"
     return 0
   fi
 
-  # Session lock
+  if ! command -v hermes >/dev/null 2>&1; then
+    log_runner "headless_resume: hermes not in PATH"
+    append_event "headless_resume_failed" event "$event" reason "hermes_not_in_path"
+    return 0
+  fi
+
+  # Session lock. The resume is intentionally fire-and-forget: Marinator must
+  # keep supervising OpenCode so it can observe control/kill while the resumed
+  # parent Hermes session thinks, inspects artifacts, or decides what to do.
   local lock_dir
   lock_dir="$(dirname "$(dirname "$run_dir")")/../owner-session-locks"
   mkdir -p "$lock_dir"
   local lock_file="$lock_dir/${owner_session_id}.lock"
 
   local resume_prompt="Marinator worker job_id=$job_id reached state=$event. run_dir=$run_dir. Read status.json, result.md, stdout/stderr logs, inspect repo diff, then follow the Marinator delegation protocol: review, decide accept/fix/wait/kill/block, and do not report success unless the requested user-visible outcome is verified."
-
-  log_runner "headless_resume: calling hermes chat --resume for event=$event"
-  append_event "headless_resume_started" event "$event" owner_session_id "$owner_session_id"
-
   local resume_log="$run_dir/resume_${event}.log"
-  if command -v hermes >/dev/null 2>&1; then
-    (
-      flock -n 200 || { log_runner "headless_resume: session lock held, skipping"; exit 0; }
-      hermes -p "$hermes_profile" chat \
-        --resume "$owner_session_id" \
-        --toolsets terminal,file \
-        -q "$resume_prompt" \
-        >"$resume_log" 2>&1 || true
-    ) 200>"$lock_file"
-    append_event "headless_resume_completed" event "$event"
-  else
-    log_runner "headless_resume: hermes not in PATH"
-    append_event "headless_resume_failed" event "$event" reason "hermes_not_in_path"
-  fi
+  local resume_pid_path="$run_dir/resume_${event}.pid"
+
+  log_runner "headless_resume: spawning async hermes chat --resume for event=$event"
+  (
+    if ! flock -n 200; then
+      printf '%s headless_resume: session lock held, skipping event=%s\n' "$(now_iso)" "$event" >>"$runner_log"
+      append_event "headless_resume_skipped" event "$event" reason "session_lock_held"
+      exit 0
+    fi
+
+    set +e
+    hermes -p "$hermes_profile" chat \
+      --resume "$owner_session_id" \
+      --toolsets terminal,file \
+      -q "$resume_prompt" \
+      >"$resume_log" 2>&1
+    resume_rc=$?
+    set -e
+
+    if [[ "$resume_rc" -eq 0 ]]; then
+      append_event "headless_resume_completed" event "$event" exit_code "$resume_rc"
+    else
+      append_event "headless_resume_failed" event "$event" exit_code "$resume_rc"
+    fi
+  ) 200>"$lock_file" &
+
+  local resume_pid=$!
+  printf '%s\n' "$resume_pid" >"$resume_pid_path"
+  append_event "headless_resume_started" event "$event" owner_session_id "$owner_session_id" pid "$resume_pid" log "$resume_log"
 }
 
 # ── Build OpenCode arguments ──
