@@ -81,7 +81,7 @@ hermes/
 
 5. **Skills** — Hermes skills replace OpenClaw protocols. They're auto-loaded when relevant tasks match, and they carry the delegation, review, reflection, and intake workflows.
 
-6. **Delegation** — Coding work is delegated via `~/.opencode/bin/opencode run` (the orchestrator never codes directly). Non-code subtasks may use `delegate_task` instead.
+6. **Delegation** — Coding work is delegated via `marinator_delegate` (the Marinator code-delegation tool). The orchestrator never codes directly. Non-code subtasks may use `delegate_task` instead.
 
 7. **Cron** — Hermes cron jobs replace shell crontab entries. Watchdog, health checks, and overnight routines are native cron jobs created during setup.
 

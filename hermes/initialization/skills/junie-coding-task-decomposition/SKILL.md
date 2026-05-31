@@ -7,7 +7,7 @@ tags: [junie-live, delegation, coding, decomposition]
 
 # Coding Task Decomposition
 
-Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; all coding work is delegated via `~/.opencode/bin/opencode run` or `delegate_task` for non-code subtasks.
+Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; all coding work is delegated via `marinator_delegate` or `delegate_task` for non-code subtasks.
 
 Documentation-only Markdown edits are an explicit exception and may be handled directly by the orchestrator.
 
@@ -18,7 +18,7 @@ Documentation-only Markdown edits are an explicit exception and may be handled d
 3. Restate objective, constraints, and non-goals.
 4. Identify affected components and likely files.
 5. Split work into sequential scoped tasks when useful.
-6. For each code-changing task, prepare an `opencode run` command via terminal with relevant context. For non-code tasks, use `delegate_task`.
+6. For each code-changing task, prepare a `marinator_delegate` invocation with relevant context. For non-code tasks, use `delegate_task`.
 7. Define verification: tests, typecheck, lint, build, manual inspection.
 8. Plan review gates before any PR/update.
 
@@ -41,23 +41,17 @@ Report outcome_status=done|partial|blocked with any gaps.
 )
 ```
 
-## opencode executor template (all code-changing work)
+## marinator_delegate template (all code-changing work)
 
-All code-changing work is delegated via `~/.opencode/bin/opencode run` with Opus 4.6 low reasoning:
+All code-changing work is delegated via `marinator_delegate`. Write a prompt file, then call the tool:
 
 ```python
-terminal(
-    command="~/.opencode/bin/opencode run '<scoped coding objective>. "
-            "Files likely involved: <list>. "
-            "Constraints: <architecture rules, non-goals>. "
-            "Verification: <how to verify the work>. "
-            "After completing, run: git status --short --branch --untracked-files=all. "
-            "Report outcome_status=done|partial|blocked with any gaps.' "
-            "--model openrouter/anthropic/claude-opus-4.6 --variant low "
-            "-f <relevant_file_1> -f <relevant_file_2>",
-    workdir="<target repo path>",
-    timeout=300
+marinator_delegate(
+    job_id="<short-stable-id>",
+    repo="/abs/path/to/repo",
+    prompt_file="/abs/path/to/PROMPT.md",
+    enable_per_minute_reports=False,
 )
 ```
 
-For long-running tasks (>5 min expected), add `background=true, notify_on_complete=true`.
+For follow-up/fix loops, pass `opencode_previous_session_id` to continue the prior OpenCode context.

@@ -8,7 +8,7 @@ Telegram is the primary incoming event source. Junie communicates with the team 
 - Meaningful work is validated against memory (strategic context) and relevant docs.
 - The **Marinator** is Junie Live's task-solving loop: validate/decompose a task, delegate to an executor, check the result, request fixes when needed, verify, accept/report, and reflect. In the current Hermes baseline this is a protocol across memory, skills, docs, and agent behavior, not a separate architectural module.
 - Only one code-changing task may run at a time (code mutex).
-- The orchestrator never writes code directly. All coding is delegated via `opencode run` (Claude Opus 4.6, `--variant low`); `delegate_task` is for non-code subtasks (research, analysis, reading).
+- The orchestrator never writes code directly. All coding is delegated via `marinator_delegate`; `delegate_task` is for non-code subtasks (research, analysis, reading).
 - Markdown-only doc edits are the exception.
 - Memory stays compact — strategic compass only. Details in docs.
 - Schedules are project-dependent.
@@ -38,7 +38,7 @@ Triggered when an accepted code-changing task is ready and mutex is free. This r
 Flow:
 1. Acquire code mutex via `hermes/scripts/code-mutex.sh acquire`.
 2. Decompose task (coding-task-decomposition skill).
-3. Delegate via `opencode run` (Claude Opus 4.6, `--variant low`) with scoped context; for non-code subtasks (research, analysis) use `delegate_task` instead.
+3. Delegate via `marinator_delegate` with scoped context; for non-code subtasks (research, analysis) use `delegate_task` instead.
 4. Run subagents sequentially under the mutex.
 5. Review results (implementation-review skill).
 6. Request fixes from subagents until correct.
