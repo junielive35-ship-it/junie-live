@@ -80,6 +80,12 @@ progress_delivery_enabled=$(json_get_default 'progress_delivery.enabled' 'false'
 progress_delivery_profile=$(json_get_default 'progress_delivery.profile' "$hermes_profile")
 progress_delivery_target=$(json_get_default 'progress_delivery.target' '')
 
+# OpenCode unattended mode: allow every permission class and every external
+# directory. `--dangerously-skip-permissions` only auto-approves permissions
+# that are not explicitly denied/asked by config; this runtime override makes
+# delegated Marinator workers genuinely headless.
+export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"allow","external_directory":{"/**":"allow"}}}'
+
 # Tuning: intervals in seconds
 update_interval_seconds=60
 no_progress_seconds=900
