@@ -93,6 +93,73 @@ function addAnomaly(status, type, detail) {
         return;
     status.anomalies.push({ type, detected_at: new Date().toISOString(), ...(detail ? { detail } : {}) });
 }
+function isoFromMs(value) {
+    if (typeof value !== "number" || !Number.isFinite(value))
+        return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+function stringValue(value) {
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+function numberValue(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+export function applyCronRunHistoryToStatus(status, cron, checkedAt = new Date()) {
+    const handoff = status.handoff;
+    if (!handoff || handoff.state !== "scheduled")
+        return status;
+    const checkedAtIso = checkedAt.toISOString();
+    const entries = Array.isArray(cron.entries) ? cron.entries : [];
+    let latestEntryNextRetryAt = null;
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+        latestEntryNextRetryAt = isoFromMs(entries[i]?.nextRunAtMs);
+        if (latestEntryNextRetryAt !== null)
+            break;
+    }
+    const nextRetryAt = isoFromMs(cron.job?.state?.nextRunAtMs) ?? isoFromMs(cron.job?.nextRunAtMs) ?? latestEntryNextRetryAt;
+    const setupTimeoutEntries = entries.filter((entry) => entry?.status === "error" && typeof entry?.error === "string" && entry.error.includes("setup timed out before runner start"));
+    const hasEvidence = setupTimeoutEntries.length > 0 || nextRetryAt !== null || typeof cron.job?.state?.consecutiveErrors === "number";
+    if (!hasEvidence)
+        return status;
+    handoff.last_checked_at = checkedAtIso;
+    if (typeof cron.job?.state?.consecutiveErrors === "number") {
+        handoff.consecutive_errors = cron.job.state.consecutiveErrors;
+    }
+    handoff.next_retry_at = nextRetryAt;
+    if (nextRetryAt) {
+        handoff.retry_state = "retrying";
+    }
+    else if (cron.job === null || cron.job?.enabled === false) {
+        handoff.retry_state = "failed_final";
+    }
+    else if (setupTimeoutEntries.length > 0 && handoff.retry_state !== "retrying") {
+        handoff.retry_state = "stale";
+    }
+    const existing = handoff.run_history ?? [];
+    const nextHistory = [...existing];
+    for (const entry of setupTimeoutEntries) {
+        const statusValue = stringValue(entry.status);
+        const errorValue = stringValue(entry.error);
+        const runAtValue = stringValue(entry.run_at) ?? stringValue(entry.runAt);
+        const durationValue = numberValue(entry.duration_ms) ?? numberValue(entry.durationMs);
+        const historyEntry = {
+            checked_at: checkedAtIso,
+            ...(statusValue !== undefined ? { status: statusValue } : {}),
+            ...(errorValue !== undefined ? { error: errorValue } : {}),
+            ...(runAtValue !== undefined ? { run_at: runAtValue } : {}),
+            ...(durationValue !== undefined ? { duration_ms: durationValue } : {}),
+            next_retry_at: nextRetryAt,
+        };
+        const key = `${historyEntry.status ?? ""}\n${historyEntry.error ?? ""}\n${historyEntry.run_at ?? ""}\n${historyEntry.next_retry_at ?? ""}`;
+        const duplicateIndex = nextHistory.findIndex((item) => `${item.status ?? ""}\n${item.error ?? ""}\n${item.run_at ?? ""}\n${item.next_retry_at ?? ""}` === key);
+        if (duplicateIndex >= 0)
+            nextHistory.splice(duplicateIndex, 1);
+        nextHistory.push(historyEntry);
+    }
+    handoff.run_history = nextHistory.slice(-10);
+    return status;
+}
 export async function handleBeforeAgentRun(_event, ctx) {
     const workspaceDir = resolveWorkspaceDir(ctx.agentDir, ctx.workspaceDir);
     if (!ctx.sessionKey || !ctx.runId) {
@@ -151,7 +218,7 @@ export async function reconcileMarinatorStatuses(workspaceDir, now = new Date(),
             continue;
         const handoff = status.handoff;
         if (handoff?.state === "scheduled" && handoff.scheduled_at && now.getTime() - Date.parse(handoff.scheduled_at) > staleMs) {
-            addAnomaly(status, "handoff_scheduled_not_consumed", `scheduled_at=${handoff.scheduled_at} schedule_job_id=${handoff.schedule_job_id ?? "unknown"}`);
+            addAnomaly(status, "handoff_scheduled_not_consumed", `scheduled_at=${handoff.scheduled_at} schedule_job_id=${handoff.schedule_job_id ?? "unknown"} retry_state=${handoff.retry_state ?? "unknown"}`);
         }
         if (handoff?.state === "consumed" && status.active_run?.state === "active" && status.active_run.startedAt && now.getTime() - Date.parse(status.active_run.startedAt) > staleMs) {
             addAnomaly(status, "active_run_not_ended", `startedAt=${status.active_run.startedAt}`);
