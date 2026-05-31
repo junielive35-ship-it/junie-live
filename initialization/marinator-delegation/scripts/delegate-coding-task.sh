@@ -215,9 +215,9 @@ schedule_continuation() {
   cron_output=$(openclaw cron add \
     --name "marinator-continuation-$job_id" \
     --at "$continuation_at" \
-    --session current \
+    --session main \
     --session-key "$orchestrator_session_key" \
-    --message "$message" \
+    --system-event "$message" \
     --timeout-seconds "$continuation_timeout_seconds" \
     --no-deliver \
     --delete-after-run \
