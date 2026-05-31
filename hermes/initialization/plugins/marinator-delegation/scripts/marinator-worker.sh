@@ -55,6 +55,8 @@ if cur is None:
     sys.exit(1)
 if isinstance(cur, (dict, list)):
     print(json.dumps(cur, ensure_ascii=False))
+elif isinstance(cur, bool):
+    print(str(cur).lower())
 else:
     print(cur)
 PY
@@ -185,7 +187,7 @@ send_progress() {
   if [[ "$enable_per_minute_reports" != "true" ]]; then
     return 0
   fi
-  if [[ "$progress_delivery_enabled" != "true" && "$progress_delivery_enabled" != "True" ]]; then
+  if [[ "$progress_delivery_enabled" != "true" ]]; then
     append_event "progress_send_skipped" reason "delivery_not_enabled" summary "$message"
     return 0
   fi
