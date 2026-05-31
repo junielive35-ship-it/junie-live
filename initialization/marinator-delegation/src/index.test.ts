@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import entry, { applyCronRunHistoryToStatus, handleAgentEnd, handleBeforeAgentRun, reconcileMarinatorStatuses } from "./index.js";
+import entry, { applyCronRunHistoryToStatus, handleAgentEnd, handleBeforeAgentRun, reconcileMarinatorStatuses, resolveDeliverySpec } from "./index.js";
 import type { MarinatorStatus } from "./index.js";
 
 const execFileAsync = promisify(execFile);
@@ -60,6 +60,15 @@ describe("marinator-delegation", () => {
     expect(entry.id).toBe("marinator-delegation");
     expect(entry.name).toBe("Marinator Delegation");
     expect(typeof entry.register).toBe("function");
+  });
+
+  it("resolves delivery spec when delivery context is present and allows headless sessions without delivery target", () => {
+    expect(resolveDeliverySpec({
+      deliveryContext: { channel: "telegram", to: "telegram:400847234:topic:7" },
+      agentAccountId: "junie-live",
+    })).toEqual({ channel: "telegram", target: "400847234", threadId: "7", accountId: "junie-live" });
+
+    expect(resolveDeliverySpec({ sessionKey: "agent:junie-live:headless" })).toBeNull();
   });
 
   it("consumes matching scheduled handoff on before_agent_run and ends it on agent_end", async () => {
