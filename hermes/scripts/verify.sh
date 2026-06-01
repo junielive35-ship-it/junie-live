@@ -113,43 +113,48 @@ done
 log "marinator worker progress-summary regression guard"
 WORKER_SH="initialization/plugins/marinator-delegation/scripts/marinator-worker.sh"
 if [[ -f "$WORKER_SH" ]]; then
-  grep -qF '## artifact paths' "$WORKER_SH" || fail "$WORKER_SH: missing artifact paths section"
-  grep -qF 'Answer in no more than 150 words' "$WORKER_SH" || fail "$WORKER_SH: missing 150-word limit in prompt"
-  grep -qF 'Do not invent paths' "$WORKER_SH" || fail "$WORKER_SH: missing Do not invent paths directive"
+  # Positive checks: required prompt directives
+  grep -qF 'Use only the stdout/stderr excerpts below' "$WORKER_SH" || \
+    fail "$WORKER_SH: missing 'Use only the stdout/stderr excerpts below' in prompt"
+  grep -qF 'Answer in no more than 150 words' "$WORKER_SH" || \
+    fail "$WORKER_SH: missing 'Answer in no more than 150 words' in prompt"
+  grep -qF 'Do not mention files/logs being missing' "$WORKER_SH" || \
+    fail "$WORKER_SH: missing 'Do not mention files/logs being missing' in prompt"
+
+  # Negative checks: no wrapper artifacts in progress context
+  if grep -qF '## artifact paths' "$WORKER_SH"; then
+    fail "$WORKER_SH: artifact paths section still present in progress context"
+  fi
+  if grep -qF '## status.json' "$WORKER_SH"; then
+    fail "$WORKER_SH: status.json section still present in progress context"
+  fi
+  if grep -qF '## recent events.jsonl' "$WORKER_SH"; then
+    fail "$WORKER_SH: events.jsonl section still present in progress context"
+  fi
+  if grep -qF '## runner.log tail' "$WORKER_SH"; then
+    fail "$WORKER_SH: runner.log tail section still present in progress context"
+  fi
+
+  # Sections must exist (regression guard: interval status/delta preserved)
+  grep -qF '## stdout/stderr interval status' "$WORKER_SH" || \
+    fail "$WORKER_SH: missing '## stdout/stderr interval status' section"
+  grep -qF '## stdout/stderr delta' "$WORKER_SH" || \
+    fail "$WORKER_SH: missing '## stdout/stderr delta' section"
+
+  # Must NOT pipe context_file through tail -c (would trim sections)
+  if grep -qE '\|\s*tail\s+-c\s+[0-9]+\s*>\s*"\$context_file"' "$WORKER_SH"; then
+    fail "$WORKER_SH: context_file is piped through tail -c; interval status/delta would be trimmed"
+  fi
+
+  # Must write context_file directly (confirming sections land in final output)
+  grep -qE '>\s*"\$context_file"' "$WORKER_SH" || \
+    fail "$WORKER_SH: no direct write to context_file; sections would be dropped"
+
+  # [:700] truncation must not appear in non-comment lines
   if grep -qF '[:700]' "$WORKER_SH"; then
-    # The construct "[:700]" should only appear in comments or false positives;
-    # the post-processing truncation must have been removed.
-    # Search lines that actually pass :700 as a Python string slice.
     if grep -nE '\[:700\]' "$WORKER_SH" | grep -vE '^\s*#' | grep -q .; then
       fail "$WORKER_SH: [:700] truncation still present in non-comment line"
     fi
-  fi
-else
-  fail "missing $WORKER_SH"
-fi
-
-log "marinator worker artifact-paths truncation guard"
-if [[ -f "$WORKER_SH" ]]; then
-  # Check 1: a context_body_file temp file is declared for the truncated body.
-  grep -qF 'context_body_file=' "$WORKER_SH" || \
-    fail "$WORKER_SH: missing context_body_file for truncated body"
-
-  # Check 2: tail -c 24000 must write to context_body_file, not context_file.
-  grep -qF 'tail -c 24000 > "$context_body_file"' "$WORKER_SH" || \
-    fail "$WORKER_SH: tail -c 24000 must write to context_body_file"
-
-  # Check 3: context_body_file is catted into context_file.
-  grep -qF 'cat "$context_body_file"' "$WORKER_SH" || \
-    fail "$WORKER_SH: missing cat of context_body_file into context_file"
-
-  # Check 4: artifact paths are NOT piped through tail -c 24000.
-  if grep -n 'printf.*artifact paths.*|.*tail -c 24000' "$WORKER_SH" >/dev/null 2>&1; then
-    fail "$WORKER_SH: artifact paths still piped through tail -c 24000"
-  fi
-
-  # Check 5: tail -c 24000 must NOT write directly to context_file (old broken pattern).
-  if grep -q 'tail -c 24000.*> "$context_file"' "$WORKER_SH" 2>/dev/null; then
-    fail "$WORKER_SH: tail -c 24000 writes to context_file instead of context_body_file"
   fi
 else
   fail "missing $WORKER_SH"

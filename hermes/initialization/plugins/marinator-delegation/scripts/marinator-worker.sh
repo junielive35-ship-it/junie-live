@@ -373,41 +373,32 @@ summarize_delta() {
     return 0
   fi
 
-  # Build context file: artifact paths first (never truncated), then truncated body.
-  # The body (status, events, runner log, delta, stdout/stderr tails) is large and
-  # gets tail-truncated to 24 KB; artifact paths are written separately so they
-  # survive even when the body is huge.
-  context_body_file="$run_dir/.summary.context.body"
+  # Build context tail (OpenCode stdout/stderr tails only, truncated)
+  context_tail_file="$run_dir/.summary.context.tail"
   {
-    printf '## change note\n%s\n\n' "$change_note"
-    printf '## status.json\n'
-    tail -c 4000 "$status_path" 2>/dev/null || true
-    printf '\n\n## recent events.jsonl\n'
-    tail -n 40 "$events_path" 2>/dev/null || true
-    printf '\n\n## runner.log tail\n'
-    tail -n 80 "$runner_log" 2>/dev/null || true
-    printf '\n\n## stdout/stderr delta\n'
-    cat "$delta_file" 2>/dev/null || true
-    printf '\n\n## stdout tail\n'
+    printf '## stdout tail\n'
     tail -n 80 "$stdout_log" 2>/dev/null || true
     printf '\n\n## stderr tail\n'
     tail -n 120 "$stderr_log" 2>/dev/null || true
-  } | tail -c 24000 > "$context_body_file"
+  } | tail -c 24000 > "$context_tail_file"
 
+  # Build context: preserved sections + truncated tails (no extra tail -c)
   {
-    printf '## artifact paths\n'
-    printf 'run_dir=%s\n' "$run_dir"
-    printf 'status_path=%s\n' "$status_path"
-    printf 'events_path=%s\n' "$events_path"
-    printf 'runner_log=%s\n' "$runner_log"
-    printf 'stdout_log=%s\n' "$stdout_log"
-    printf 'stderr_log=%s\n\n' "$stderr_log"
-    cat "$context_body_file"
+    printf '## stdout/stderr interval status\n%s\n\n' "$change_note"
+    printf '## stdout/stderr delta\n'
+    cat "$delta_file" 2>/dev/null || true
+    printf '\n\n'
+    cat "$context_tail_file"
   } > "$context_file"
 
-  # Construct LLM prompt
+  # Construct LLM prompt — OpenCode-only, no wrapper artifacts
   summary_prompt=$(cat <<PROMPT
-Summarize this Marinator/OpenCode worker state for a Telegram debug progress update. Use the provided status, events, runner log, stdout, stderr, and artifact paths. Focus on worker actions and critical errors/blockers. Answer in no more than 150 words. Do not invent paths. If logs are empty, say they are empty, not missing. Only say files are missing if the context explicitly shows missing-file errors. Use the artifact paths above for reference. If the change note says there was no new stdout/stderr and the context shows no other movement, explicitly say nothing changed and that the worker still appears to be running.
+Summarize OpenCode progress for a Telegram debug update.
+Use only the stdout/stderr excerpts below.
+Focus on what OpenCode appears to be doing, recent tool actions, tests, errors, or blockers.
+Answer in no more than 150 words.
+Do not mention files/logs being missing.
+If stdout/stderr delta is empty, say no new OpenCode output appeared since the previous update.
 
 Job: $job_id
 
@@ -433,9 +424,9 @@ print("\n".join(out).strip())
   # Fallback if LLM call failed or returned empty
   if [[ -z "$summary" ]]; then
     if [[ -s "$delta_file" ]]; then
-      summary="Marinator worker $job_id: OpenCode is still running; new log output was produced, but summary generation failed."
+      summary="OpenCode is still running; new output was produced, but summary generation failed."
     else
-      summary="Marinator worker $job_id: OpenCode is still running; nothing changed since the previous update, and summary generation failed."
+      summary="No new OpenCode output since previous update."
     fi
     log_runner "progress_summary_failed reason llm_call_failed"
     append_event "progress_summary_failed" reason "llm_call_failed"
