@@ -110,6 +110,51 @@ for skill_dir in initialization/skills/*/; do
   grep -q '^description: ' "$skill_file" || fail "skill missing description in frontmatter: $skill_file"
 done
 
+log "marinator worker progress-summary regression guard"
+WORKER_SH="initialization/plugins/marinator-delegation/scripts/marinator-worker.sh"
+if [[ -f "$WORKER_SH" ]]; then
+  grep -qF '## artifact paths' "$WORKER_SH" || fail "$WORKER_SH: missing artifact paths section"
+  grep -qF 'Answer in no more than 150 words' "$WORKER_SH" || fail "$WORKER_SH: missing 150-word limit in prompt"
+  grep -qF 'Do not invent paths' "$WORKER_SH" || fail "$WORKER_SH: missing Do not invent paths directive"
+  if grep -qF '[:700]' "$WORKER_SH"; then
+    # The construct "[:700]" should only appear in comments or false positives;
+    # the post-processing truncation must have been removed.
+    # Search lines that actually pass :700 as a Python string slice.
+    if grep -nE '\[:700\]' "$WORKER_SH" | grep -vE '^\s*#' | grep -q .; then
+      fail "$WORKER_SH: [:700] truncation still present in non-comment line"
+    fi
+  fi
+else
+  fail "missing $WORKER_SH"
+fi
+
+log "marinator worker artifact-paths truncation guard"
+if [[ -f "$WORKER_SH" ]]; then
+  # Check 1: a context_body_file temp file is declared for the truncated body.
+  grep -qF 'context_body_file=' "$WORKER_SH" || \
+    fail "$WORKER_SH: missing context_body_file for truncated body"
+
+  # Check 2: tail -c 24000 must write to context_body_file, not context_file.
+  grep -qF 'tail -c 24000 > "$context_body_file"' "$WORKER_SH" || \
+    fail "$WORKER_SH: tail -c 24000 must write to context_body_file"
+
+  # Check 3: context_body_file is catted into context_file.
+  grep -qF 'cat "$context_body_file"' "$WORKER_SH" || \
+    fail "$WORKER_SH: missing cat of context_body_file into context_file"
+
+  # Check 4: artifact paths are NOT piped through tail -c 24000.
+  if grep -n 'printf.*artifact paths.*|.*tail -c 24000' "$WORKER_SH" >/dev/null 2>&1; then
+    fail "$WORKER_SH: artifact paths still piped through tail -c 24000"
+  fi
+
+  # Check 5: tail -c 24000 must NOT write directly to context_file (old broken pattern).
+  if grep -q 'tail -c 24000.*> "$context_file"' "$WORKER_SH" 2>/dev/null; then
+    fail "$WORKER_SH: tail -c 24000 writes to context_file instead of context_body_file"
+  fi
+else
+  fail "missing $WORKER_SH"
+fi
+
 log "marinator plugin bash syntax"
 for plugin_script in initialization/plugins/*/scripts/*.sh; do
   [[ -f "$plugin_script" ]] || continue

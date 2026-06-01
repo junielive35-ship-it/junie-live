@@ -373,7 +373,11 @@ summarize_delta() {
     return 0
   fi
 
-  # Build context file (status, events, runner log, delta, stdout/stderr tails)
+  # Build context file: artifact paths first (never truncated), then truncated body.
+  # The body (status, events, runner log, delta, stdout/stderr tails) is large and
+  # gets tail-truncated to 24 KB; artifact paths are written separately so they
+  # survive even when the body is huge.
+  context_body_file="$run_dir/.summary.context.body"
   {
     printf '## change note\n%s\n\n' "$change_note"
     printf '## status.json\n'
@@ -388,11 +392,22 @@ summarize_delta() {
     tail -n 80 "$stdout_log" 2>/dev/null || true
     printf '\n\n## stderr tail\n'
     tail -n 120 "$stderr_log" 2>/dev/null || true
-  } | tail -c 24000 > "$context_file"
+  } | tail -c 24000 > "$context_body_file"
+
+  {
+    printf '## artifact paths\n'
+    printf 'run_dir=%s\n' "$run_dir"
+    printf 'status_path=%s\n' "$status_path"
+    printf 'events_path=%s\n' "$events_path"
+    printf 'runner_log=%s\n' "$runner_log"
+    printf 'stdout_log=%s\n' "$stdout_log"
+    printf 'stderr_log=%s\n\n' "$stderr_log"
+    cat "$context_body_file"
+  } > "$context_file"
 
   # Construct LLM prompt
   summary_prompt=$(cat <<PROMPT
-Summarize this Marinator/OpenCode worker state for a Telegram debug progress update. Use the provided status, events, runner log, stdout, and stderr. Focus on worker actions and critical errors/blockers. Be concise, factual, under 700 characters. If the change note says there was no new stdout/stderr and the context shows no other movement, explicitly say nothing changed and that the worker still appears to be running.
+Summarize this Marinator/OpenCode worker state for a Telegram debug progress update. Use the provided status, events, runner log, stdout, stderr, and artifact paths. Focus on worker actions and critical errors/blockers. Answer in no more than 150 words. Do not invent paths. If logs are empty, say they are empty, not missing. Only say files are missing if the context explicitly shows missing-file errors. Use the artifact paths above for reference. If the change note says there was no new stdout/stderr and the context shows no other movement, explicitly say nothing changed and that the worker still appears to be running.
 
 Job: $job_id
 
@@ -411,7 +426,7 @@ PROMPT
 import sys
 lines = sys.stdin.read().strip().splitlines()
 out = [l for l in lines if not l.startswith("session_id:")]
-print("\n".join(out).strip()[:700])
+print("\n".join(out).strip())
 ' 2>/dev/null || true)
   fi
 
