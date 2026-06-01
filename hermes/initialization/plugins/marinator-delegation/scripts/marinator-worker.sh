@@ -435,8 +435,10 @@ print("\n".join(out).strip())
   log_runner "MARINATOR_PROGRESS job_id=$job_id elapsed=${elapsed}s summary=$change_note total_stdout=${stdout_size}B total_stderr=${stderr_size}B"
   append_event "progress_summary_sent" summary "$summary" stdout_bytes "$stdout_size" stderr_bytes "$stderr_size" elapsed "$elapsed"
 
-  # Send via Telegram — the LLM-generated text IS the message
-  send_progress "$summary"
+  # Send via Telegram with prefix — the LLM-generated text IS the message
+  progress_message="[OpenCode progress summary]
+$summary"
+  send_progress "$progress_message"
 }
 
 # ── Stall detection (no auto-kill) ──

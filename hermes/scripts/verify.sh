@@ -156,6 +156,13 @@ if [[ -f "$WORKER_SH" ]]; then
       fail "$WORKER_SH: [:700] truncation still present in non-comment line"
     fi
   fi
+
+  # OpenCode progress summary prefix guard (code-level, not LLM prompt)
+  grep -qF '[OpenCode progress summary]' "$WORKER_SH" || \
+    fail "$WORKER_SH: missing '[OpenCode progress summary]' prefix in progress messages"
+  if grep -qE 'send_progress\s+"\$summary"' "$WORKER_SH"; then
+    fail "$WORKER_SH: send_progress uses raw \$summary instead of prefixed variable"
+  fi
 else
   fail "missing $WORKER_SH"
 fi
