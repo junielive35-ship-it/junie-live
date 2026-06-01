@@ -347,6 +347,30 @@ print('OK: additionalProperties is False')
 " && pass || fail "Schema additionalProperties test failed"
 
 # ════════════════════════════════════════════════════════════════
+printf '=== Test 14: build_opencode_args uses option terminator before prompt ===\n'
+# The --file option is an array and greedily consumes subsequent positionals.
+# The prompt must be separated from options by -- to prevent yargs from
+# treating the prompt text as another --file value.
+if grep -qF -- '-- "$prompt"' "$WORKER_SH"; then
+  pass
+  printf '  OK: -- "$prompt" terminator pattern found\n'
+else
+  fail "-- \"\$prompt\" terminator pattern not found in build_opencode_args"
+fi
+
+# Guard against regressions: the bare "$prompt" without a preceding --
+# terminator must not appear.  The fixed line is:
+#   OPENCODE_ARGS+=(-- "$prompt")
+# which still contains "$prompt" but with -- before it.  Grep for the
+# old bug pattern.
+if grep -qF 'OPENCODE_ARGS+=("$prompt")' "$WORKER_SH"; then
+  fail "BUG: OPENCODE_ARGS+=(\"\$prompt\") found without -- terminator"
+else
+  pass
+  printf '  OK: no bare "$prompt" without -- terminator\n'
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '\n'
 printf '=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"

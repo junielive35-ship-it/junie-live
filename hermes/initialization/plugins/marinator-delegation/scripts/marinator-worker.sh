@@ -320,7 +320,7 @@ except Exception:
 PYATT
   )
 
-  OPENCODE_ARGS+=("$prompt")
+  OPENCODE_ARGS+=(-- "$prompt")
 }
 
 # ── Progress summary (LLM-generated when enabled, byte-delta fallback otherwise) ──
