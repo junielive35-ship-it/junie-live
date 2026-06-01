@@ -85,7 +85,9 @@ for required_file in \
     initialization/plugins/autonomous-work/tools.py \
     initialization/plugins/autonomous-work/state.py \
     initialization/plugins/autonomous-work/prompts.py \
-    initialization/plugins/autonomous-work/scripts/aw-runner.sh; do
+    initialization/plugins/autonomous-work/backlog.py \
+    initialization/plugins/autonomous-work/scripts/aw-runner.sh \
+    initialization/docs/backlog-protocol.md; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 

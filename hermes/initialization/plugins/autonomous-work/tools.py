@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from . import state
 from . import prompts
+from . import backlog
 
 
 AUTONOMOUS_WORK_START_SCHEMA = {
@@ -802,27 +803,48 @@ def _detect_candidates(window_dir: str) -> bool:
     if isinstance(window, dict):
         if window.get("selected_item"):
             return True
+    # Also check Hermes backlog for candidate/validated/ready items
+    try:
+        if backlog.get_candidate_paths():
+            return True
+    except Exception:
+        pass
     return False
 
 
 def _detect_selected_item(window_dir: str, window: dict) -> Optional[dict]:
     selection_path = state.get_selection_path(window_dir)
+    selected_id = None
     if os.path.isfile(selection_path):
         content = _read_text_file_safe(selection_path)
         if content:
             for line in content.splitlines():
                 lower_line = line.strip().lower()
                 if lower_line.startswith("selected_item:"):
-                    item_id = line.split(":", 1)[1].strip()
-                    return {"id": item_id, "outcome": None}
+                    selected_id = line.split(":", 1)[1].strip()
+                    break
                 if lower_line.startswith("selected:"):
-                    item_id = line.split(":", 1)[1].strip()
-                    return {"id": item_id, "outcome": None}
-    # Check if window already has a selected_item set
-    selected = window.get("selected_item")
-    if selected:
-        return {"id": selected, "outcome": None}
-    return None
+                    selected_id = line.split(":", 1)[1].strip()
+                    break
+    # Fallback to window state
+    if not selected_id:
+        selected_id = window.get("selected_item")
+    if not selected_id:
+        return None
+    # Validate against Hermes backlog if possible
+    try:
+        if backlog.get_items_dir():
+            item_path = os.path.join(backlog.get_items_dir(), f"{selected_id}.md")
+            if not os.path.isfile(item_path):
+                item_path = os.path.join(backlog.get_items_dir(), selected_id)
+                if not os.path.isfile(item_path):
+                    for p in backlog.list_items():
+                        if os.path.basename(p).startswith(selected_id):
+                            item_path = p
+                            break
+    except Exception:
+        pass
+    return {"id": selected_id, "outcome": None}
 
 
 def _detect_terminal_selected_item_outcome(window_dir: str, window: dict) -> Optional[dict]:

@@ -146,10 +146,13 @@ backlog items until 8am or blockers.
 ~/.hermes/junie-live/
 └── state/
     ├── code_mutex/       # Mutex state files
-    ├── backlog/          # Backlog items
-    │   └── items/
+    ├── backlog/          # Hermes-native backlog items (Markdown + YAML frontmatter)
+    │   ├── items/        # Active items (*.md)
+    │   ├── archive/      # Done/dropped items
+    │   └── events.jsonl  # Backlog operation log
     ├── reflections/      # Post-task reflections
     ├── overnight/        # Overnight routine state
+    ├── autonomous_work/  # AW window directories and artifacts
     └── logs/             # Operational logs
 
 <target-repo>/
