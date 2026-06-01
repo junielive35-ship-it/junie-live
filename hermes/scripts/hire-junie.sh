@@ -411,6 +411,58 @@ hermes -p "$PROFILE" config set model.default "$MODEL" 2>/dev/null || true
 hermes -p "$PROFILE" config set model.provider "$PROVIDER" 2>/dev/null || true
 hermes -p "$PROFILE" config set agent.reasoning_effort "$REASONING" 2>/dev/null || true
 
+# ── Step 6b: Configure /start → /new quick command alias ──
+# Maps /start to /new so the "send /start to the bot" instruction works
+# out of the box. The gateway expands this before built-in dispatch.
+# Uses direct config.yaml editing (preferred) with hermes CLI fallback.
+log "Configuring /start → /new quick command alias..."
+_ensure_quick_start_alias() {
+  local profile_dir="$1"
+  local profile="$2"
+
+  local ok
+  ok=$(PD="$profile_dir" python3 2>/dev/null <<'PYQC'
+import os, sys
+cf = os.path.join(os.environ['PD'], 'config.yaml')
+try:
+    import yaml
+except ImportError:
+    sys.exit(2)
+cfg = {}
+if os.path.isfile(cf):
+    with open(cf) as f:
+        cfg = yaml.safe_load(f) or {}
+qc = cfg.setdefault('quick_commands', {})
+st = qc.setdefault('start', {})
+st['type'] = 'alias'
+st['target'] = '/new'
+with open(cf, 'w') as f:
+    yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+print('OK')
+PYQC
+  ) || ok=""
+
+  if [[ "$ok" == "OK" ]]; then
+    log "  /start → /new quick command alias configured in config.yaml"
+    return 0
+  fi
+
+  # Fallback: try hermes CLI
+  if hermes -p "$profile" config set quick_commands.start.type alias 2>/dev/null && \
+     hermes -p "$profile" config set quick_commands.start.target /new 2>/dev/null; then
+    log "  /start → /new quick command alias configured via hermes (fallback)"
+    return 0
+  fi
+
+  log "  WARNING: could not configure /start quick command alias"
+  log "  Add it manually after hire:"
+  log "    hermes -p $profile config set quick_commands.start.type alias"
+  log "    hermes -p $profile config set quick_commands.start.target /new"
+  log "    hermes -p $profile gateway restart"
+  return 1
+}
+_ensure_quick_start_alias "$PROFILE_DIR" "$PROFILE"
+
 # ── Step 7: Install and start gateway (Ubuntu / Linux + systemd) ──
 # `hermes gateway install` asks two yes/no questions on Linux (start now?
 # start on login?). Both default to yes, so we feed two newlines via stdin
