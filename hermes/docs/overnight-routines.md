@@ -57,27 +57,31 @@ After initialization, the admin can request bounded autonomous work via Telegram
 
 Junie resolves the duration/end time, validates context, and starts work. The admin does not need to specify internal details.
 
-## Implementation via Hermes cron
+## Implementation via Autonomous Work plugin
 
-Instead of shell crontab entries, Junie creates Hermes cron jobs:
+Instead of shell crontab entries or ad-hoc background processes, Junie uses the
+Autonomous Work Window Hermes plugin:
 
 ```python
-# Watchdog
-cronjob(action="create", name="junie-watchdog", schedule="*/15 * * * *",
-        prompt="...", deliver="telegram")
-
-# For admin-triggered work windows
-cronjob(action="create", name="junie-autonomous-window",
-        schedule="<computed-end-time>",
-        prompt="...", skills=["junie-autonomous-work-window"],
-        deliver="telegram")
+autonomous_work_start(duration="<duration>", prompt="<optional guidance>")
 ```
 
-For ad-hoc work windows, the orchestrator may also use a spawned background process:
+This creates a durable window directory, bootstraps a dedicated AW Hermes session,
+and starts the AW runner. The runner drives deterministic phase transitions via
+`autonomous_work_step()`.
+
+Cron is not the primary control plane. Hermes cron may be used only for:
+- **Watchdog** (every 15 min): independently monitors code mutex, stuck items,
+  and routine health. Reports to the owner.
+- **Scheduled overnight start** (optional, deferred): a cron job that calls
+  `autonomous_work_start` at a specific time.
+
+Hook-style:
 
 ```python
-terminal(command="hermes -p junie-live chat -q '<autonomous work prompt>'",
-         background=true, notify_on_complete=true)
+cronjob(action="create", name="junie-watchdog", schedule="*/15 * * * *",
+        prompt="Read state, check mutex and stuck items, report issues.",
+        deliver="telegram")
 ```
 
 ## Verification failure handling

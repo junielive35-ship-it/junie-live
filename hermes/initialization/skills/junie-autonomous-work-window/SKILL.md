@@ -36,29 +36,25 @@ Before starting:
 
 ## Implementation
 
-Use Hermes cron to create a bounded autonomous work job:
+Use the Autonomous Work Window plugin tools:
 
 ```
-cronjob(
-  action="create",
-  name="junie-autonomous-window",
-  schedule="now",  # Start immediately
-  prompt="You are Junie Live running an autonomous work window. Duration: <duration>. Goal: <goal or backlog priorities>. Read memory for full context. Select the highest-priority eligible backlog item, delegate implementation via marinator_delegate, review the result, commit if good, reflect, then pick the next item. Stop when time expires or you hit a blocker. Report results to the owner via Telegram.",
-  skills=["junie-autonomous-work-window", "junie-coding-task-decomposition", "junie-implementation-review", "junie-task-reflection"],
-  enabled_toolsets=["terminal", "file", "web", "delegation"],
-  deliver="telegram"
-)
+autonomous_work_start(duration="<duration>", prompt="<optional guidance>")
 ```
 
-Alternatively, for simpler cases, use a spawned background process:
+This creates a durable window directory, bootstraps a dedicated AW Hermes session,
+and starts the AW runner. The runner drives deterministic phase transitions via
+`autonomous_work_step()` and resumes the AW session for each phase.
 
-```
-terminal(
-  command="hermes -p junie-live chat -q '<autonomous work prompt>'",
-  background=true,
-  notify_on_complete=true
-)
-```
+The AW state machine handles: snapshot_preflight, candidate_generation,
+score_and_select, executing_task, record_outcome, finalizing.
+
+During `executing_task`, code-changing work is delegated via `marinator_delegate`
+per the standard delegation protocol. Marinator completion/failure wakes resume
+the same AW session.
+
+Do not use cron as the primary control plane. Cron may be added later only as
+a recovery/watchdog, not as the core continuation path.
 
 ## Telegram response format
 
@@ -90,7 +86,7 @@ Current: <active task or blocker>
 - Initialization must be complete before starting.
 - Code mutex must be free.
 - Do not run on `main`.
-- Do not use ad hoc background loops. Use Hermes cron or spawned processes.
+- Do not use ad hoc background loops. Use `autonomous_work_start` instead.
 - Keep the skill project-agnostic; do not hard-code repo paths or branch names.
 
 ## Verification failure handling
