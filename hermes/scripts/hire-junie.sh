@@ -254,6 +254,51 @@ fi
 log "Creating state directories..."
 mkdir -p "$STATE_DIR"/{backlog/items,reflections,overnight,logs}
 mkdir -p "$STATE_DIR"/marinator/runs
+mkdir -p "$STATE_DIR"/autonomous_work/windows
+
+# ── Plugin enable helper (preserves existing plugins.enabled) ──
+
+# _ensure_plugin PROFILE_DIR PROFILE plugin_name
+# Tries `plugins enable` first. Falls back to reading config.yaml,
+# appending the plugin to plugins.enabled, and writing back via
+# `config set` so other enabled plugins are preserved.
+_ensure_plugin() {
+  local profile_dir="$1"
+  local profile="$2"
+  local plugin_name="$3"
+
+  if hermes -p "$profile" plugins enable "$plugin_name" >/dev/null 2>&1; then
+    log "  Plugin '$plugin_name' enabled via 'plugins enable'"
+    return 0
+  fi
+
+  local merged
+  merged=$(PD="$profile_dir" PN="$plugin_name" python3 2>/dev/null <<'PYENSURE'
+import json, os
+config_file = os.path.join(os.environ['PD'], 'config.yaml')
+plugin = os.environ['PN']
+existing = []
+if os.path.isfile(config_file):
+    try:
+        import yaml
+        with open(config_file) as f:
+            cfg = yaml.safe_load(f) or {}
+        enabled = (cfg.get('plugins') or {}).get('enabled') or []
+        existing = enabled if isinstance(enabled, list) else []
+    except ImportError:
+        pass
+if plugin not in existing:
+    existing.append(plugin)
+print(json.dumps(existing))
+PYENSURE
+  ) || merged='["marinator-delegation","autonomous-work","'"$plugin_name"'"]'
+
+  if hermes -p "$profile" config set plugins.enabled "$merged" >/dev/null 2>&1; then
+    log "  Plugin '$plugin_name' enabled via config set fallback (preserving existing plugins)"
+  else
+    log "  WARNING: could not enable plugin '$plugin_name'; enable manually after hire"
+  fi
+}
 
 # ── Step 4b: Enable Marinator delegation plugin + toolsets ──
 # The plugin source was copied from initialization/plugins/ into
@@ -261,15 +306,7 @@ mkdir -p "$STATE_DIR"/marinator/runs
 # toolsets for CLI and Telegram so marinator_delegate is available.
 if [[ -d "$PROFILE_DIR/plugins/marinator-delegation" ]]; then
   log "Enabling Marinator delegation plugin..."
-
-  # Enable via plugins enable if available, otherwise config set fallback
-  if hermes -p "$PROFILE" plugins enable marinator-delegation >/dev/null 2>&1; then
-    log "  Plugin enabled via 'plugins enable'"
-  elif hermes -p "$PROFILE" config set plugins.enabled '["marinator-delegation"]' >/dev/null 2>&1; then
-    log "  Plugin enabled via config set fallback"
-  else
-    log "  WARNING: could not enable marinator-delegation plugin; enable manually after hire"
-  fi
+  _ensure_plugin "$PROFILE_DIR" "$PROFILE" "marinator-delegation"
 
   # Enable marinator toolset for CLI and Telegram
   for platform in cli telegram; do
@@ -280,6 +317,21 @@ if [[ -d "$PROFILE_DIR/plugins/marinator-delegation" ]]; then
   log "  Toolsets enabled: marinator, terminal, file (cli + telegram)"
 else
   log "  WARNING: plugins/marinator-delegation not found in seed; skipping plugin setup"
+fi
+
+# ── Step 4c: Enable Autonomous Work plugin + toolsets ──
+if [[ -d "$PROFILE_DIR/plugins/autonomous-work" ]]; then
+  log "Enabling Autonomous Work plugin..."
+  _ensure_plugin "$PROFILE_DIR" "$PROFILE" "autonomous-work"
+
+  for platform in cli telegram; do
+    for toolset in autonomous marinator terminal file; do
+      hermes -p "$PROFILE" tools enable --platform "$platform" "$toolset" >/dev/null 2>&1 || true
+    done
+  done
+  log "  Toolsets enabled: autonomous, marinator, terminal, file (cli + telegram)"
+else
+  log "  WARNING: plugins/autonomous-work not found in seed; skipping plugin setup"
 fi
 
 # ── Step 5: Configure Telegram + forward provider keys into profile .env ──

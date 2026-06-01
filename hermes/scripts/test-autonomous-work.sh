@@ -1,0 +1,452 @@
+#!/usr/bin/env bash
+# Test Autonomous Work plugin: state helpers, duration parsing, window lifecycle,
+# and transition table. Run from the hermes/ subtree root.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_DIR="$ROOT/initialization/plugins/autonomous-work"
+
+fail_count=0
+pass_count=0
+
+pass() { pass_count=$((pass_count + 1)); }
+fail() { printf '  FAIL: %s\n' "$*" >&2; fail_count=$((fail_count + 1)); }
+
+# Run Python code with state.py loaded directly
+run_state_test() {
+  python3 -c "
+import sys, importlib.util, importlib.machinery
+loader = importlib.machinery.SourceFileLoader('aw_state', '$PLUGIN_DIR/state.py')
+spec = importlib.util.spec_from_loader('aw_state', loader)
+state = importlib.util.module_from_spec(spec)
+loader.exec_module(state)
+$1
+" 2>&1
+}
+
+# Run Python code with prompts.py loaded directly
+run_prompts_test() {
+  python3 -c "
+import sys, importlib.util, importlib.machinery
+sloader = importlib.machinery.SourceFileLoader('aw_state', '$PLUGIN_DIR/state.py')
+sspec = importlib.util.spec_from_loader('aw_state', sloader)
+state_mod = importlib.util.module_from_spec(sspec)
+sloader.exec_module(state_mod)
+ploader = importlib.machinery.SourceFileLoader('aw_prompts', '$PLUGIN_DIR/prompts.py')
+pspec = importlib.util.spec_from_loader('aw_prompts', ploader)
+prompts_mod = importlib.util.module_from_spec(pspec)
+ploader.exec_module(prompts_mod)
+$1
+" 2>&1
+}
+
+# Run Python code with tools.py loaded (resolves relative imports via package)
+run_tools_test() {
+  python3 -c "
+import sys, importlib.util, importlib.machinery, types
+
+# Load state module
+sloader = importlib.machinery.SourceFileLoader('aw_state', '$PLUGIN_DIR/state.py')
+sspec = importlib.util.spec_from_loader('aw_state', sloader)
+state_mod = importlib.util.module_from_spec(sspec)
+sys.modules['aw_state'] = state_mod
+sloader.exec_module(state_mod)
+
+# Load prompts module
+ploader = importlib.machinery.SourceFileLoader('aw_prompts', '$PLUGIN_DIR/prompts.py')
+pspec = importlib.util.spec_from_loader('aw_prompts', ploader)
+prompts_mod = importlib.util.module_from_spec(pspec)
+sys.modules['aw_prompts'] = prompts_mod
+ploader.exec_module(prompts_mod)
+
+# Create package so relative imports work
+pkg = types.ModuleType('aw_pkg')
+pkg.__path__ = ['$PLUGIN_DIR']
+pkg.__package__ = 'aw_pkg'
+pkg.state = state_mod
+pkg.prompts = prompts_mod
+sys.modules['aw_pkg'] = pkg
+sys.modules['aw_pkg.state'] = state_mod
+sys.modules['aw_pkg.prompts'] = prompts_mod
+
+# Load tools as aw_pkg.tools
+tloader = importlib.machinery.SourceFileLoader('aw_pkg.tools', '$PLUGIN_DIR/tools.py')
+tspec = importlib.util.spec_from_loader('aw_pkg.tools', tloader)
+tools_mod = importlib.util.module_from_spec(tspec)
+sys.modules['aw_pkg.tools'] = tools_mod
+tloader.exec_module(tools_mod)
+$1
+" 2>&1
+}
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 1: Duration parsing ===\n'
+run_state_test "
+assert state.parse_duration('2h') == 7200, '2h should be 7200s'
+assert state.parse_duration('90m') == 5400, '90m should be 5400s'
+assert state.parse_duration('30s') == 30, '30s should be 30s'
+assert state.parse_duration('1 hour') == 3600, '1 hour should be 3600s'
+assert state.parse_duration('5 minutes') == 300, '5 minutes should be 300s'
+assert state.parse_duration('invalid') is None, 'invalid should return None'
+assert state.parse_duration('') is None, 'empty should return None'
+assert state.parse_duration('-1h') is None, 'negative should return None'
+print('OK: all duration tests passed')
+" && pass || fail "Duration parsing test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 2: Valid window id ===\n'
+run_state_test "
+assert state.is_valid_window_id('AW-20260601-001'), 'valid id'
+assert state.is_valid_window_id('AW-20260101-999'), 'valid id high'
+assert not state.is_valid_window_id('AW-20260101-'), 'incomplete'
+assert not state.is_valid_window_id('foo'), 'random string'
+assert not state.is_valid_window_id(''), 'empty'
+print('OK: window id validation works')
+" && pass || fail "Window id validation failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 3: Window id sequence ===\n'
+run_state_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+wid1 = state.generate_window_id()
+assert wid1.startswith('AW-'), f'should start with AW-, got {wid1}'
+print(f'OK: generated window id: {wid1}')
+" && pass || fail "Window id generation failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 4: Initial window shape ===\n'
+run_state_test "
+win = state.make_initial_window(
+    window_id='AW-20260601-001',
+    duration_seconds=7200,
+    owner_prompt='Test owner guidance',
+    owner_session_id='ses_test123',
+    repo='/tmp/test-repo',
+)
+assert win['window_id'] == 'AW-20260601-001'
+assert win['phase'] == 'snapshot_preflight'
+assert win['continuation'] == 'continue_now'
+assert win['status'] == 'running'
+assert win['duration_seconds'] == 7200
+assert win['prompt'] == 'Test owner guidance'
+assert win['owner_session_id'] == 'ses_test123'
+assert win['selected_item'] is None
+assert win['completed_items'] == []
+assert win['blocked_items'] == []
+assert win['failure_count'] == 0
+assert win['failure_budget'] == 3
+print('OK: initial window has correct shape')
+" && pass || fail "Initial window shape failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 5: Atomic write/read ===\n'
+run_state_test "
+import os, tempfile
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+path = os.path.join(tmpdir, 'test.json')
+data = {'hello': 'world', 'nested': {'a': 1}}
+state.atomic_write_json(path, data)
+result = state.read_json(path)
+assert result == data, f'round-trip failed: {result} != {data}'
+none_result = state.read_json(os.path.join(tmpdir, 'nonexistent.json'))
+assert none_result is None, 'missing file should return None'
+corrupt = os.path.join(tmpdir, 'corrupt.json')
+with open(corrupt, 'w') as f:
+    f.write('not json')
+corrupt_result = state.read_json(corrupt)
+assert corrupt_result is None, 'corrupt file should return None'
+print('OK: atomic write/read works')
+" && pass || fail "Atomic write/read failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 6: Append event ===\n'
+run_state_test "
+import os, tempfile
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+events_path = os.path.join(tmpdir, 'events.jsonl')
+event1 = state.append_event(events_path, 'test_event', {'key': 'val1'})
+assert event1['type'] == 'test_event'
+assert event1['data']['key'] == 'val1'
+event2 = state.append_event(events_path, 'test_event2')
+assert event2['type'] == 'test_event2'
+with open(events_path, 'r') as f:
+    lines = f.readlines()
+assert len(lines) == 2, f'expected 2 lines, got {len(lines)}'
+print('OK: append event works')
+" && pass || fail "Append event failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 7: Active window management ===\n'
+run_state_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+assert state.get_active_window() is None, 'should be None initially'
+state.set_active_window('AW-test-001')
+active = state.get_active_window()
+assert active is not None
+assert active['window_id'] == 'AW-test-001'
+state.clear_active_window()
+assert state.get_active_window() is None, 'should be None after clear'
+print('OK: active window management works')
+" && pass || fail "Active window management failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 8: Window directory creation ===\n'
+run_state_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+window_dir = state.create_window_dir('AW-test-002')
+assert os.path.isdir(window_dir), f'dir should exist: {window_dir}'
+assert os.path.isdir(os.path.join(window_dir, 'logs'))
+assert os.path.isdir(os.path.join(window_dir, 'control'))
+assert os.path.isdir(os.path.join(window_dir, 'locks'))
+print(f'OK: window directory created at {window_dir}')
+" && pass || fail "Window directory creation failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 9: Artifact path helpers ===\n'
+run_state_test "
+window_dir = '/tmp/aw-test-window'
+assert state.get_window_json_path(window_dir) == '/tmp/aw-test-window/window.json'
+assert state.get_events_path(window_dir) == '/tmp/aw-test-window/events.jsonl'
+assert state.get_selection_path(window_dir) == '/tmp/aw-test-window/selection.md'
+assert state.get_final_report_path(window_dir) == '/tmp/aw-test-window/final_report.md'
+assert state.get_cancel_path(window_dir) == '/tmp/aw-test-window/control/cancel'
+assert state.get_runner_lock_path(window_dir) == '/tmp/aw-test-window/locks/runner.lock'
+assert state.get_step_lock_path(window_dir) == '/tmp/aw-test-window/locks/step.lock'
+print('OK: artifact path helpers')
+" && pass || fail "Artifact path helpers failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 10: Phase/continuation validation ===\n'
+run_state_test "
+assert state.is_terminal('final'), 'final should be terminal'
+assert state.is_terminal('blocked'), 'blocked should be terminal'
+assert not state.is_terminal('continue_now'), 'continue_now should not be terminal'
+assert not state.is_terminal('wait_external'), 'wait_external should not be terminal'
+assert state.is_terminal_phase('completed'), 'completed should be terminal'
+assert state.is_terminal_phase('cancelled'), 'cancelled should be terminal'
+assert state.is_terminal_phase('failed'), 'failed should be terminal'
+assert not state.is_terminal_phase('running'), 'running should not be terminal'
+assert 'snapshot_preflight' in state.VALID_PHASES
+assert 'candidate_generation' in state.VALID_PHASES
+assert 'executing_task' in state.VALID_PHASES
+assert 'continue_now' in state.VALID_CONTINUATIONS
+print('OK: phase/continuation validation')
+" && pass || fail "Phase validation failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 11: Tool schemas correct ===\n'
+run_tools_test "
+# start schema
+start_props = tools_mod.AUTONOMOUS_WORK_START_SCHEMA['parameters']['properties']
+assert 'duration' in start_props, 'duration required'
+assert start_props['duration']['type'] == 'string'
+assert 'prompt' in start_props, 'prompt optional'
+assert tools_mod.AUTONOMOUS_WORK_START_SCHEMA['parameters']['required'] == ['duration']
+assert tools_mod.AUTONOMOUS_WORK_START_SCHEMA['parameters'].get('additionalProperties') == False
+# step schema
+step_props = tools_mod.AUTONOMOUS_WORK_STEP_SCHEMA['parameters']['properties']
+assert 'rationale' in step_props, 'rationale in schema'
+assert step_props['rationale']['type'] == 'string'
+assert tools_mod.AUTONOMOUS_WORK_STEP_SCHEMA['parameters']['required'] == []
+assert tools_mod.AUTONOMOUS_WORK_STEP_SCHEMA['parameters'].get('additionalProperties') == False
+print('OK: tool schemas correct')
+" && pass || fail "Tool schemas test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 12: Prompt construction ===\n'
+run_prompts_test "
+import os, tempfile
+window = {
+    'window_id': 'AW-20260601-001',
+    'end_at': 9999999999,
+    'prompt': 'test guidance',
+    'repo': '/tmp/test-repo',
+}
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+result = prompts_mod.build_step_prompt(window, tmpdir, 'snapshot_preflight')
+assert result['phase'] == 'snapshot_preflight'
+assert os.path.isfile(result['prompt_path']), 'prompt file should exist'
+prompt_content = open(result['prompt_path']).read()
+assert 'snapshot_preflight' in prompt_content, f'snapshot_preflight phase not in prompt content'
+print(f'OK: prompt built for snapshot_preflight')
+
+result2 = prompts_mod.build_step_prompt(window, tmpdir, 'executing_task', selected_item='ITEM-001')
+assert 'ITEM-001' in open(result2['prompt_path']).read()
+print(f'OK: prompt built for executing_task with selected_item')
+
+result3 = prompts_mod.build_step_prompt(window, tmpdir, 'finalizing')
+assert 'final_report.md' in open(result3['prompt_path']).read()
+print(f'OK: prompt built for finalizing')
+" && pass || fail "Prompt construction failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 13: Transition detection helpers ===\n'
+run_tools_test "
+import os, tempfile
+# Outcome parsing
+assert tools_mod._parse_outcome_from_text('outcome: done') == 'done'
+assert tools_mod._parse_outcome_from_text('outcome: blocked') == 'blocked'
+assert tools_mod._parse_outcome_from_text('outcome: failed') == 'failed'
+assert tools_mod._parse_outcome_from_text('outcome: needs_approval') == 'needs_approval'
+assert tools_mod._parse_outcome_from_text('outcome: skipped') == 'skipped'
+assert tools_mod._parse_outcome_from_text('outcome_status=done') == 'done'
+assert tools_mod._parse_outcome_from_text('random text') is None
+
+# Candidates detection with selection.md
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+sel_path = state_mod.get_selection_path(tmpdir)
+assert not tools_mod._detect_candidates(tmpdir), 'empty dir should have no candidates'
+with open(sel_path, 'w') as f:
+    f.write('## Candidates\\n- ITEM-001: Fix bug\\n- ITEM-002: Add feature\\n')
+assert tools_mod._detect_candidates(tmpdir), 'should detect candidates from selection.md'
+print('OK: transition detection helpers')
+" && pass || fail "Transition detection failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 14: Marker once ===\n'
+run_state_test "
+import os, tempfile
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+locks_dir = os.path.join(tmpdir, 'locks')
+os.makedirs(locks_dir, exist_ok=True)
+assert state.marker_once(tmpdir, 'test_marker'), 'first call should create marker'
+assert not state.marker_once(tmpdir, 'test_marker'), 'second call should not create marker'
+print('OK: marker once works')
+" && pass || fail "Marker once test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 15: Update window ===\n'
+run_state_test "
+import os, tempfile
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+win_path = os.path.join(tmpdir, 'window.json')
+win = state.make_initial_window('AW-001', 3600, None, None, '/tmp/repo')
+state.atomic_write_json(win_path, win)
+updated = state.update_window(win_path, {'phase': 'candidate_generation', 'continuation': 'continue_now'})
+assert updated['phase'] == 'candidate_generation'
+assert updated['window_id'] == 'AW-001'
+# Dotted key update
+updated2 = state.update_window(win_path, {'selected_item': 'ITEM-001'})
+assert updated2['selected_item'] == 'ITEM-001'
+print('OK: update window works')
+" && pass || fail "Update window test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 16: Atomic active-window acquire ===\n'
+run_state_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+
+# 1. First acquire should succeed
+assert state.try_acquire_active_window('AW-TEST-001'), 'first acquire should succeed'
+
+# 2. Second acquire while lock+json exist should fail
+assert not state.try_acquire_active_window('AW-TEST-002'), 'second acquire should fail while active'
+
+# 3. Clear and retry
+state.clear_active_window()
+assert state.try_acquire_active_window('AW-TEST-003'), 'acquire after clear should succeed'
+
+# 4. Verify active_window.json was written
+active = state.get_active_window()
+assert active is not None
+assert active['window_id'] == 'AW-TEST-003'
+
+# 5. json-only refusal: create active_window.json without lock, then try acquiring
+state.clear_active_window()
+state.set_active_window('AW-TEST-004')
+# Manually remove the lock file to simulate older state
+lock_path = os.path.join(state.get_aw_base(), 'active_window.lock')
+if os.path.isfile(lock_path):
+    os.unlink(lock_path)
+# Now try_acquire should still refuse because json exists
+assert not state.try_acquire_active_window('AW-TEST-005'), 'should refuse when json exists even without lock'
+
+print('OK: atomic active-window acquire works (lock + json-only refusal)')
+" && pass || fail "Atomic active-window acquire test failed"
+
+# ════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 17: Repo resolution ordering ===\n'
+run_tools_test "
+import os, tempfile
+
+# Create a temp git repo to serve as the 'real' target
+target_repo = tempfile.mkdtemp(prefix='aw-repo-resolve-')
+os.system(f'git -C \"{target_repo}\" init -q')
+
+# Create a different temp git repo to serve as cwd fake
+fake_repo = tempfile.mkdtemp(prefix='aw-fake-cwd-')
+os.system(f'git -C \"{fake_repo}\" init -q')
+
+# Create a temp profile dir with docs/tools.md pointing at target_repo
+# Use chr(96) for backtick to avoid shell command substitution
+bt = chr(96)
+profile_dir = tempfile.mkdtemp(prefix='aw-profile-')
+os.makedirs(os.path.join(profile_dir, 'docs'), exist_ok=True)
+with open(os.path.join(profile_dir, 'docs', 'tools.md'), 'w') as f:
+    f.write(f'- Repository: {bt}{target_repo}{bt}\\n')
+    f.write('- Workspace / monorepo subdir (if relevant): TODO\\n')
+
+os.environ['HERMES_PROFILE_DIR'] = profile_dir
+os.environ['JUNIE_REPO'] = ''
+
+# Test 1: no JUNIE_REPO, tools.md should resolve
+orig_cwd = os.getcwd()
+os.chdir(fake_repo)
+try:
+    result = tools_mod._resolve_repo()
+    assert result == os.path.abspath(target_repo), f'Expected target_repo from tools.md, got {result}'
+finally:
+    os.chdir(orig_cwd)
+print('OK: repo resolves from tools.md when cwd is different git repo')
+
+# Test 2: JUNIE_REPO takes priority over both tools.md and cwd
+os.environ['JUNIE_REPO'] = fake_repo
+try:
+    result2 = tools_mod._resolve_repo()
+    assert result2 == os.path.abspath(fake_repo), f'Expected fake_repo from JUNIE_REPO, got {result2}'
+finally:
+    del os.environ['JUNIE_REPO']
+print('OK: JUNIE_REPO takes priority over tools.md')
+
+# Test 3: no JUNIE_REPO, no tools.md Repository -> falls back to cwd git root
+profile_dir2 = tempfile.mkdtemp(prefix='aw-profile2-')
+os.makedirs(os.path.join(profile_dir2, 'docs'), exist_ok=True)
+with open(os.path.join(profile_dir2, 'docs', 'tools.md'), 'w') as f:
+    f.write('# tools.md\\n- Workspace / monorepo subdir: TODO\\n')
+os.environ['HERMES_PROFILE_DIR'] = profile_dir2
+orig_cwd = os.getcwd()
+os.chdir(fake_repo)
+try:
+    result3 = tools_mod._resolve_repo()
+    assert result3 == os.path.abspath(fake_repo), f'Expected fake_repo from cwd, got {result3}'
+finally:
+    os.chdir(orig_cwd)
+print('OK: falls back to cwd git root when tools.md has no Repository line')
+
+# Cleanup
+import shutil
+shutil.rmtree(target_repo, ignore_errors=True)
+shutil.rmtree(fake_repo, ignore_errors=True)
+shutil.rmtree(profile_dir, ignore_errors=True)
+shutil.rmtree(profile_dir2, ignore_errors=True)
+del os.environ['HERMES_PROFILE_DIR']
+" && pass || fail "Repo resolution ordering test failed"
+
+printf '\n'
+printf '=== Results ===\n'
+printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"
+
+if [[ "$fail_count" -gt 0 ]]; then
+  exit 1
+fi

@@ -54,7 +54,16 @@ if [[ -n "$offenders" ]]; then
 fi
 
 log "directory structure"
-for required_dir in initialization initialization/docs initialization/skills scripts docs initialization/plugins/marinator-delegation initialization/plugins/marinator-delegation/scripts; do
+for required_dir in \
+    initialization \
+    initialization/docs \
+    initialization/skills \
+    scripts \
+    docs \
+    initialization/plugins/marinator-delegation \
+    initialization/plugins/marinator-delegation/scripts \
+    initialization/plugins/autonomous-work \
+    initialization/plugins/autonomous-work/scripts; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
 done
 
@@ -70,7 +79,13 @@ for required_file in \
     initialization/plugins/marinator-delegation/tools.py \
     initialization/plugins/marinator-delegation/runner.py \
     initialization/plugins/marinator-delegation/state.py \
-    initialization/plugins/marinator-delegation/scripts/marinator-worker.sh; do
+    initialization/plugins/marinator-delegation/scripts/marinator-worker.sh \
+    initialization/plugins/autonomous-work/plugin.yaml \
+    initialization/plugins/autonomous-work/__init__.py \
+    initialization/plugins/autonomous-work/tools.py \
+    initialization/plugins/autonomous-work/state.py \
+    initialization/plugins/autonomous-work/prompts.py \
+    initialization/plugins/autonomous-work/scripts/aw-runner.sh; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 
@@ -94,6 +109,9 @@ for plugin_py in initialization/plugins/*/*.py; do
   [[ -f "$plugin_py" ]] || continue
   python3 -m py_compile "$plugin_py" || fail "python syntax error in $plugin_py"
 done
+
+log "autonomous-work plugin tests"
+"$ROOT/scripts/test-autonomous-work.sh" || fail "autonomous-work plugin tests failed"
 
 log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
