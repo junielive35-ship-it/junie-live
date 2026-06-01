@@ -1,13 +1,38 @@
 """Prompt construction for Autonomous Work Window phases.
 
 Builds phase-specific prompts that include window metadata, artifact paths,
-and behavior rules. Prompts are written to the window directory and returned
-as structured results.
+Hermes backlog paths, and behavior rules. Prompts are written to the window
+directory and returned as structured results. Never references OpenClaw paths.
 """
 
 import os
 import time
 from typing import Any, Optional
+
+
+def _resolve_backlog_paths() -> dict:
+    """Resolve Hermes backlog paths from profile dir.
+
+    Returns dict with backlog_root, items_dir, archive_dir, events_path.
+    Never falls back to OpenClaw paths.
+    """
+    try:
+        from . import state as aw_state
+        profile_dir = aw_state.get_profile_dir()
+        root = os.path.join(profile_dir, "junie-live", "state", "backlog")
+        return {
+            "backlog_root": root,
+            "items_dir": os.path.join(root, "items"),
+            "archive_dir": os.path.join(root, "archive"),
+            "events_path": os.path.join(root, "events.jsonl"),
+        }
+    except Exception:
+        return {
+            "backlog_root": "",
+            "items_dir": "",
+            "archive_dir": "",
+            "events_path": "",
+        }
 
 
 def build_step_prompt(
@@ -30,6 +55,8 @@ def build_step_prompt(
     last_step_result_path = os.path.join(window_dir, "last_step_result.md")
     control_cancel = os.path.join(window_dir, "control", "cancel")
 
+    backlog = _resolve_backlog_paths()
+
     common_rules = (
         "RULES:\n"
         "- Do not ask live questions. If something needs approval, record it as "
@@ -37,6 +64,8 @@ def build_step_prompt(
         "- Do not edit code directly. All code changes must go through "
         "marinator_delegate per delegation-protocol.md.\n"
         "- Update required artifacts for this phase.\n"
+        "- Never read OpenClaw backlog state. The Hermes backlog is the sole "
+        "source of truth at the profile-local path shown below.\n"
         "- Call autonomous_work_step(rationale=<brief note>) at the end, unless "
         "you are waiting on Marinator (executing_task phase).\n"
     )
@@ -54,6 +83,9 @@ def build_step_prompt(
         last_step_result_path=last_step_result_path,
         control_cancel=control_cancel,
         selected_item=selected_item,
+        backlog_items_dir=backlog["items_dir"],
+        backlog_archive_dir=backlog["archive_dir"],
+        backlog_events_path=backlog["events_path"],
     )
 
     full_prompt = (
@@ -71,6 +103,11 @@ def build_step_prompt(
         f"  final_report.md: {final_report_path}\n"
         f"  last_step_result.md: {last_step_result_path}\n"
         f"  control/cancel: {control_cancel}\n"
+        f"\n"
+        f"Hermes backlog (profile-local, sole source of truth):\n"
+        f"  items: {backlog['items_dir']}\n"
+        f"  archive: {backlog['archive_dir']}\n"
+        f"  events: {backlog['events_path']}\n"
         f"\n"
         f"{common_rules}\n"
         f"{prompt_body}\n"
@@ -101,6 +138,9 @@ def _build_phase_body(
     last_step_result_path: str,
     control_cancel: str,
     selected_item: Optional[str] = None,
+    backlog_items_dir: str = "",
+    backlog_archive_dir: str = "",
+    backlog_events_path: str = "",
 ) -> str:
     builders = {
         "snapshot_preflight": _snapshot_preflight_body,
@@ -123,10 +163,14 @@ def _build_phase_body(
         last_step_result_path=last_step_result_path,
         control_cancel=control_cancel,
         selected_item=selected_item,
+        backlog_items_dir=backlog_items_dir,
+        backlog_archive_dir=backlog_archive_dir,
+        backlog_events_path=backlog_events_path,
     )
 
 
 def _snapshot_preflight_body(**kw) -> str:
+    backlog_items = kw.get("backlog_items_dir", "")
     return (
         "## Objective\n"
         "Read current project/product/runtime state to understand what is safe "
@@ -135,7 +179,11 @@ def _snapshot_preflight_body(**kw) -> str:
         "## Required actions\n"
         "1. Read current memory / strategic compass.\n"
         "2. Check profile docs and target repo HERMES.md / operational references.\n"
-        "3. Check backlog state and current implementation status.\n"
+        "3. Check Hermes backlog state at the profile-local path. List items in "
+        f"{backlog_items or '<backlog/items/>'} if it exists. "
+        "Check statuses: candidate, validated, ready, in_progress, blocked. "
+        "Do NOT read .openclaw, ~/.openclaw, JUNIE_WORKSPACE, workspace-junie-live, "
+        "scripts/backlog.sh, or legacy JSON backlog files.\n"
         "4. Check git status and current branch. Must not be main.\n"
         "5. Write snapshot_preflight event to events.jsonl (you may use terminal "
         "to append, or document via autonomous_work_step rationale).\n"
@@ -151,6 +199,7 @@ def _snapshot_preflight_body(**kw) -> str:
 
 
 def _candidate_generation_body(**kw) -> str:
+    backlog_items = kw.get("backlog_items_dir", "")
     return (
         "## Objective\n"
         "Generate or update candidate work items from current signals.\n"
@@ -162,19 +211,43 @@ def _candidate_generation_body(**kw) -> str:
         "- Owner request / prompt for this window.\n"
         "- Verification gaps.\n"
         "- Current backlog hygiene.\n"
+        "- Existing Hermes backlog items with status candidate/validated/ready "
+        f"in {backlog_items or '<backlog/items/>'}.\n"
+        "\n"
+        "## Backlog item format\n"
+        "Each item is a Markdown file with YAML frontmatter:\n"
+        "---\n"
+        "id: BL-YYYYMMDD-NNN\n"
+        "kind: feature|bug|chore|refactor|decision\n"
+        "status: candidate\n"
+        "title: One-line title\n"
+        "source: autonomous\n"
+        "problem: Problem statement\n"
+        "desired_outcome: What done looks like\n"
+        "acceptance: |\n"
+        "  - Criterion 1\n"
+        "verification: |\n"
+        "  - How to verify\n"
+        "scores:\n"
+        "  strategy_fit: 8\n"
+        "  effort: 3\n"
+        "approval_required: false\n"
+        "---\n"
         "\n"
         "## Constraints\n"
         "- Do not invent random work just because the backlog is empty. "
         "Strategy/architecture/status fit is the primary gate.\n"
-        "- Create or update backlog items using the current Junie backlog protocol.\n"
+        "- Create or update backlog items as Markdown files with YAML "
+        "frontmatter using the format above.\n"
+        "- selection.md is a per-window summary only, not a backlog item.\n"
         "\n"
         "## Artifacts\n"
-        "- Created/updated backlog items or candidate notes.\n"
+        "- Created/updated Hermes backlog items (Markdown files in items dir).\n"
         "- Write selection.md in the window directory with the list of candidates "
         "and their priority/strategy fit.\n"
         "\n"
         "## Transition\n"
-        "After writing candidates, call autonomous_work_step(rationale=...). "
+        "After writing candidates and selection.md, call autonomous_work_step(rationale=...). "
         "If no eligible work exists and no useful candidates can be identified, "
         "record that and call autonomous_work_step — the system will transition "
         "to finalizing."
@@ -182,9 +255,15 @@ def _candidate_generation_body(**kw) -> str:
 
 
 def _score_and_select_body(**kw) -> str:
+    backlog_items = kw.get("backlog_items_dir", "")
     return (
         "## Objective\n"
         "Evaluate eligible items and select one for execution.\n"
+        "\n"
+        "## Source items\n"
+        f"Read candidate/validated/ready items from the Hermes backlog: "
+        f"{backlog_items or '<backlog/items/>'}. "
+        "Do NOT read OpenClaw state or legacy JSON.\n"
         "\n"
         "## Eligibility gates\n"
         "- Owner approval requirement — if an item needs owner approval, mark it "
@@ -203,18 +282,26 @@ def _score_and_select_body(**kw) -> str:
         "5. Autonomous fit\n"
         "6. Effort/risk/uncertainty\n"
         "\n"
+        "## Required actions\n"
+        "1. Read candidate/validated/ready items from Hermes backlog items dir.\n"
+        "2. Evaluate each against eligibility gates and priority order.\n"
+        "3. Update the selected item's status to in_progress in its Markdown file "
+        "and set updated timestamp.\n"
+        "\n"
         "## Artifacts\n"
-        "- Write selection.md with the selected item and skipped/ineligible reasons "
-        "for each candidate not selected.\n"
+        "- Write selection.md with selected_item: <id> on the first line, "
+        "then skipped/ineligible reasons for each candidate not selected.\n"
         "\n"
         "## Transition\n"
-        "After writing selection.md, call autonomous_work_step(rationale=...). "
+        "After writing selection.md and updating the backlog item, call "
+        "autonomous_work_step(rationale=...). "
         "If no eligible item exists, record why and call autonomous_work_step."
     )
 
 
 def _executing_task_body(**kw) -> str:
     selected = kw.get("selected_item")
+    backlog_items = kw.get("backlog_items_dir", "")
     instr = (
         "## Objective\n"
         f"Execute the selected backlog item through the standard Junie/Marinator "
@@ -225,7 +312,8 @@ def _executing_task_body(**kw) -> str:
 
     instr += (
         "\n## Required actions\n"
-        "1. Read selected item acceptance and verification requirements.\n"
+        "1. Read selected item acceptance and verification requirements from "
+        "its Markdown file in the Hermes backlog.\n"
         "2. Follow delegation-protocol.md.\n"
         "3. Decompose the work into scoped subtasks if needed.\n"
         "4. For code-changing work: write a prompt file and call marinator_delegate "
@@ -238,11 +326,16 @@ def _executing_task_body(**kw) -> str:
         "verification evidence.\n"
         "   - decide accept/fix/wait/kill/block.\n"
         "   - if fix is needed, call marinator_delegate again with is_follow_up=true.\n"
-        "6. Update backlog/task artifacts with the terminal outcome.\n"
+        "6. Update the backlog item's status in its Markdown file when the task "
+        "reaches a terminal outcome.\n"
         "\n"
         "## Terminal selected-item outcomes\n"
-        "When the selected item reaches a terminal outcome, write it to "
-        "last_step_result.md in the window directory with a line like:\n"
+        "When the selected item reaches a terminal outcome:\n"
+        "1. Update the Hermes backlog item: set status to done/blocked/failed "
+        f"in its Markdown file at {backlog_items or '<backlog/items/>'} "
+        "and append a history entry.\n"
+        "2. Write the outcome to last_step_result.md in the window directory "
+        "with a line like:\n"
         "  outcome: done | blocked | needs_approval | failed | skipped\n"
         "\n"
         "## IMPORTANT\n"
@@ -256,9 +349,19 @@ def _executing_task_body(**kw) -> str:
 
 
 def _record_outcome_body(**kw) -> str:
+    backlog_items = kw.get("backlog_items_dir", "")
     return (
         "## Objective\n"
-        "Record what happened with the selected item.\n"
+        "Record what happened with the selected item and update the Hermes backlog.\n"
+        "\n"
+        "## Required actions\n"
+        "1. Update the selected backlog item's Markdown file:\n"
+        "   - Set status to done/blocked/failed/dropped as appropriate.\n"
+        "   - Append a history entry with timestamp and outcome summary.\n"
+        "   - Set updated timestamp.\n"
+        f"   Item file location: {backlog_items or '<backlog/items/>'}\n"
+        "2. If the item is done and verified, move the file to the archive dir "
+        "or leave it in items with status: done.\n"
         "\n"
         "## Required information\n"
         "- Item id.\n"
@@ -272,8 +375,8 @@ def _record_outcome_body(**kw) -> str:
         "Write the outcome record to last_step_result.md in the window directory.\n"
         "\n"
         "## Transition\n"
-        "After recording, call autonomous_work_step(rationale=...). If time "
-        "remains and failure budget allows, the system will restart the cycle "
+        "After recording and updating the backlog, call autonomous_work_step(rationale=...). "
+        "If time remains and failure budget allows, the system will restart the cycle "
         "from snapshot_preflight."
     )
 
@@ -307,7 +410,9 @@ def _finalizing_body(**kw) -> str:
 
 
 def _default_body(**kw) -> str:
+    phase = kw.get("phase", "unknown") or "unknown"
+    wid = kw.get("window_id", "?") or "?"
     return (
-        f"Execute the {kw.get('phase', 'unknown')} phase of the autonomous work "
-        f"window {kw.get('window_id', '?')}."
+        f"Execute the {phase} phase of the autonomous work "
+        f"window {wid}."
     )

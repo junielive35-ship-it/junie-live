@@ -252,7 +252,7 @@ fi
 
 # ── Step 4: Create state directories ──
 log "Creating state directories..."
-mkdir -p "$STATE_DIR"/{backlog/items,reflections,overnight,logs}
+mkdir -p "$STATE_DIR"/{backlog/items,backlog/archive,reflections,overnight,logs}
 mkdir -p "$STATE_DIR"/marinator/runs
 mkdir -p "$STATE_DIR"/autonomous_work/windows
 

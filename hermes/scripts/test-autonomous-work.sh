@@ -40,6 +40,36 @@ $1
 " 2>&1
 }
 
+# Run Python code with backlog.py loaded directly
+run_backlog_test() {
+  python3 -c "
+import sys, importlib.util, importlib.machinery, types
+
+# Load state module
+sloader = importlib.machinery.SourceFileLoader('aw_state', '$PLUGIN_DIR/state.py')
+sspec = importlib.util.spec_from_loader('aw_state', sloader)
+state_mod = importlib.util.module_from_spec(sspec)
+sys.modules['aw_state'] = state_mod
+sloader.exec_module(state_mod)
+
+# Create package so relative imports work
+pkg = types.ModuleType('aw_pkg')
+pkg.__path__ = ['$PLUGIN_DIR']
+pkg.__package__ = 'aw_pkg'
+pkg.state = state_mod
+sys.modules['aw_pkg'] = pkg
+sys.modules['aw_pkg.state'] = state_mod
+
+# Load backlog as aw_pkg.backlog
+bloader = importlib.machinery.SourceFileLoader('aw_pkg.backlog', '$PLUGIN_DIR/backlog.py')
+bspec = importlib.util.spec_from_loader('aw_pkg.backlog', bloader)
+backlog = importlib.util.module_from_spec(bspec)
+sys.modules['aw_pkg.backlog'] = backlog
+bloader.exec_module(backlog)
+$1
+" 2>&1
+}
+
 # Run Python code with tools.py loaded (resolves relative imports via package)
 run_tools_test() {
   python3 -c "
@@ -68,6 +98,13 @@ pkg.prompts = prompts_mod
 sys.modules['aw_pkg'] = pkg
 sys.modules['aw_pkg.state'] = state_mod
 sys.modules['aw_pkg.prompts'] = prompts_mod
+
+# Load backlog module (needed by tools)
+bloader = importlib.machinery.SourceFileLoader('aw_pkg.backlog', '$PLUGIN_DIR/backlog.py')
+bspec = importlib.util.spec_from_loader('aw_pkg.backlog', bloader)
+backlog_mod = importlib.util.module_from_spec(bspec)
+sys.modules['aw_pkg.backlog'] = backlog_mod
+bloader.exec_module(backlog_mod)
 
 # Load tools as aw_pkg.tools
 tloader = importlib.machinery.SourceFileLoader('aw_pkg.tools', '$PLUGIN_DIR/tools.py')
@@ -442,6 +479,223 @@ shutil.rmtree(profile_dir, ignore_errors=True)
 shutil.rmtree(profile_dir2, ignore_errors=True)
 del os.environ['HERMES_PROFILE_DIR']
 " && pass || fail "Repo resolution ordering test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 18: Backlog path resolves under temp HERMES_HOME (not .openclaw) ===\n'
+run_backlog_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+root = backlog.get_backlog_root()
+assert '.openclaw' not in root, f'backlog root must not reference .openclaw: {root}'
+assert root.endswith('test-profile/junie-live/state/backlog'), f'unexpected backlog root: {root}'
+items_dir = backlog.get_items_dir()
+assert items_dir.endswith('/items'), f'unexpected items dir: {items_dir}'
+archive_dir = backlog.get_archive_dir()
+assert archive_dir.endswith('/archive'), f'unexpected archive dir: {archive_dir}'
+events_path = backlog.get_events_path()
+assert events_path.endswith('/events.jsonl'), f'unexpected events path: {events_path}'
+print(f'OK: backlog path resolves correctly: {root}')
+" && pass || fail "Backlog path resolution failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 19: Ensure backlog dirs creates structure ===\n'
+run_backlog_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+backlog.ensure_backlog_dirs()
+assert os.path.isdir(backlog.get_items_dir()), 'items dir should exist'
+assert os.path.isdir(backlog.get_archive_dir()), 'archive dir should exist'
+print('OK: backlog directories created')
+" && pass || fail "Ensure backlog dirs failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 20: Generate item id ===\n'
+run_backlog_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+backlog.ensure_backlog_dirs()
+item_id = backlog.generate_item_id()
+assert item_id.startswith('BL-'), f'item id should start with BL-, got {item_id}'
+assert '-001' in item_id or item_id.endswith('-001'), f'first item should end with -001, got {item_id}'
+print(f'OK: generated item id: {item_id}')
+" && pass || fail "Generate item id failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 21: Write and read backlog item ===\n'
+run_backlog_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+backlog.ensure_backlog_dirs()
+
+fm = {
+    'id': 'BL-20260601-001',
+    'kind': 'feature',
+    'status': 'candidate',
+    'title': 'Test item',
+    'source': 'test',
+    'problem': 'Something is wrong',
+    'desired_outcome': 'Something works',
+    'approval_required': False,
+    'scores': {'strategy_fit': 8, 'effort': 3},
+}
+body = 'Optional body text'
+item_path = os.path.join(backlog.get_items_dir(), 'BL-20260601-001.md')
+backlog.write_item(item_path, fm, body)
+assert os.path.isfile(item_path), 'item file should exist'
+
+read_fm, read_body = backlog.read_item(item_path)
+assert read_fm['id'] == 'BL-20260601-001', f'id mismatch: {read_fm[\"id\"]}'
+assert read_fm['status'] == 'candidate'
+assert read_fm['approval_required'] == False
+assert read_fm['scores']['strategy_fit'] == 8
+assert read_body == body, f'body mismatch: {read_body}'
+print('OK: write/read backlog item works')
+" && pass || fail "Write/read backlog item failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 22: List and filter backlog items ===\n'
+run_backlog_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+backlog.ensure_backlog_dirs()
+
+# Create two items
+fm1 = {'id': 'BL-001', 'kind': 'feature', 'status': 'candidate', 'title': 'Item 1', 'source': 'test'}
+fm2 = {'id': 'BL-002', 'kind': 'bug', 'status': 'ready', 'title': 'Item 2', 'source': 'test'}
+fm3 = {'id': 'BL-003', 'kind': 'chore', 'status': 'done', 'title': 'Item 3', 'source': 'test'}
+backlog.write_item(os.path.join(backlog.get_items_dir(), 'BL-001.md'), fm1)
+backlog.write_item(os.path.join(backlog.get_items_dir(), 'BL-002.md'), fm2)
+backlog.write_item(os.path.join(backlog.get_items_dir(), 'BL-003.md'), fm3)
+
+all_items = backlog.list_items()
+assert len(all_items) == 3, f'expected 3 items, got {len(all_items)}'
+
+filtered = backlog.filter_by_status(all_items, {'candidate', 'ready'})
+assert len(filtered) == 2, f'expected 2 filtered items, got {len(filtered)}'
+
+active = backlog.list_active_items()
+assert len(active) == 2, f'expected 2 active items, got {len(active)}'
+
+candidates = backlog.get_candidate_paths()
+assert len(candidates) == 2, f'expected 2 candidate paths, got {len(candidates)}'
+print('OK: list/filter backlog items works')
+" && pass || fail "List/filter backlog items failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 23: Update item status ===\n'
+run_backlog_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+backlog.ensure_backlog_dirs()
+
+fm = {'id': 'BL-001', 'kind': 'feature', 'status': 'candidate', 'title': 'Test', 'source': 'test'}
+item_path = os.path.join(backlog.get_items_dir(), 'BL-001.md')
+backlog.write_item(item_path, fm)
+
+backlog.update_item_status(item_path, 'in_progress', 'Starting work')
+read_fm, _ = backlog.read_item(item_path)
+assert read_fm['status'] == 'in_progress', f'status should be in_progress, got {read_fm[\"status\"]}'
+assert 'history' in read_fm, 'should have history'
+assert 'Starting work' in read_fm['history']
+print('OK: update item status works')
+" && pass || fail "Update item status failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 24: Candidate detection from backlog items (no selection.md) ===\n'
+run_tools_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+
+# Create a backlog item with status candidate
+backlog_mod.ensure_backlog_dirs()
+fm = {'id': 'BL-001', 'kind': 'feature', 'status': 'candidate', 'title': 'Backlog candidate', 'source': 'test'}
+backlog_mod.write_item(os.path.join(backlog_mod.get_items_dir(), 'BL-001.md'), fm)
+
+# Empty window dir with no selection.md
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+# Candidate detection should find the backlog item
+assert tools_mod._detect_candidates(tmpdir), 'should detect candidates from backlog even without selection.md'
+print('OK: candidate detection finds backlog items without selection.md')
+" && pass || fail "Candidate detection from backlog failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 25: Prompt mentions Hermes backlog path as source of truth ===\n'
+run_prompts_test "
+import os, tempfile
+window = {
+    'window_id': 'AW-20260601-001',
+    'end_at': 9999999999,
+    'prompt': 'test',
+    'repo': '/tmp/test-repo',
+}
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+result = prompts_mod.build_step_prompt(window, tmpdir, 'snapshot_preflight')
+content = open(result['prompt_path']).read()
+assert 'Hermes backlog' in content, 'prompt should mention Hermes backlog'
+assert 'backlog/items' in content.lower() or 'items:' in content, 'prompt should mention backlog items path'
+# Prohibition text may mention .openclaw as forbidden; that is intentional.
+print('OK: prompts mention Hermes backlog path as source of truth')
+" && pass || fail "Prompt backlog path test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 26: Backlog frontmatter roundtrip (booleans, nested dicts, multiline) ===\n'
+run_backlog_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+backlog.ensure_backlog_dirs()
+
+fm = {
+    'id': 'BL-002',
+    'kind': 'refactor',
+    'status': 'validated',
+    'title': 'Complex item',
+    'source': 'owner',
+    'approval_required': True,
+    'scores': {'strategy_fit': 9, 'effort': 5, 'risk': 2},
+}
+item_path = os.path.join(backlog.get_items_dir(), 'BL-002.md')
+backlog.write_item(item_path, fm)
+read_fm, _ = backlog.read_item(item_path)
+assert read_fm['approval_required'] == True, f'bool: {read_fm[\"approval_required\"]}'
+assert read_fm['scores']['strategy_fit'] == 9
+assert read_fm['scores']['risk'] == 2
+print('OK: complex frontmatter roundtrips correctly')
+" && pass || fail "Complex frontmatter roundtrip failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 27: Backlog list fields roundtrip ===\n'
+run_backlog_test "
+import os, tempfile
+os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
+os.environ['HERMES_PROFILE'] = 'test-profile'
+backlog.ensure_backlog_dirs()
+
+fm = {
+    'id': 'BL-003',
+    'kind': 'feature',
+    'status': 'validated',
+    'title': 'List roundtrip',
+    'source': 'test',
+    'acceptance': ['Criterion 1', 'Criterion 2'],
+    'verification': ['Verify A', 'Verify B', 'Verify C'],
+}
+item_path = os.path.join(backlog.get_items_dir(), 'BL-003.md')
+backlog.write_item(item_path, fm)
+read_fm, _ = backlog.read_item(item_path)
+assert isinstance(read_fm['acceptance'], list), f'acceptance should be list, got {type(read_fm[\"acceptance\"]).__name__}: {read_fm[\"acceptance\"]}'
+assert read_fm['acceptance'] == ['Criterion 1', 'Criterion 2'], f'acceptance mismatch: {read_fm[\"acceptance\"]}'
+assert isinstance(read_fm['verification'], list), f'verification should be list, got {type(read_fm[\"verification\"]).__name__}: {read_fm[\"verification\"]}'
+assert read_fm['verification'] == ['Verify A', 'Verify B', 'Verify C'], f'verification mismatch: {read_fm[\"verification\"]}'
+print(f'OK: list fields roundtrip as lists: acceptance={read_fm[\"acceptance\"]} verification={read_fm[\"verification\"]}')
+" && pass || fail "List fields roundtrip test failed"
 
 printf '\n'
 printf '=== Results ===\n'
