@@ -44,6 +44,16 @@ if ! git diff --check HEAD -- 2>/dev/null; then
   fail "git diff --check found whitespace errors"
 fi
 
+log "hire-junie.sh /start quick command alias"
+# Verify the direct config.yaml writer sets quick_commands.start
+if grep -qF "quick_commands" "$ROOT/scripts/hire-junie.sh" && \
+   grep -qE "'type'.*'alias'" "$ROOT/scripts/hire-junie.sh" && \
+   grep -qE "'target'.*'/new'" "$ROOT/scripts/hire-junie.sh"; then
+  :
+else
+  fail "hire-junie.sh missing /start → /new quick command alias config"
+fi
+
 log "variant-minimal regression guard"
 offenders=$(grep -rn --exclude-dir=.git -- '--variant minimal' . 2>/dev/null | \
   grep -v '^\./docs/implementation-status.md:' | \
