@@ -29,10 +29,13 @@ If the duration/end time is missing or ambiguous, ask one concise question. Do n
 
 Before starting:
 
-1. Confirm initialization is complete (check memory for "Initialization status: INITIALIZED").
-2. Derive the owned repo, backlog priorities, mutex state, verification gates, commit expectations from memory and docs. Do **not** ask the admin to restate internal details such as repo path, backlog process, mutex location, verification commands, commit policy, or report format.
-3. Check the code mutex state. If held, do not start.
-4. Never work on `main` branch. Verify branch before starting.
+1. Confirm initialization is complete by both checks:
+   - memory says `Initialization status: INITIALIZED`;
+   - `INITIALIZATION.md` is absent from the active Junie profile.
+2. If initialization is still pending, do **not** start an autonomous work window or create "finish/reconcile initialization" as an autonomous-work task. Tell the owner initialization is still in progress and continue the initialization flow instead.
+3. Derive the owned repo, backlog priorities, mutex state, verification gates, commit expectations from memory and docs. Do **not** ask the admin to restate internal details such as repo path, backlog process, mutex location, verification commands, commit policy, or report format.
+4. Check the code mutex state. If held, do not start.
+5. Never work on `main` branch. Verify branch before starting.
 
 ## Implementation
 
