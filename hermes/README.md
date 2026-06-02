@@ -2,6 +2,37 @@
 
 Hermes-native implementation of [Junie Live](../idea.md): a persistent, product-owning senior SWE agent.
 
+## Setup
+
+1. Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/installation):
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+   hermes setup
+   ```
+
+2. Create a Telegram bot and token:
+   - Open [@BotFather](https://t.me/BotFather).
+   - Send `/newbot`.
+   - Choose a display name and a username ending in `bot`.
+   - Copy the API token BotFather returns.
+
+3. Find your Telegram numeric user ID:
+   - Message [@userinfobot](https://t.me/userinfobot).
+   - Copy the number it returns. It is not your `@username`.
+
+4. Hire Junie:
+   ```bash
+   cd ~/code/junie-live
+   export JUNIE_TELEGRAM_BOT_TOKEN="paste-token-here"
+   ./hermes/scripts/hire-junie.sh \
+     --telegram-token "$JUNIE_TELEGRAM_BOT_TOKEN" \
+     --admin-telegram-id YOUR_NUMERIC_TELEGRAM_ID
+   ```
+
+5. Send `/start` to the Junie bot in Telegram.
+
+The hire script creates the Hermes profile, installs Junie seed files, configures Telegram DM access for the admin ID, and starts the gateway. See [docs/setup.md](docs/setup.md) for manual setup options.
+
 ## What is this?
 
 This directory contains everything needed to run Junie Live on top of [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) instead of OpenClaw. The behavioral contract — product ownership, strategic validation, delegation, review, reflection, autonomous work windows — stays the same. Junie Live's task-solving loop is called the **Marinator** when referring to validation/decomposition, delegation, result checking, fix requests, verification, acceptance/reporting, and reflection as one loop. The implementation leverages Hermes-native features instead of shell scripts and OpenClaw workspace conventions.
@@ -16,18 +47,6 @@ This directory contains everything needed to run Junie Live on top of [Hermes Ag
 | Scheduled routines | System crontab / OpenClaw cron | Hermes native cron jobs |
 | Skills | OpenClaw skill files in workspace | Hermes skills (first-class, auto-loaded by matching) |
 | Repo hygiene | Shell scripts checking for workspace artifacts | Single tracked file in the target repo (`HERMES.md`); all other state under `~/.hermes/` |
-
-## Setup
-
-```bash
-./hermes/scripts/hire-junie.sh \
-  --telegram-token "$JUNIE_TELEGRAM_BOT_TOKEN" \
-  --admin-telegram-id YOUR_ID
-
-# Then send /start to the Junie bot in Telegram.
-```
-
-The hire script does everything: creates a Hermes profile, installs `SOUL.md` / skills / docs / `seed-HERMES.md` / `memory-seed.md` / `INITIALIZATION.md`, configures Telegram with DM restricted to the admin, and starts the gateway. See [docs/setup.md](docs/setup.md) for details and manual setup options.
 
 ## Directory structure
 
