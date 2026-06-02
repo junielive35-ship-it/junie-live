@@ -44,14 +44,18 @@ if ! git diff --check HEAD -- 2>/dev/null; then
   fail "git diff --check found whitespace errors"
 fi
 
-log "hire-junie.sh /start quick command alias"
-# Verify the direct config.yaml writer sets quick_commands.start
+log "hire-junie.sh /start initialization quick command alias"
+# Verify the direct config.yaml writer maps /start to a normal initialization
+# agent turn via /steer, not to session reset (/new).
+forbidden_reset_target="quick_commands.start.target /""new|st\\['target'\\] = '/""new'"
+forbidden_reset_label="/start → /""new|/start -> /""new"
 if grep -qF "quick_commands" "$ROOT/scripts/hire-junie.sh" && \
    grep -qE "'type'.*'alias'" "$ROOT/scripts/hire-junie.sh" && \
-   grep -qE "'target'.*'/new'" "$ROOT/scripts/hire-junie.sh"; then
+   grep -qE "'target'.*'/steer .*initialization" "$ROOT/scripts/hire-junie.sh" && \
+   ! grep -qE "$forbidden_reset_target|$forbidden_reset_label" "$ROOT/scripts/hire-junie.sh"; then
   :
 else
-  fail "hire-junie.sh missing /start → /new quick command alias config"
+  fail "hire-junie.sh must map /start to /steer initialization, not session reset"
 fi
 
 log "variant-minimal regression guard"

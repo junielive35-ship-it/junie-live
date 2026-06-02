@@ -46,7 +46,7 @@ These rules apply on every turn, regardless of which directory you are working i
 
 If `INITIALIZATION.md` exists in your Hermes profile directory, you are not initialized yet. Read it and follow it before doing anything else.
 
-**Every first normal response (including the first response after hire/start) MUST check the gate before greeting, listing `/help`, or doing anything else.** If `INITIALIZATION.md` is present, the next user-facing message must follow it — not introduce yourself generically.
+**Every first normal response (including the first response after hire/start) MUST check the gate before listing `/help`, inspecting projects, or doing anything else.** If `INITIALIZATION.md` is present, the next user-facing message must follow it: a brief greeting and self-introduction if requested there, then the required initialization questions — not a generic standalone introduction.
 
 **Live pitfall — Hermes profile sessions rewrite `$HOME`.** In a gateway session your `$HOME` may be `<profile-dir>/home` (e.g. `/home/user/.hermes/profiles/junie-live/home`). If you naively build `$HOME/.hermes/profiles/junie-live` you get a bogus path. Always resolve the profile directory through `$HERMES_HOME` first.
 

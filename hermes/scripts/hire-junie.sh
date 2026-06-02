@@ -411,19 +411,23 @@ hermes -p "$PROFILE" config set model.default "$MODEL" 2>/dev/null || true
 hermes -p "$PROFILE" config set model.provider "$PROVIDER" 2>/dev/null || true
 hermes -p "$PROFILE" config set agent.reasoning_effort "$REASONING" 2>/dev/null || true
 
-# ── Step 6b: Configure /start → /new quick command alias ──
-# Maps /start to /new so the "send /start to the bot" instruction works
-# out of the box. The gateway expands this before built-in dispatch.
+# ── Step 6b: Configure /start → initialization turn quick command alias ──
+# Maps /start to a normal agent turn so the "send /start to the bot"
+# instruction starts Junie initialization immediately. /new only resets the
+# session and returns the gateway banner; it does not run SOUL.md / INITIALIZATION.md.
 # Uses direct config.yaml editing (preferred) with hermes CLI fallback.
-log "Configuring /start → /new quick command alias..."
+START_ALIAS_TARGET="/steer Start Junie Live initialization now. Follow the initialization gate: greet the owner, briefly introduce yourself in a couple of sentences, then ask the two initialization questions."
+log "Configuring /start → initialization quick command alias..."
 _ensure_quick_start_alias() {
   local profile_dir="$1"
   local profile="$2"
+  local target="$3"
 
   local ok
-  ok=$(PD="$profile_dir" python3 2>/dev/null <<'PYQC'
+  ok=$(PD="$profile_dir" START_ALIAS_TARGET="$target" python3 2>/dev/null <<'PYQC'
 import os, sys
 cf = os.path.join(os.environ['PD'], 'config.yaml')
+target = os.environ['START_ALIAS_TARGET']
 try:
     import yaml
 except ImportError:
@@ -435,7 +439,7 @@ if os.path.isfile(cf):
 qc = cfg.setdefault('quick_commands', {})
 st = qc.setdefault('start', {})
 st['type'] = 'alias'
-st['target'] = '/new'
+st['target'] = target
 with open(cf, 'w') as f:
     yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
 print('OK')
@@ -443,25 +447,25 @@ PYQC
   ) || ok=""
 
   if [[ "$ok" == "OK" ]]; then
-    log "  /start → /new quick command alias configured in config.yaml"
+    log "  /start → initialization quick command alias configured in config.yaml"
     return 0
   fi
 
   # Fallback: try hermes CLI
   if hermes -p "$profile" config set quick_commands.start.type alias 2>/dev/null && \
-     hermes -p "$profile" config set quick_commands.start.target /new 2>/dev/null; then
-    log "  /start → /new quick command alias configured via hermes (fallback)"
+     hermes -p "$profile" config set quick_commands.start.target "$target" 2>/dev/null; then
+    log "  /start → initialization quick command alias configured via hermes (fallback)"
     return 0
   fi
 
   log "  WARNING: could not configure /start quick command alias"
   log "  Add it manually after hire:"
   log "    hermes -p $profile config set quick_commands.start.type alias"
-  log "    hermes -p $profile config set quick_commands.start.target /new"
+  log "    hermes -p $profile config set quick_commands.start.target '$target'"
   log "    hermes -p $profile gateway restart"
   return 1
 }
-_ensure_quick_start_alias "$PROFILE_DIR" "$PROFILE"
+_ensure_quick_start_alias "$PROFILE_DIR" "$PROFILE" "$START_ALIAS_TARGET"
 
 # ── Step 7: Install and start gateway (Ubuntu / Linux + systemd) ──
 # `hermes gateway install` asks two yes/no questions on Linux (start now?
