@@ -75,4 +75,6 @@ Junie Live is a persistent senior-engineer-style agent: product-aware, architect
 
 ## Current implementation status
 
-See [`implementation-status.md`](implementation-status.md) for the current implemented/partial/contract-only/deferred status of Junie Live capabilities and how current work maps to the product strategy.
+See the framework-specific implementation status docs for the current implemented/partial/contract-only/deferred status of Junie Live capabilities:
+- OpenClaw: [`openclaw/implementation-status.md`](openclaw/implementation-status.md)
+- Hermes: [`hermes/docs/implementation-status.md`](hermes/docs/implementation-status.md)

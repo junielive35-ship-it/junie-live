@@ -183,7 +183,7 @@ def _snapshot_preflight_body(**kw) -> str:
         f"{backlog_items or '<backlog/items/>'} if it exists. "
         "Check statuses: candidate, validated, ready, in_progress, blocked. "
         "Do NOT read .openclaw, ~/.openclaw, JUNIE_WORKSPACE, workspace-junie-live, "
-        "scripts/backlog.sh, or legacy JSON backlog files.\n"
+        "openclaw/scripts/backlog.sh, or legacy JSON backlog files.\n"
         "4. Check git status and current branch. Must not be main.\n"
         "5. Write snapshot_preflight event to events.jsonl (you may use terminal "
         "to append, or document via autonomous_work_step rationale).\n"

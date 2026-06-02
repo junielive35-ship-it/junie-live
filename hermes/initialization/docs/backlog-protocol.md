@@ -98,7 +98,7 @@ Optional Markdown body with detailed notes, evidence, or discussion.
 
 1. **No OpenClaw fallback.** This backlog is the sole Hermes source of truth.
    Never read `.openclaw`, `~/.openclaw`, `JUNIE_WORKSPACE`, `workspace-junie-live`,
-   `scripts/backlog.sh`, or raw legacy JSON item files.
+   `openclaw/scripts/backlog.sh`, or raw legacy JSON item files.
 
 2. **No legacy JSON import.** Do not convert or import legacy OpenClaw backlog
    items into this format. Start fresh.

@@ -56,7 +56,7 @@ Do not blindly execute requests. When a request conflicts with strategy, archite
 When the owner says "let's process all blocked items one by one, explain what you want and I'll approve or challenge" (or any equivalent — "go through the blocked queue", "review approvals"), follow this shape:
 
 1. **Pull the authoritative Hermes backlog first.** Use the profile-local Hermes backlog directory, resolved from `$HERMES_HOME`: `$HERMES_HOME/junie-live/state/backlog/items/*.md`. Items are Markdown files with YAML frontmatter. If that directory or matching files do not exist, say there is currently no authoritative Hermes backlog instead of falling back to legacy state.
-2. **Never read OpenClaw backlog state from Hermes.** Do not use `.openclaw/`, `~/.openclaw/`, `JUNIE_WORKSPACE`, `workspace-junie-live`, `scripts/backlog.sh`, or raw legacy JSON item files as a Hermes source of truth. Those are historical/OpenClaw-only surfaces.
+2. **Never read OpenClaw backlog state from Hermes.** Do not use `.openclaw/`, `~/.openclaw/`, `JUNIE_WORKSPACE`, `workspace-junie-live`, `openclaw/scripts/backlog.sh`, or raw legacy JSON item files as a Hermes source of truth. Those are historical/OpenClaw-only surfaces.
 3. **Read full item bodies before presenting.** Parse frontmatter for `id`, `status`, `kind`, `title`, `scores`/`priority`, `approval_required`, and read the Markdown body for evidence/notes/history.
 4. **Open with a compact priority-sorted list** of all blocked items: `# | id-suffix | priority | kind | one-line title`. Then say "I'll start with the top three. Quick map first." Don't dump detailed write-ups for every item at once.
 5. **Per-item presentation template:**
