@@ -12,14 +12,16 @@ Status values:
 
 ## Strategic thread
 
-TODO: Explain the product goal, the current strategic priority, and why the next/active work matters.
+Initialization is not complete until this file has been reconciled with the target repository and the long-lived profile docs. Its job is to prevent Junie from saying "initialization done" while still lacking a clear, evidence-backed model of what exists, what is partial, what is only documented intent, and what remains externally unknown.
+
+Keep this file concise. Do not paste large repo documents here; link to repo docs when they are the better source of truth, and record the implementation status plus Junie's operating consequence.
 
 ## Current status matrix
 
 | Area / capability | Source docs | Status | Evidence | Gaps / next action |
 | --- | --- | --- | --- | --- |
-| Marinator delegation plugin | `docs/delegation-protocol.md`, `plugins/marinator-delegation/` | implemented | Plugin installed by hire-junie.sh; provides `marinator_delegate` tool under `marinator` toolset | Approved code-changing delegation path; Kanban and cron continuation deferred |
-| Example capability | `docs/example.md` | unknown | Not inspected yet | Inspect code/tests and update this row before planning related work. |
+| Marinator delegation plugin | `docs/delegation-protocol.md`, `plugins/marinator-delegation/` | implemented | Plugin installed by `hire-junie.sh`; provides `marinator_delegate` tool under `marinator` toolset | Approved code-changing delegation path; Kanban and cron continuation are separate capabilities and must have their own rows if relevant |
+| Target-project capabilities | Target repo code/docs; profile `strategy.md`, `architecture.md`, `design-decisions.md`, `tools.md` | unknown until inspected | Seed placeholder only | Replace this row during initialization with project-specific capability rows. Do not delete `INITIALIZATION.md` while this file still contains generic placeholders or unreconciled status gaps that can be answered from the repo/profile. |
 
 ## How to use this file
 
