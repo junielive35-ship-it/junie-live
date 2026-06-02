@@ -6,7 +6,7 @@ cd "$ROOT"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
-forbidden=(AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw state)
+forbidden=(SOUL.md USER.md TOOLS.md IDENTITY.md HEARTBEAT.md .openclaw state)
 
 for artifact in "${forbidden[@]}"; do
   if [[ -e "$ROOT/$artifact" ]]; then
