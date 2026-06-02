@@ -132,6 +132,7 @@ def make_initial_window(
     owner_prompt: Optional[str],
     owner_session_id: Optional[str],
     repo: str,
+    enable_debug_messages: bool = True,
 ) -> dict:
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     started_at = time.time()
@@ -163,6 +164,7 @@ def make_initial_window(
         "last_step_result_path": None,
         "last_error": None,
         "report_path": None,
+        "enable_debug_messages": enable_debug_messages,
     }
 
 

@@ -174,7 +174,20 @@ assert win['completed_items'] == []
 assert win['blocked_items'] == []
 assert win['failure_count'] == 0
 assert win['failure_budget'] == 3
+assert win['enable_debug_messages'] == True, 'debug messages default true'
 print('OK: initial window has correct shape')
+
+# Also verify the flag can be set to False
+win_no_debug = state.make_initial_window(
+    window_id='AW-20260601-002',
+    duration_seconds=3600,
+    owner_prompt=None,
+    owner_session_id=None,
+    repo='/tmp/repo',
+    enable_debug_messages=False,
+)
+assert win_no_debug['enable_debug_messages'] == False
+print('OK: enable_debug_messages=False works')
 " && pass || fail "Initial window shape failed"
 
 # ════════════════════════════════════════════════════════════════
@@ -284,6 +297,9 @@ start_props = tools_mod.AUTONOMOUS_WORK_START_SCHEMA['parameters']['properties']
 assert 'duration' in start_props, 'duration required'
 assert start_props['duration']['type'] == 'string'
 assert 'prompt' in start_props, 'prompt optional'
+assert 'enable_debug_messages' in start_props, 'enable_debug_messages in schema'
+assert start_props['enable_debug_messages']['type'] == 'boolean'
+assert start_props['enable_debug_messages'].get('default') == True, 'default should be True'
 assert tools_mod.AUTONOMOUS_WORK_START_SCHEMA['parameters']['required'] == ['duration']
 assert tools_mod.AUTONOMOUS_WORK_START_SCHEMA['parameters'].get('additionalProperties') == False
 # step schema
@@ -323,7 +339,55 @@ print(f'OK: prompt built for finalizing')
 " && pass || fail "Prompt construction failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 13: Transition detection helpers ===\n'
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 13: executing_task prompt includes marinator debug flag ===\n'
+run_prompts_test "
+import os, tempfile
+
+# Test with debug enabled (default)
+window_debug_true = {
+    'window_id': 'AW-20260601-001',
+    'end_at': 9999999999,
+    'prompt': 'test',
+    'repo': '/tmp/test-repo',
+    'enable_debug_messages': True,
+}
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+result = prompts_mod.build_step_prompt(window_debug_true, tmpdir, 'executing_task', selected_item='ITEM-001')
+content = open(result['prompt_path']).read()
+assert 'enable_per_minute_reports=True' in content, f'expected True flag in prompt, got content:\\n{content}'
+print('OK: executing_task prompt has enable_per_minute_reports=True when debug enabled')
+
+# Test with debug disabled
+window_debug_false = {
+    'window_id': 'AW-20260601-002',
+    'end_at': 9999999999,
+    'prompt': 'test',
+    'repo': '/tmp/test-repo',
+    'enable_debug_messages': False,
+}
+tmpdir2 = tempfile.mkdtemp(prefix='aw-test-')
+result2 = prompts_mod.build_step_prompt(window_debug_false, tmpdir2, 'executing_task', selected_item='ITEM-002')
+content2 = open(result2['prompt_path']).read()
+assert 'enable_per_minute_reports=False' in content2, f'expected False flag in prompt, got content:\\n{content2}'
+print('OK: executing_task prompt has enable_per_minute_reports=False when debug disabled')
+
+# Test backward compatibility: omitted defaults to True
+window_no_flag = {
+    'window_id': 'AW-20260601-003',
+    'end_at': 9999999999,
+    'prompt': 'test',
+    'repo': '/tmp/test-repo',
+}
+tmpdir3 = tempfile.mkdtemp(prefix='aw-test-')
+result3 = prompts_mod.build_step_prompt(window_no_flag, tmpdir3, 'executing_task', selected_item='ITEM-003')
+content3 = open(result3['prompt_path']).read()
+assert 'enable_per_minute_reports=True' in content3, 'omitted flag should default to True'
+print('OK: omitted enable_debug_messages defaults to True')
+" && pass || fail "executing_task marinator debug flag test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 14: Transition detection helpers ===\n'
 run_tools_test "
 import os, tempfile
 # Outcome parsing
@@ -348,7 +412,7 @@ print('OK: transition detection helpers')
 " && pass || fail "Transition detection failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 14: Marker once ===\n'
+printf '=== Test 15: Marker once ===\n'
 run_state_test "
 import os, tempfile
 tmpdir = tempfile.mkdtemp(prefix='aw-test-')
@@ -360,7 +424,7 @@ print('OK: marker once works')
 " && pass || fail "Marker once test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 15: Update window ===\n'
+printf '=== Test 16: Update window ===\n'
 run_state_test "
 import os, tempfile
 tmpdir = tempfile.mkdtemp(prefix='aw-test-')
@@ -377,7 +441,7 @@ print('OK: update window works')
 " && pass || fail "Update window test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 16: Atomic active-window acquire ===\n'
+printf '=== Test 17: Atomic active-window acquire ===\n'
 run_state_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -413,7 +477,7 @@ print('OK: atomic active-window acquire works (lock + json-only refusal)')
 
 # ════════════════════════════════════════════════════════════════
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 17: Repo resolution ordering ===\n'
+printf '=== Test 18: Repo resolution ordering ===\n'
 run_tools_test "
 import os, tempfile
 
@@ -481,7 +545,7 @@ del os.environ['HERMES_PROFILE_DIR']
 " && pass || fail "Repo resolution ordering test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 18: Backlog path resolves under temp HERMES_HOME (not .openclaw) ===\n'
+printf '=== Test 19: Backlog path resolves under temp HERMES_HOME (not .openclaw) ===\n'
 run_backlog_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -499,7 +563,7 @@ print(f'OK: backlog path resolves correctly: {root}')
 " && pass || fail "Backlog path resolution failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 19: Ensure backlog dirs creates structure ===\n'
+printf '=== Test 20: Ensure backlog dirs creates structure ===\n'
 run_backlog_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -511,7 +575,7 @@ print('OK: backlog directories created')
 " && pass || fail "Ensure backlog dirs failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 20: Generate item id ===\n'
+printf '=== Test 21: Generate item id ===\n'
 run_backlog_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -524,7 +588,7 @@ print(f'OK: generated item id: {item_id}')
 " && pass || fail "Generate item id failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 21: Write and read backlog item ===\n'
+printf '=== Test 22: Write and read backlog item ===\n'
 run_backlog_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -557,7 +621,7 @@ print('OK: write/read backlog item works')
 " && pass || fail "Write/read backlog item failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 22: List and filter backlog items ===\n'
+printf '=== Test 23: List and filter backlog items ===\n'
 run_backlog_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -587,7 +651,7 @@ print('OK: list/filter backlog items works')
 " && pass || fail "List/filter backlog items failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 23: Update item status ===\n'
+printf '=== Test 24: Update item status ===\n'
 run_backlog_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -607,7 +671,7 @@ print('OK: update item status works')
 " && pass || fail "Update item status failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 24: Candidate detection from backlog items (no selection.md) ===\n'
+printf '=== Test 25: Candidate detection from backlog items (no selection.md) ===\n'
 run_tools_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -626,7 +690,7 @@ print('OK: candidate detection finds backlog items without selection.md')
 " && pass || fail "Candidate detection from backlog failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 25: Prompt mentions Hermes backlog path as source of truth ===\n'
+printf '=== Test 26: Prompt mentions Hermes backlog path as source of truth ===\n'
 run_prompts_test "
 import os, tempfile
 window = {
@@ -645,7 +709,7 @@ print('OK: prompts mention Hermes backlog path as source of truth')
 " && pass || fail "Prompt backlog path test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 26: Backlog frontmatter roundtrip (booleans, nested dicts, multiline) ===\n'
+printf '=== Test 27: Backlog frontmatter roundtrip (booleans, nested dicts, multiline) ===\n'
 run_backlog_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -671,7 +735,7 @@ print('OK: complex frontmatter roundtrips correctly')
 " && pass || fail "Complex frontmatter roundtrip failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 27: Backlog list fields roundtrip ===\n'
+printf '=== Test 28: Backlog list fields roundtrip ===\n'
 run_backlog_test "
 import os, tempfile
 os.environ['HERMES_HOME'] = tempfile.mkdtemp(prefix='aw-test-')
@@ -698,7 +762,7 @@ print(f'OK: list fields roundtrip as lists: acceptance={read_fm[\"acceptance\"]}
 " && pass || fail "List fields roundtrip test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 28: aw-runner.sh has no --resume (regression) ===\n'
+printf '=== Test 29: aw-runner.sh has no --resume (regression) ===\n'
 if grep -qF -- '--resume' "$PLUGIN_DIR/scripts/aw-runner.sh"; then
   fail "aw-runner.sh contains --resume (must start fresh sessions per step)"
 else
@@ -706,7 +770,7 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 29: aw-runner.sh has no AW_SESSION_ID (regression) ===\n'
+printf '=== Test 30: aw-runner.sh has no AW_SESSION_ID (regression) ===\n'
 if grep -qF 'AW_SESSION_ID' "$PLUGIN_DIR/scripts/aw-runner.sh"; then
   fail "aw-runner.sh references AW_SESSION_ID (should not persist/resume sessions)"
 else
@@ -714,7 +778,7 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 30: tools.py has no bootstrap/resume patterns (regression) ===\n'
+printf '=== Test 31: tools.py has no bootstrap/resume patterns (regression) ===\n'
 if grep -qE '_bootstrap_aw_session|aw_session_bootstrapped' "$PLUGIN_DIR/tools.py"; then
   fail "tools.py contains _bootstrap_aw_session or aw_session_bootstrapped"
 else
@@ -722,11 +786,48 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 31: tools.py aw_session_id is None-only (backward-compatible) ===\n'
+printf '=== Test 32: tools.py aw_session_id is None-only (backward-compatible) ===\n'
 if grep -n 'aw_session_id' "$PLUGIN_DIR/tools.py" | grep -qv '": None'; then
   fail "tools.py has non-None aw_session_id (should only appear as backward-compatible None)"
 else
   pass
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 33: aw-runner.sh has AW_ENABLE_DEBUG and AW_DEBUG_DELIVERY_TARGET gating ===\n'
+if grep -qF 'AW_ENABLE_DEBUG' "$PLUGIN_DIR/scripts/aw-runner.sh"; then
+  pass
+else
+  fail "aw-runner.sh missing AW_ENABLE_DEBUG gating"
+fi
+if grep -qF 'AW_DEBUG_DELIVERY_TARGET' "$PLUGIN_DIR/scripts/aw-runner.sh"; then
+  pass
+else
+  fail "aw-runner.sh missing AW_DEBUG_DELIVERY_TARGET"
+fi
+if grep -qF 'Use send_message' "$PLUGIN_DIR/scripts/aw-runner.sh"; then
+  pass
+else
+  fail "aw-runner.sh missing send_message call for debug"
+fi
+if grep -qF -- '-t messaging' "$PLUGIN_DIR/scripts/aw-runner.sh"; then
+  pass
+else
+  fail "aw-runner.sh debug message hermes call missing -t messaging toolset"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 34: tools.py _resolve_debug_delivery_target and return payload ===\n'
+if grep -qF '_resolve_debug_delivery_target' "$PLUGIN_DIR/tools.py"; then
+  pass
+else
+  fail "tools.py missing _resolve_debug_delivery_target helper"
+fi
+# Regression: start return JSON must include enable_debug_messages
+if grep -A10 'return json.dumps({' "$PLUGIN_DIR/tools.py" | grep -qF 'enable_debug_messages'; then
+  pass
+else
+  fail "tools.py start return JSON missing enable_debug_messages"
 fi
 
 printf '\n'

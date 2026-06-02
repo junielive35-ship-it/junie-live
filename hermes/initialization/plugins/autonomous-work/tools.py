@@ -39,6 +39,15 @@ AUTONOMOUS_WORK_START_SCHEMA = {
                 ),
                 "default": "",
             },
+            "enable_debug_messages": {
+                "type": "boolean",
+                "description": (
+                    "Enable debug/progress messages sent via Telegram on each "
+                    "autonomous step. Defaults to true for visibility. Set to false "
+                    "only when the user explicitly asks to disable debug messages."
+                ),
+                "default": True,
+            },
         },
         "required": ["duration"],
         "additionalProperties": False,
@@ -139,6 +148,25 @@ def _resolve_repo() -> Optional[str]:
     return None
 
 
+def _resolve_debug_delivery_target() -> Optional[str]:
+    """Resolve a delivery target string for debug messages.
+    Returns e.g. 'telegram:12345:6789' or None if runtime delivery
+    context is unavailable.
+    """
+    try:
+        platform = _session_env("HERMES_SESSION_PLATFORM", "")
+        chat_id = _session_env("HERMES_SESSION_CHAT_ID", "")
+        if platform and chat_id:
+            thread_id = _session_env("HERMES_SESSION_THREAD_ID", "")
+            target = f"{platform}:{chat_id}"
+            if thread_id:
+                target += f":{thread_id}"
+            return target
+    except Exception:
+        pass
+    return None
+
+
 # ── autonomous_work_start handler ──
 
 def handle_autonomous_work_start(params: dict, plugin_ctx: Any = None, **kwargs) -> str:
@@ -173,6 +201,9 @@ def _do_start(params: dict, plugin_ctx: Any) -> str:
         })
 
     owner_prompt = params.get("prompt", "")
+    enable_debug_messages = params.get("enable_debug_messages", True)
+    if not isinstance(enable_debug_messages, bool):
+        enable_debug_messages = True
     owner_session_id = _session_env("HERMES_SESSION_ID", "") or None
     hermes_profile = os.environ.get("HERMES_PROFILE", "junie-live")
     repo = _resolve_repo()
@@ -193,6 +224,7 @@ def _do_start(params: dict, plugin_ctx: Any) -> str:
         owner_prompt=owner_prompt,
         owner_session_id=owner_session_id,
         repo=repo,
+        enable_debug_messages=enable_debug_messages,
     )
 
     events_path = state.get_events_path(window_dir)
@@ -215,6 +247,7 @@ def _do_start(params: dict, plugin_ctx: Any) -> str:
         "started_iso": window.get("started_iso"),
         "end_at": window.get("end_at"),
         "end_iso": window.get("end_iso"),
+        "enable_debug_messages": enable_debug_messages,
     })
 
     if not state.try_acquire_active_window(window_id):
@@ -226,7 +259,7 @@ def _do_start(params: dict, plugin_ctx: Any) -> str:
             )
         })
 
-    runner_pid = _start_runner(window_dir, window_id, hermes_profile)
+    runner_pid = _start_runner(window_dir, window_id, hermes_profile, enable_debug_messages)
     if runner_pid is None:
         state.clear_active_window()
         return json.dumps({
@@ -246,6 +279,7 @@ def _do_start(params: dict, plugin_ctx: Any) -> str:
         "status": "running",
         "duration": duration_str,
         "end_at": window["end_at"],
+        "enable_debug_messages": enable_debug_messages,
     })
 
 
@@ -253,6 +287,7 @@ def _start_runner(
     window_dir: str,
     window_id: str,
     profile: str,
+    enable_debug_messages: bool = True,
 ) -> Optional[int]:
     """Start aw-runner.sh in the background. Returns PID or None."""
     runner_script = os.path.join(
@@ -267,6 +302,11 @@ def _start_runner(
     runner_env["AW_WINDOW_DIR"] = window_dir
     runner_env["AW_WINDOW_ID"] = window_id
     runner_env["HERMES_PROFILE"] = profile
+    runner_env["AW_ENABLE_DEBUG"] = "true" if enable_debug_messages else "false"
+
+    delivery_target = _resolve_debug_delivery_target()
+    if delivery_target:
+        runner_env["AW_DEBUG_DELIVERY_TARGET"] = delivery_target
 
     runner_log = os.path.join(window_dir, "logs", "aw-runner.log")
     try:
