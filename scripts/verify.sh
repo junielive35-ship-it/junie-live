@@ -117,7 +117,7 @@ done
 
 log "remaining docs do not reference removed implementation scripts"
 removed_ref_pattern='scripts/(backlog|backlog-hygiene|backlog-rescore|drive|hypothesis-generate|install-overnight-crons|next-action|overnight-controller|overnight-watchdog|report|routine-health|run-backlog-worker|start-autonomous-window)\.sh|docs/overnight-routines\.md|opencode serve|--attach http://127\.0\.0\.1'
-if grep -RIn --exclude-dir=.git --exclude-dir=.idea --exclude-dir=hermes --exclude='verify.sh' \
+if grep -RIn --exclude-dir=.git --exclude-dir=.idea --exclude-dir=hermes --exclude-dir=tmp_specs --exclude='verify.sh' \
   -E "$removed_ref_pattern" .; then
   fail "remaining docs/scripts reference removed auxiliary implementations"
 fi

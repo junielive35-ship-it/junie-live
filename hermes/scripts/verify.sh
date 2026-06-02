@@ -51,7 +51,8 @@ forbidden_reset_target="quick_commands.start.target /""new|st\\['target'\\] = '/
 forbidden_reset_label="/start → /""new|/start -> /""new"
 if grep -qF "quick_commands" "$ROOT/scripts/hire-junie.sh" && \
    grep -qE "'type'.*'alias'" "$ROOT/scripts/hire-junie.sh" && \
-   grep -qE "'target'.*'/steer .*initialization" "$ROOT/scripts/hire-junie.sh" && \
+   grep -qE "START_ALIAS_TARGET.*/steer.*initialization" "$ROOT/scripts/hire-junie.sh" && \
+   grep -qE "st\['target'\] = target" "$ROOT/scripts/hire-junie.sh" && \
    ! grep -qE "$forbidden_reset_target|$forbidden_reset_label" "$ROOT/scripts/hire-junie.sh"; then
   :
 else
