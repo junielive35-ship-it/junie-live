@@ -31,20 +31,18 @@ The agent communicates with the team through Telegram. It can ask clarifying que
 
 ## Architecture
 
-The current root implementation uses OpenClaw as the orchestrator. OpenClaw owns the long-term context: strategy, architecture, design choices, memory, team communication, planning, scheduling, and review.
+Junie Live's central task-solving loop is the **Marinator**: the product-owned loop that takes an accepted task from validation through delegation, worker-result review, fix requests, verification, acceptance, reporting, and reflection. The Marinator is a protocol and responsibility boundary, not necessarily a separate runtime module. The term is descriptive; it does not imply parallel executors or a new architecture boundary.
 
-The repository also contains `hermes/`, a Hermes-native Junie Live baseline. That directory exists so the Hermes version can evolve separately while keeping the same high-level product contract; do not treat it as accidental duplicate seed/workspace material.
+The orchestrator owns long-term context: strategy, architecture, design choices, memory, team communication, planning, scheduling, delegation, review, and acceptance. It must never do coding work itself. All coding tasks are delegated to scoped coding subagents or workers, while the orchestrator remains accountable for outcome quality and product fit.
 
-Junie Live's central task-solving loop is the **Marinator**: the product-owned loop that takes an accepted task from validation through delegation, worker-result review, fix requests, verification, acceptance, reporting, and reflection. In the current root implementation the Marinator is a protocol spanning OpenClaw guidance, docs, skills, and scripts rather than a separate module. The term is descriptive; it does not imply parallel executors or a new architecture boundary.
+Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown guidance/docs directly when no source code, scripts, tests, config, generated files, or external systems are changed. Code-changing routines are serialized by a code mutex so only one code-changing task can run against the owned repo or area at a time.
 
-All coding tasks in the OpenClaw implementation are delegated to opencode subagents powered by Claude Opus 4.8 with low reasoning. The orchestrator must never do coding work itself; it owns context, planning, delegation, review, and acceptance through the Marinator loop. Documentation-only Markdown changes are an explicit exception: the orchestrator may edit Markdown guidance/docs directly when no source code, scripts, tests, config, generated files, or external systems are changed. Code-changing routines are serialized by the code mutex described in [`code_mutex.md`](code_mutex.md).
-
-The concrete OpenClaw delegation boundary is the bundled `marinator_delegate` tool. A hired instance links the `marinator-delegation` plugin from its workspace copy, and the tool starts a supervised opencode runner that records durable run state, progress events, terminal status, and wake events under the initialized workspace. This keeps implementation work observable without changing Marinator semantics: task/subtask boundaries are still chosen by acceptance, review risk, and user-visible outcome, not by progress-update cadence.
+Delegation must be observable and reviewable. A coding worker should produce durable evidence: changed files, verification commands and results, remaining risks, and any follow-up questions. Task/subtask boundaries are chosen by acceptance criteria, review risk, and user-visible outcome, not by progress-update cadence.
 
 Treat coding subagents roughly like junior engineers. The orchestrator must:
 
 1. Decompose work into appropriately sized coding tasks.
-2. Delegate each coding task to opencode using Claude Opus 4.8 with low reasoning.
+2. Delegate each coding task to an appropriate coding worker.
 3. Provide each subagent with precise, relevant context: goal, constraints, architecture notes, strategy implications, and expected verification.
 4. Avoid overloading prompts with unnecessary history.
 5. Review subagent output using the full long-term context.
@@ -72,7 +70,7 @@ Any changes to product architecture, agent architecture, or major workflow assum
 
 ## Summary
 
-Junie Live is a persistent senior-engineer-style agent: product-aware, architecture-aware, strategic, proactive, communicative, and reflective. The root implementation uses OpenClaw for continuity and orchestration; opencode subagents powered by Claude Opus 4.8 with low reasoning perform scoped code/script/config/test implementation work under review. The `hermes/` directory holds the separate Hermes-native implementation baseline. The orchestrator may directly maintain Markdown-only docs and guidance when that is the whole change.
+Junie Live is a persistent senior-engineer-style agent: product-aware, architecture-aware, strategic, proactive, communicative, and reflective. Coding workers perform scoped code/script/config/test implementation work under review. The orchestrator owns context, planning, delegation, review, acceptance, communication, and reflection. It may directly maintain Markdown-only docs and guidance when that is the whole change.
 
 
 ## Current implementation status

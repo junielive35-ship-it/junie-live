@@ -30,7 +30,7 @@ Do not log broad raw tool calls by default. Prefer capability-level summaries ov
 
 Every event must identify the actor:
 
-- `orchestrator` — Junie/OpenClaw main agent;
+- `orchestrator` — the main Junie Live agent;
 - `subagent` — third-party coding worker such as opencode;
 - optional parent linkage from subagent back to the Junie task/run.
 
@@ -48,19 +48,19 @@ Example:
 
 ## Collection strategy
 
-### Orchestrator / OpenClaw agent
+### Orchestrator agent
 
-Collect from OpenClaw plugin hooks or session logs.
+Collect from framework hooks, agent events, or session logs where available.
 
 Useful signals:
 
 - skill usage: explicit skill-load event if available, otherwise reads of known `SKILL.md` files;
-- MCP usage: MCP tool calls visible to OpenClaw;
+- MCP usage: MCP tool calls visible to the orchestrator;
 - docs reads: local docs file reads and documentation URL fetches.
 
 ### Third-party coding subagents
 
-Use post-run extraction first. Avoid OpenClaw core changes for the first v2 implementation.
+Use post-run extraction first. Avoid framework core changes for the first v2 implementation.
 
 Each subagent type may need a small adapter because capability usage is not standardized:
 
@@ -83,7 +83,7 @@ Append-only JSONL is enough for the first v2 implementation.
     "id": "junie | opencode:run-17",
     "parent_id": "..."
   },
-  "source": "openclaw_hook | session_log | acpx_record | opencode_log | mcp_proxy",
+  "source": "framework_hook | session_log | acpx_record | worker_log | mcp_proxy",
   "kind": "skill_used | mcp_call | docs_read | tooling_used | failure | retry | routine_output | health_signal | usefulness_signal",
   "name": "capability, routine, signal, or event name",
   "target": "file path, docs URL, MCP server/tool, or skill id",
