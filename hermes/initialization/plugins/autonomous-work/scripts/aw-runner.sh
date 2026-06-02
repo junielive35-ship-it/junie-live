@@ -114,6 +114,30 @@ PYCONT
 
   log_runner "Step $step_count: phase=$phase continuation=$continuation"
 
+  # ── Debug/progress message ──
+  if [[ "${AW_ENABLE_DEBUG:-true}" == "true" && -n "${AW_DEBUG_DELIVERY_TARGET:-}" ]]; then
+    selected_item=$(python3 - "$window_json" 2>/dev/null <<'PYSEL'
+import json, sys
+try:
+    with open(sys.argv[1], 'r') as fh:
+        w = json.load(fh)
+    print(w.get('selected_item', '') or '')
+except Exception:
+    print('')
+PYSEL
+) || selected_item=""
+    debug_msg="[AW debug] Step $step_count starting: phase=$phase window=$window_id"
+    if [[ -n "$selected_item" ]]; then
+      debug_msg="$debug_msg item=$selected_item"
+    fi
+    if [[ -n "$continuation" ]]; then
+      debug_msg="$debug_msg continuation=$continuation"
+    fi
+    hermes -p "$profile" chat -Q -t messaging \
+      -q "Use send_message to send this exact message to target $AW_DEBUG_DELIVERY_TARGET: $debug_msg. Then reply only SEND_DONE." \
+      >/dev/null 2>&1 || log_runner "Warning: debug send failed (non-fatal)"
+  fi
+
   case "$continuation" in
     continue_now)
       # Read the step prompt built by autonomous_work_step

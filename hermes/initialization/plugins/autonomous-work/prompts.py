@@ -46,6 +46,7 @@ def build_step_prompt(
     prompt = window.get("prompt", "")
     repo = window.get("repo", "")
     deadline_iso = window.get("end_iso", "") or time.strftime("%Y-%m-%dT%H:%M:%S%z", time.gmtime(end_at))
+    enable_debug_messages = window.get("enable_debug_messages", True)
 
     prompt_path = os.path.join(window_dir, "step_prompt.md")
     events_path = os.path.join(window_dir, "events.jsonl")
@@ -86,6 +87,7 @@ def build_step_prompt(
         backlog_items_dir=backlog["items_dir"],
         backlog_archive_dir=backlog["archive_dir"],
         backlog_events_path=backlog["events_path"],
+        enable_debug_messages=enable_debug_messages,
     )
 
     full_prompt = (
@@ -141,6 +143,7 @@ def _build_phase_body(
     backlog_items_dir: str = "",
     backlog_archive_dir: str = "",
     backlog_events_path: str = "",
+    enable_debug_messages: bool = True,
 ) -> str:
     builders = {
         "snapshot_preflight": _snapshot_preflight_body,
@@ -166,6 +169,7 @@ def _build_phase_body(
         backlog_items_dir=backlog_items_dir,
         backlog_archive_dir=backlog_archive_dir,
         backlog_events_path=backlog_events_path,
+        enable_debug_messages=enable_debug_messages,
     )
 
 
@@ -302,6 +306,7 @@ def _score_and_select_body(**kw) -> str:
 def _executing_task_body(**kw) -> str:
     selected = kw.get("selected_item")
     backlog_items = kw.get("backlog_items_dir", "")
+    enable_debug_messages = kw.get("enable_debug_messages", True)
     instr = (
         "## Objective\n"
         f"Execute the selected backlog item through the standard Junie/Marinator "
@@ -310,6 +315,7 @@ def _executing_task_body(**kw) -> str:
     if selected:
         instr += f"\nSelected item: {selected}\n"
 
+    marinator_debug_flag = "True" if enable_debug_messages else "False"
     instr += (
         "\n## Required actions\n"
         "1. Read selected item acceptance and verification requirements from "
@@ -320,6 +326,8 @@ def _executing_task_body(**kw) -> str:
         "with job_id, repo, prompt_file.\n"
         "   - Do NOT run opencode directly.\n"
         "   - Do NOT edit code yourself.\n"
+        f"   - Set enable_per_minute_reports={marinator_debug_flag} when calling "
+        f"marinator_delegate.\n"
         "5. Handle Marinator completion/failure/attention wakes in the ordinary "
         "Marinator loop:\n"
         "   - inspect run_dir, status.json, result.md, logs, diff, and "
