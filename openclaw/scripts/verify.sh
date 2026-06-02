@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 log() { printf '==> %s\n' "$*"; }
@@ -21,21 +21,21 @@ if git status --porcelain --untracked-files=all | grep -q .; then
 fi
 
 log "bash syntax"
-bash -n hire-junie.sh
+bash -n openclaw/hire-junie.sh
 script_count=0
 while IFS= read -r script; do
   [[ -f "$script" ]] || continue
   bash -n "$script" || fail "bash syntax error in $script"
   script_count=$((script_count + 1))
-done < <({ find scripts -maxdepth 1 -name '*.sh' -type f
-           find initialization/scripts -maxdepth 1 -name '*.sh' -type f; } | sort)
-[[ "$script_count" -ge 8 ]] || fail "expected at least 8 bash scripts across scripts/ and initialization/scripts/, found $script_count"
+done < <({ find openclaw/scripts -maxdepth 1 -name '*.sh' -type f
+           find openclaw/initialization/scripts -maxdepth 1 -name '*.sh' -type f; } | sort)
+[[ "$script_count" -ge 8 ]] || fail "expected at least 8 bash scripts across openclaw/scripts/ and openclaw/initialization/scripts/, found $script_count"
 
 log "python syntax"
-python3 -m py_compile initialization/scripts/check-markdown-tables.py
+python3 -m py_compile openclaw/initialization/scripts/check-markdown-tables.py
 
 log "maintained markdown tables"
-initialization/scripts/check-markdown-tables.py implementation-status.md
+openclaw/initialization/scripts/check-markdown-tables.py openclaw/implementation-status.md
 
 log "local markdown links"
 while IFS= read -r file; do
@@ -52,7 +52,7 @@ done < <(find . -path './.git' -prune -o -path './hermes' -prune -o -name '*.md'
 
 log "md consistency scan"
 mc_base="$(mktemp -d)"
-./initialization/scripts/md-consistency.sh --repo "$ROOT" >"$mc_base/md-consistency.out"
+./openclaw/initialization/scripts/md-consistency.sh --repo "$ROOT" >"$mc_base/md-consistency.out"
 grep -q '^checked=' "$mc_base/md-consistency.out" || fail "md-consistency missing checked count"
 mc_count=$(grep '^checked=' "$mc_base/md-consistency.out" | sed 's/^checked=//')
 [[ "$mc_count" -ge 8 ]] || fail "md-consistency checked too few refs: $mc_count"
@@ -63,7 +63,7 @@ mkdir -p "$mc_tmp/scripts"
 printf '#!/bin/true\n' > "$mc_tmp/scripts/exists.sh"
 printf '# Test\n\nSee `scripts/exists.sh` and `missing-script.sh`.\n' > "$mc_tmp/test.md"
 set +e
-./initialization/scripts/md-consistency.sh --repo "$mc_tmp" >"$mc_base/mc-broken.out" 2>"$mc_base/mc-broken.err"
+./openclaw/initialization/scripts/md-consistency.sh --repo "$mc_tmp" >"$mc_base/mc-broken.out" 2>"$mc_base/mc-broken.err"
 mc_status=$?
 set -e
 [[ "$mc_status" -eq 1 ]] || fail "md-consistency should exit 1 when broken refs found"
@@ -72,9 +72,9 @@ grep -q 'missing-script.sh' "$mc_base/mc-broken.out" || fail "md-consistency sho
 rm -rf "$mc_base"
 
 log "initialization seed guidance"
-seed_agents="initialization/AGENTS.md"
-seed_delegation="initialization/docs/delegation-protocol.md"
-seed_review="initialization/docs/review-protocol.md"
+seed_agents="openclaw/initialization/AGENTS.md"
+seed_delegation="openclaw/initialization/docs/delegation-protocol.md"
+seed_review="openclaw/initialization/docs/review-protocol.md"
 for seed_file in "$seed_agents" "$seed_delegation" "$seed_review"; do
   [[ -f "$seed_file" ]] || fail "missing initialization seed file: $seed_file"
 done
@@ -93,37 +93,38 @@ grep -qi 'cross-cutting invariants' <<<"$seed_hygiene_text" || fail "initializat
 grep -qi 'implementation acceptance loop' <<<"$seed_hygiene_text" || fail "initialization seed must name implementation acceptance loop"
 grep -qi 'worker/delegation/review/fix/acceptance' <<<"$seed_hygiene_text" || fail "initialization seed must preserve worker/delegation/review/fix/acceptance loop"
 grep -qi 'Never silently abandon half-finished work' <<<"$seed_hygiene_text" || fail "initialization seed must forbid silent abandonment of half-finished work"
-grep -qi 'Incomplete-task reporting guardrail' initialization/AGENTS.md || fail "AGENTS seed must include incomplete-task reporting guardrail section"
+grep -qi 'Incomplete-task reporting guardrail' openclaw/initialization/AGENTS.md || fail "AGENTS seed must include incomplete-task reporting guardrail section"
 
 log "removed auxiliary implementations stay removed"
 for removed in \
-  docs/overnight-routines.md \
-  initialization/skills/autonomous-work-window/SKILL.md \
-  scripts/backlog.sh \
-  scripts/backlog-hygiene.sh \
-  scripts/backlog-rescore.sh \
-  scripts/drive.sh \
-  scripts/hypothesis-generate.sh \
-  scripts/install-overnight-crons.sh \
-  scripts/next-action.sh \
-  scripts/overnight-controller.sh \
-  scripts/overnight-watchdog.sh \
-  scripts/report.sh \
-  scripts/routine-health.sh \
-  scripts/run-backlog-worker.sh \
-  scripts/start-autonomous-window.sh; do
+  openclaw/docs/overnight-routines.md \
+  openclaw/initialization/skills/autonomous-work-window/SKILL.md \
+  openclaw/scripts/backlog.sh \
+  openclaw/scripts/backlog-hygiene.sh \
+  openclaw/scripts/backlog-rescore.sh \
+  openclaw/scripts/drive.sh \
+  openclaw/scripts/hypothesis-generate.sh \
+  openclaw/scripts/install-overnight-crons.sh \
+  openclaw/scripts/next-action.sh \
+  openclaw/scripts/overnight-controller.sh \
+  openclaw/scripts/overnight-watchdog.sh \
+  openclaw/scripts/report.sh \
+  openclaw/scripts/routine-health.sh \
+  openclaw/scripts/run-backlog-worker.sh \
+  openclaw/scripts/start-autonomous-window.sh; do
   [[ ! -e "$removed" ]] || fail "removed auxiliary implementation still exists: $removed"
 done
 
 log "remaining docs do not reference removed implementation scripts"
-removed_ref_pattern='scripts/(backlog|backlog-hygiene|backlog-rescore|drive|hypothesis-generate|install-overnight-crons|next-action|overnight-controller|overnight-watchdog|report|routine-health|run-backlog-worker|start-autonomous-window)\.sh|docs/overnight-routines\.md|opencode serve|--attach http://127\.0\.0\.1'
-if grep -RIn --exclude-dir=.git --exclude-dir=.idea --exclude-dir=hermes --exclude-dir=tmp_specs --exclude='verify.sh' \
+removed_ref_pattern='openclaw/scripts/(backlog|backlog-hygiene|backlog-rescore|drive|hypothesis-generate|install-overnight-crons|next-action|overnight-controller|overnight-watchdog|report|routine-health|run-backlog-worker|start-autonomous-window)\.sh|openclaw/docs/overnight-routines\.md|opencode serve|--attach http://127\.0\.0\.1'
+if grep -RIn --exclude-dir=.git --exclude-dir=.idea --exclude-dir=hermes --exclude-dir=tmp_specs \
+  --exclude='verify.sh' --exclude-dir=openclaw \
   -E "$removed_ref_pattern" .; then
   fail "remaining docs/scripts reference removed auxiliary implementations"
 fi
 
 log "repo hygiene"
-scripts/check-repo-hygiene.sh
+openclaw/scripts/check-repo-hygiene.sh
 
 log "git diff whitespace"
 git diff --check

@@ -71,18 +71,18 @@ resolve_ref() {
   [[ -e "$repo/$ref" ]] && return 0
   # Relative to markdown file directory
   [[ -e "$md_dir/$ref" ]] && return 0
-  # Bare .sh files -> try scripts/ prefix
+  # Bare .sh files -> try openclaw/scripts/ prefix
   if [[ "$ref" =~ \.sh$ && ! "$ref" == */* ]]; then
-    [[ -e "$repo/scripts/$ref" ]] && return 0
+    [[ -e "$repo/openclaw/scripts/$ref" ]] && return 0
   fi
-  # Single-component paths (no intermediate /) -> try initialization/ prefix
+  # Single-component paths (no intermediate /) -> try openclaw/initialization/ prefix
   local base="${ref%/}"
   if [[ "$base" != */* ]]; then
-    [[ -e "$repo/initialization/$ref" ]] && return 0
+    [[ -e "$repo/openclaw/initialization/$ref" ]] && return 0
   fi
-  # docs/ paths -> try initialization/docs/
+  # docs/ paths -> try openclaw/initialization/docs/
   if [[ "$ref" == docs/* ]]; then
-    [[ -e "$repo/initialization/$ref" ]] && return 0
+    [[ -e "$repo/openclaw/initialization/$ref" ]] && return 0
   fi
   # Repo-name-prefixed paths (e.g., junie-live/initialization/). In temp
   # verification clones, the directory name may differ from the product repo name,
@@ -126,8 +126,8 @@ done < <({
     git -C "$repo" ls-files --cached --others --exclude-standard '*.md' | while IFS= read -r f; do
       rp="$repo/$f"
       case "$f" in
-        docs/*|*.md)
-          [[ "$f" == */* && "$f" != docs/* ]] && continue
+        docs/*|openclaw/*|openclaw/**/*|*.md)
+          [[ "$f" == */* && "$f" != docs/* && "$f" != openclaw/* ]] && continue
           printf '%s\n' "$rp"
           ;;
       esac
@@ -135,6 +135,7 @@ done < <({
   else
     find "$repo" -maxdepth 1 -name '*.md' -type f -print
     find "$repo/docs" -name '*.md' -type f -print 2>/dev/null
+    find "$repo/openclaw" -name '*.md' -type f -print 2>/dev/null
   fi
 } | sort)
 

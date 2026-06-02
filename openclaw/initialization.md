@@ -1,20 +1,20 @@
 # Junie Live Initialization Directory
 
-`junie-live/initialization/` contains the reusable seed workspace for creating a new Junie Live instance for any project or feature area.
+`openclaw/initialization/` contains the reusable seed workspace for creating a new Junie Live instance for any project or feature area.
 
 These files are copied into an OpenClaw workspace before the first run of a new Junie Live agent. They are not the initialized identity of a specific project. They are the starting scaffold that tells Junie how to initialize itself.
 
 Alongside the guidance seed, `initialization/` also bundles the project-agnostic runtime assets every working Junie Live instance needs:
 
-- `initialization/scripts/` — operational scripts such as code-mutex helpers, PR/CI helpers, reflection, and the MD/table consistency checkers.
-- `initialization/marinator-delegation/` — the OpenClaw plugin that exposes the `marinator_delegate` tool and drives the bounded opencode runner it bundles at `initialization/marinator-delegation/scripts/delegate-coding-task.sh`.
+- `openclaw/initialization/scripts/` — operational scripts such as code-mutex helpers, PR/CI helpers, reflection, and the MD/table consistency checkers.
+- `openclaw/initialization/marinator-delegation/` — the OpenClaw plugin that exposes the `marinator_delegate` tool and drives the bounded opencode runner it bundles at `openclaw/initialization/marinator-delegation/scripts/delegate-coding-task.sh`.
 
-`hire-junie.sh` copies these into the workspace, installs (copies) the plugin from the workspace copy, and patches OpenClaw config (tools allowlist and runtime models) so a hired instance can delegate coding work without manual setup. The plugin bundles its runner under its own `scripts/` directory and resolves it relative to the plugin package, so the plugin is self-contained and works under any install shape (copy, npm, ClawHub) without depending on this source repo's path. These assets are project-agnostic: they work the same for any target project.
+`openclaw/hire-junie.sh` copies these into the workspace, installs (copies) the plugin from the workspace copy, and patches OpenClaw config (tools allowlist and runtime models) so a hired instance can delegate coding work without manual setup. The plugin bundles its runner under its own `scripts/` directory and resolves it relative to the plugin package, so the plugin is self-contained and works under any install shape (copy, npm, ClawHub) without depending on this source repo's path. These assets are project-agnostic: they work the same for any target project.
 
 After hire, the expected runtime layout is:
 
 - workspace `marinator-delegation/` — installed (copied) OpenClaw plugin directory;
-- runner bundled in the plugin, copied from `initialization/marinator-delegation/scripts/delegate-coding-task.sh` — supervised opencode runner used by `marinator_delegate`;
+- runner bundled in the plugin, copied from `openclaw/initialization/marinator-delegation/scripts/delegate-coding-task.sh` — supervised opencode runner used by `marinator_delegate`;
 - workspace Marinator run state directory — per-run durable state with `spec.json`, `status.json`, `events.jsonl`, logs, `opencode.exit`, and a result artifact when available.
 
 The hire flow must also make the `marinator-delegation` plugin visible under coding tool profiles via `tools.alsoAllow`, register `openrouter/openai/gpt-4.1-mini` for progress summaries, and install/link the plugin with the explicit unsafe-install bypass because the runner starts a child process. The runner reports concise progress as observability, but task granularity still follows the Marinator acceptance loop. Every run should reach an explicit terminal status (`completed`, `failed`, `timeout`, `killed`, or `stalled`) and wake the orchestrator so half-finished work is not silently abandoned.
@@ -25,7 +25,7 @@ Code-changing work initialized from this seed uses the mutex protocol described 
 
 For the current MVP, a new Junie Live instance is created roughly like this:
 
-1. Copy files from `junie-live/initialization/` into `.openclaw/workspace`.
+1. Copy files from `openclaw/initialization/` into `.openclaw/workspace`.
 2. Run OpenClaw with the new agent workspace.
 3. Give Junie:
    - the path to the target project;
@@ -48,7 +48,7 @@ They may describe:
 - generic recurring-check guidance;
 - templates for project-specific files such as `MEMORY.md`, `TOOLS.md`, and `docs/`;
 - reusable skills such as task reflection.
-- project-agnostic runtime assets every instance needs: operational scripts in `initialization/scripts/` and the `initialization/marinator-delegation/` delegation plugin.
+- project-agnostic runtime assets every instance needs: operational scripts in `openclaw/initialization/scripts/` and the `openclaw/initialization/marinator-delegation/` delegation plugin.
 
 The files should make sense if copied into a workspace for any target project, for example:
 

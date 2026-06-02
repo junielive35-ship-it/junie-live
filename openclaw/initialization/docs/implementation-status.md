@@ -18,7 +18,7 @@ TODO: Explain the product goal, the current strategic priority, and why the next
 
 | Area / capability | Source docs | Status | Evidence | Gaps / next action |
 | ----------------- | ----------- | ------ | -------- | ------------------ |
-| Example capability | `docs/example.md` | unknown | Not inspected yet | Inspect code/tests and update this row before planning related work. |
+| Example capability | `openclaw/initialization.md` | unknown | Not inspected yet | Inspect code/tests and update this row before planning related work. |
 
 ## How to use this file
 

@@ -35,11 +35,11 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 | Aspect | OpenClaw | Hermes |
 | --- | --- | --- |
 | **Cron backend** | System crontab + OpenClaw cron API + shell scripts | Hermes cron scheduler (in-process, persistent) |
-| **Job creation** | `scripts/install-overnight-crons.sh` generates crontab entries and OpenClaw cron definitions | `cronjob(action="create", ...)` from any session |
+| **Job creation** | `openclaw/scripts/install-overnight-crons.sh` generates crontab entries and OpenClaw cron definitions | `cronjob(action="create", ...)` from any session |
 | **Job definition** | JSON definition + crontab line + shell command with explicit env vars | Prompt + optional skills + schedule + delivery target |
-| **Watchdog** | `scripts/overnight-watchdog.sh` — shell script checking mutex, process state, git status | Hermes cron job with LLM — checks mutex, uses tools to inspect state |
-| **Controller** | `scripts/overnight-controller.sh` — loop: select task → delegate worker → verify → commit → next | LLM-driven: same flow but orchestrated by the agent, not a shell loop |
-| **Report** | `scripts/overnight-report.sh` — generates KV-format report from state files | LLM generates natural-language report from inspection |
+| **Watchdog** | `openclaw/scripts/overnight-watchdog.sh` — shell script checking mutex, process state, git status | Hermes cron job with LLM — checks mutex, uses tools to inspect state |
+| **Controller** | `openclaw/scripts/overnight-controller.sh` — loop: select task → delegate worker → verify → commit → next | LLM-driven: same flow but orchestrated by the agent, not a shell loop |
+| **Report** | `openclaw/scripts/overnight-report.sh` — generates KV-format report from state files | LLM generates natural-language report from inspection |
 
 ## 2. Strengths and Weaknesses
 
@@ -71,7 +71,7 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 
 6. **OpenClaw dependency** — If OpenClaw changes its API, workspace format, or cron interface, all scripts need updating.
 
-7. **Complex initialization** — The `hire-junie.sh` script is 258 lines orchestrating: backup, openclaw agents add, workspace seeding, cron installation, telegram channel setup, config patching, agent binding, device approval, gateway restart.
+7. **Complex initialization** — The `openclaw/hire-junie.sh` script is 258 lines orchestrating: backup, openclaw agents add, workspace seeding, cron installation, telegram channel setup, config patching, agent binding, device approval, gateway restart.
 
 ### Hermes Strengths
 
