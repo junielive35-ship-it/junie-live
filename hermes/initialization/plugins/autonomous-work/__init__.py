@@ -22,9 +22,9 @@ def register(ctx) -> None:
         check_fn=check_requirements,
         description=(
             "Start a bounded autonomous work window. Creates a durable window "
-            "directory, bootstraps a headless AW Hermes session, and starts the "
-            "AW runner in the background. Returns window_id, run_dir, aw_session_id, "
-            "phase, and status. Does not select work or execute tasks."
+            "directory and starts the AW runner in the background. Returns "
+            "window_id, run_dir, phase, and status. Does not select work or "
+            "execute tasks."
         ),
         emoji="\U0001f30c",
     )

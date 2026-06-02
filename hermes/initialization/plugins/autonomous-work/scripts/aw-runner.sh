@@ -10,7 +10,6 @@ set -euo pipefail
 # Environment:
 #   AW_WINDOW_DIR   — window run directory (provided by autonomous_work_start)
 #   AW_WINDOW_ID    — window identifier
-#   AW_SESSION_ID   — AW Hermes session id for --resume
 #   HERMES_PROFILE  — Hermes profile (default: junie-live)
 
 if [[ -z "${AW_WINDOW_DIR:-}" ]]; then
@@ -20,7 +19,6 @@ fi
 
 window_dir="$AW_WINDOW_DIR"
 window_id="${AW_WINDOW_ID:-unknown}"
-aw_session_id="${AW_SESSION_ID:-}"
 profile="${HERMES_PROFILE:-junie-live}"
 
 window_json="$window_dir/window.json"
@@ -78,7 +76,7 @@ if ! (set -C; : > "$runner_lock") 2>/dev/null; then
   exit 0
 fi
 
-log_runner "AW runner started: window_id=$window_id session=$aw_session_id"
+log_runner "AW runner started: window_id=$window_id"
 
 # ── Main loop ──
 
@@ -130,7 +128,7 @@ PYCONT
       step_log="$logs_dir/step-${step_count}.stdout.log"
       step_err_log="$logs_dir/step-${step_count}.stderr.log"
 
-      log_runner "resuming AW session: aw_session_id=$aw_session_id phase=$phase"
+      log_runner "starting fresh AW step: phase=$phase"
 
       # Acquire step lock for this step (cleanup handler removes it on error)
       if ! (set -C; : > "$step_lock") 2>/dev/null; then
@@ -141,7 +139,6 @@ PYCONT
 
       set +e
       hermes -p "$profile" chat \
-        --resume "$aw_session_id" \
         --toolsets autonomous,marinator,terminal,file \
         -q "$prompt" \
         >"$step_log" 2>"$step_err_log"

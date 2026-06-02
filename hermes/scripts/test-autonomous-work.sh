@@ -697,6 +697,38 @@ assert read_fm['verification'] == ['Verify A', 'Verify B', 'Verify C'], f'verifi
 print(f'OK: list fields roundtrip as lists: acceptance={read_fm[\"acceptance\"]} verification={read_fm[\"verification\"]}')
 " && pass || fail "List fields roundtrip test failed"
 
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 28: aw-runner.sh has no --resume (regression) ===\n'
+if grep -qF -- '--resume' "$PLUGIN_DIR/scripts/aw-runner.sh"; then
+  fail "aw-runner.sh contains --resume (must start fresh sessions per step)"
+else
+  pass
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 29: aw-runner.sh has no AW_SESSION_ID (regression) ===\n'
+if grep -qF 'AW_SESSION_ID' "$PLUGIN_DIR/scripts/aw-runner.sh"; then
+  fail "aw-runner.sh references AW_SESSION_ID (should not persist/resume sessions)"
+else
+  pass
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 30: tools.py has no bootstrap/resume patterns (regression) ===\n'
+if grep -qE '_bootstrap_aw_session|aw_session_bootstrapped' "$PLUGIN_DIR/tools.py"; then
+  fail "tools.py contains _bootstrap_aw_session or aw_session_bootstrapped"
+else
+  pass
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 31: tools.py aw_session_id is None-only (backward-compatible) ===\n'
+if grep -n 'aw_session_id' "$PLUGIN_DIR/tools.py" | grep -qv '": None'; then
+  fail "tools.py has non-None aw_session_id (should only appear as backward-compatible None)"
+else
+  pass
+fi
+
 printf '\n'
 printf '=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"

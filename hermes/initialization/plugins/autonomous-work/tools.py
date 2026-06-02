@@ -226,23 +226,7 @@ def _do_start(params: dict, plugin_ctx: Any) -> str:
             )
         })
 
-    aw_session_id = _bootstrap_aw_session(window_id, hermes_profile, plugin_ctx)
-    if aw_session_id is None:
-        state.clear_active_window()
-        shutil.rmtree(window_dir, ignore_errors=True)
-        return json.dumps({
-            "error": (
-                "Failed to bootstrap AW Hermes session. Check Hermes CLI "
-                "availability and profile configuration."
-            )
-        })
-
-    state.update_window(window_path, {"aw_session_id": aw_session_id})
-    state.append_event(events_path, "aw_session_bootstrapped", {
-        "aw_session_id": aw_session_id,
-    })
-
-    runner_pid = _start_runner(window_dir, window_id, aw_session_id, hermes_profile)
+    runner_pid = _start_runner(window_dir, window_id, hermes_profile)
     if runner_pid is None:
         state.clear_active_window()
         return json.dumps({
@@ -257,7 +241,7 @@ def _do_start(params: dict, plugin_ctx: Any) -> str:
     return json.dumps({
         "window_id": window_id,
         "run_dir": window_dir,
-        "aw_session_id": aw_session_id,
+        "aw_session_id": None,
         "phase": "snapshot_preflight",
         "status": "running",
         "duration": duration_str,
@@ -265,63 +249,9 @@ def _do_start(params: dict, plugin_ctx: Any) -> str:
     })
 
 
-def _bootstrap_aw_session(
-    window_id: str,
-    profile: str,
-    plugin_ctx: Any,
-) -> Optional[str]:
-    """Bootstrap a headless AW Hermes session.
-
-    Uses the spec's recommended approach: run a one-shot hermes chat with
-    --pass-session-id and parse the session_id: footer from stdout.
-    """
-    bootstrap_prompt = (
-        f"AW bootstrap for window {window_id}. "
-        f"Reply READY and wait for the runner."
-    )
-
-    try:
-        result = subprocess.run(
-            [
-                "hermes", "-p", profile, "chat",
-                "-Q",
-                "--pass-session-id",
-                "--toolsets", "autonomous,marinator,terminal,file",
-                "-q", bootstrap_prompt,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except subprocess.TimeoutExpired:
-        return None
-    except FileNotFoundError:
-        return None
-
-    if result.returncode != 0:
-        return None
-
-    session_id = None
-    for line in result.stdout.splitlines():
-        line = line.strip()
-        if line.startswith("session_id:"):
-            session_id = line.split(":", 1)[1].strip()
-            break
-
-    if not session_id:
-        for line in result.stderr.splitlines():
-            line = line.strip()
-            if line.startswith("session_id:"):
-                session_id = line.split(":", 1)[1].strip()
-                break
-
-    return session_id or None
-
-
 def _start_runner(
     window_dir: str,
     window_id: str,
-    aw_session_id: str,
     profile: str,
 ) -> Optional[int]:
     """Start aw-runner.sh in the background. Returns PID or None."""
@@ -336,7 +266,6 @@ def _start_runner(
     runner_env = os.environ.copy()
     runner_env["AW_WINDOW_DIR"] = window_dir
     runner_env["AW_WINDOW_ID"] = window_id
-    runner_env["AW_SESSION_ID"] = aw_session_id
     runner_env["HERMES_PROFILE"] = profile
 
     runner_log = os.path.join(window_dir, "logs", "aw-runner.log")
