@@ -122,12 +122,14 @@ else
   pass
 fi
 
-printf '\n=== INITIALIZATION.md: forbids generic greeting before the two questions ===\n'
+printf '\n=== INITIALIZATION.md: first response greets, introduces Junie, then asks two questions ===\n'
 INIT_MD="$ROOT/initialization/INITIALIZATION.md"
-if grep -qi 'no.*generic.*greeting\|no.*/help\|do not send.*greeting\|do not.*greet.*before\|MUST ask.*stop' "$INIT_MD" 2>/dev/null; then
+if grep -qi 'greet.*owner\|brief.*greeting\|say hello\|hello' "$INIT_MD" 2>/dev/null && \
+   grep -qi 'two.*sentence\|couple.*sentence\|briefly.*introduce\|tell.*about.*yourself' "$INIT_MD" 2>/dev/null && \
+   grep -qi 'MUST ask exactly those two questions and stop\|ask exactly those two questions and stop\|ask the owner the two initialization questions' "$INIT_MD" 2>/dev/null; then
   pass
 else
-  fail "INITIALIZATION.md does not forbid generic greeting before the two questions"
+  fail "INITIALIZATION.md must greet, briefly introduce Junie, then ask the two initialization questions"
 fi
 
 printf '\n=== seed-HERMES.md: no Initialization mode section ===\n'
