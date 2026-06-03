@@ -152,6 +152,7 @@ SEED_OWNED_PATHS=(
   docs
   skills
   plugins
+  scripts
   # Historical names — kept here so a re-hire over an older install cleans them
   persona.md
 )
@@ -169,7 +170,7 @@ log "  Removed $seed_removed prior seed entries"
 
 log "Installing seed files..."
 cp -a "$SEED_DIR/." "$PROFILE_DIR/"
-log "  Copied: SOUL.md, INITIALIZATION.md, memory-seed.md, skills, docs (incl. seed-HERMES.md), plugins"
+log "  Copied: SOUL.md, INITIALIZATION.md, memory-seed.md, skills, docs, plugins, scripts"
 
 # ── Step 3b: Clear runtime state that would contradict fresh initialization ──
 # On re-hire the agent needs to re-initialize from scratch. Memory stores
