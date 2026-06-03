@@ -66,9 +66,14 @@ Autonomous Work Window Hermes plugin:
 autonomous_work_start(duration="<duration>", prompt="<optional guidance>")
 ```
 
-This creates a durable window directory, bootstraps a dedicated AW Hermes session,
-and starts the AW runner. The runner drives deterministic phase transitions via
-`autonomous_work_step()`.
+This creates a durable window directory and starts the AW runner. The runner drives deterministic phase transitions via `autonomous_work_step()`.
+By default, `autonomous_work_start` enables debug/progress messages. When the
+current Hermes session has a delivery target, the runner can send step-level
+`[AW debug]` Telegram messages. During the executing-task phase, the AW prompt
+maps that debug setting to Marinator `enable_per_minute_reports=True` by default.
+Those messages improve operator visibility only: they do not replace backlog
+outcomes, final reports, orchestrator review, verification evidence, or git
+status checks.
 
 Cron is not the primary control plane. Hermes cron may be used only for:
 - **Watchdog** (every 15 min): independently monitors code mutex, stuck items,
