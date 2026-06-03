@@ -371,6 +371,21 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 15: start_job return discourages process.wait happy path ===\n'
+py_eval "
+from pathlib import Path
+text = Path('$RUNNER_PY').read_text()
+start = text.index('    return {\n        \"job_id\": job_id,\n        \"run_dir\": run_dir,')
+end = text.index('\ndef _spawn_wrapper_subprocess', start)
+return_block = text[start:end]
+assert 'process_session_id' not in return_block, 'return payload should not expose process_session_id'
+assert 'wait for Marinator wake or inspect status_path later' in return_block, 'missing wait/status guidance'
+assert 'If a caller synchronously waits and sees MARINATOR_DONE' in return_block, 'missing synchronous wait review guard'
+print('OK: start_job return hides process_session_id and includes review guard')
+" && pass || fail "runner.py return payload still encourages process.wait happy path"
+
 printf '\n'
 printf '=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"

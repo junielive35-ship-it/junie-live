@@ -415,14 +415,17 @@ def start_job(
     return {
         "job_id": job_id,
         "run_dir": run_dir,
-        "process_session_id": process_session_id or f"job_{job_id}",
         "runtime_mode": runtime_mode,
         "enable_per_minute_reports": enable_per_minute_reports,
         "status_path": status_path,
         "is_follow_up": is_follow_up,
+        "completion_signal": "wait_for_wake_or_inspect_status_path",
         "message": (
-            "Delegated coding task. I will review the result when "
-            "Marinator wakes this session."
+            "Delegated coding task. Do not call process.wait as the normal "
+            "happy path; wait for Marinator wake or inspect status_path later. "
+            "If a caller synchronously waits and sees MARINATOR_DONE, review "
+            "status.json, result.md, logs, diff, and verification evidence "
+            "immediately before any final response."
         ),
     }
 

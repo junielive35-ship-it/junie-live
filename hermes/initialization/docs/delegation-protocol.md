@@ -50,6 +50,13 @@ Headless resume is fire-and-forget: the wrapper must launch the resume helper as
 
 The orchestrator then reads `status.json`, `result.md`, stdout/stderr logs, and the repo diff, and decides what, if anything, to report to the user.
 
+There are two legal post-delegation states, and they must not be mixed:
+
+- **Worker still running:** the orchestrator may stop with a waiting status and let the configured wake path resume the same session.
+- **Worker completed/failed/timed out/stalled/killed:** the orchestrator has mandatory pending-review debt. It must read `status.json`, `result.md`, logs, and the repo diff, run or inspect required verification, and decide accept/fix/wait/kill/block before any final user-facing response or task outcome.
+
+If a caller synchronously waits on the Marinator background process and receives `MARINATOR_DONE` in the same turn, that is already a completed-worker state. The next action is the full review checklist immediately. Ending with “I need to review/verify next” (or equivalent) is a protocol violation.
+
 Known debug-only exception (temporary): the current runner can send periodic progress summaries via Hermes messaging when `enable_per_minute_reports=true`. These are user-facing progress logs only. They technically violate the strict executor-isolation invariant and should not become task acceptance, fix-loop, or completion signals. Do not add new direct runner-to-user sends; route substantive status, decisions, and completion through the orchestrator.
 
 ## How the orchestrator wake actually reaches the user
@@ -133,6 +140,8 @@ All code-changing work is executed via the `marinator_delegate` tool, which is i
 4. In live Telegram sessions, `notify_on_complete` wakes the orchestrator when the worker finishes.
 5. In headless sessions, the wrapper calls `hermes chat --resume` to continue the orchestrator session.
 6. On wake, the orchestrator reads `status.json`, `result.md`, stdout/stderr logs, inspects the repo diff, and decides: accept, fix, wait, kill, or block.
+
+Do not use `process.wait` as the normal happy path after `marinator_delegate`; prefer the wake path or inspect `status_path` later. If `process.wait` is used and returns `MARINATOR_DONE`, do not stop with a plan — perform the review/verification/decision loop in the same turn.
 
 ### Follow-up / fix loops
 

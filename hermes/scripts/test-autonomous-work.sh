@@ -877,6 +877,32 @@ else
   fail "hot-swap execution failed"
 fi
 
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 36: executing_task prompt forbids stopping after Marinator completion ===\n'
+run_prompts_test "
+import tempfile
+window = {
+    'window_id': 'AW-20260601-001',
+    'end_at': 9999999999,
+    'prompt': 'test',
+    'repo': '/tmp/test-repo',
+}
+tmpdir = tempfile.mkdtemp(prefix='aw-test-')
+result = prompts_mod.build_step_prompt(window, tmpdir, 'executing_task', selected_item='BL-001')
+content = open(result['prompt_path']).read()
+required = [
+    'If Marinator is still running',
+    'If Marinator has completed, failed, timed out, stalled, or been killed',
+    'do the review now',
+    'Do not end the turn with a plan to review later',
+    'process.wait',
+]
+missing = [text for text in required if text not in content]
+assert not missing, f'missing mandatory Marinator completion guard text: {missing}'
+print('OK: executing_task prompt distinguishes running vs completed and forbids review-later stop')
+" && pass || fail "executing_task Marinator completion guard missing"
+
 printf '\n'
 printf '=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"
