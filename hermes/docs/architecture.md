@@ -116,7 +116,7 @@ OpenClaw shells out to `opencode run` via bash scripts with complex timeout/retr
 - Spawns `marinator-worker.sh` which runs OpenCode in a separate process group with stdout/stderr capture, progress monitoring, stall detection (without auto-kill), and marker line emission
 - Live sessions wake via `notify_on_complete=true`; headless sessions continue via `hermes chat --resume`
 - The orchestrator reviews results, decides accept/fix/wait/kill/block, and verifies user-visible outcomes
-- Optional per-minute progress reports via Telegram when explicitly requested
+- Per-minute progress reports via Telegram are enabled by default for debug visibility unless the user explicitly disables them; these are observability only, not acceptance or completion signals
 - Follow-up/fix loops set `is_follow_up: true`; the plugin resolves the previous OpenCode session internally and keeps raw session ids out of the LLM-facing API
 
 Kanban-backed Marinator and cron-bound session continuation are deferred for the MVP.
