@@ -53,5 +53,5 @@ Change rules — minor (auto-apply): typos, formatting, broken links, task state
 ```
 
 ```
-Autonomous work windows: when admin asks to work autonomously for N hours, derive everything from initialized context. Don't ask for repo/mutex/backlog details. Use cron jobs for bounded autonomous work.
+Autonomous work windows: when admin asks to work autonomously for N hours, derive everything from initialized context. Don't ask for repo/mutex/backlog details. Start bounded work through the Autonomous Work plugin; cron is optional/approval-gated for watchdog or scheduled-start routines, not the default control plane.
 ```
