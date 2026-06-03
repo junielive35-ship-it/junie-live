@@ -59,7 +59,7 @@ This directory contains everything needed to run Junie Live on top of [Hermes Ag
 |---------|----------|--------|
 | Orchestration | OpenClaw agent with `AGENTS.md` workspace | Hermes profile with `SOUL.md`, memory, skills, and `HERMES.md` in the target repo |
 | Persistent context | `MEMORY.md` file in workspace | Hermes native memory (user + memory stores) |
-| Coding delegation | `opencode run` subagent via shell scripts | `delegate_task` or spawned `hermes`/`claude-code`/`codex` process |
+| Coding delegation | `opencode run` subagent via shell scripts | `marinator_delegate` supervised OpenCode worker for code-changing work; `delegate_task` only for non-code subtasks |
 | Scheduled routines | System crontab / OpenClaw cron | Hermes native cron jobs |
 | Skills | OpenClaw skill files in workspace | Hermes skills (first-class, auto-loaded by matching) |
 | Repo hygiene | Shell scripts checking for workspace artifacts | Single tracked file in the target repo (`HERMES.md`); all other state under `~/.hermes/` |
