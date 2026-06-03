@@ -59,6 +59,21 @@ else
   fail "hire-junie.sh must map /start to /steer initialization, not session reset"
 fi
 
+log "dump-junie.sh seed installation regression guard"
+# dump-junie.sh lives in initialization/scripts/ so the normal seed copy
+# (cp -a "$SEED_DIR/." "$PROFILE_DIR/") installs it into the profile at
+# $PROFILE_DIR/scripts/dump-junie.sh, making it runnable on a live VM
+# without the repo checkout.
+if [[ -f "$ROOT/initialization/scripts/dump-junie.sh" ]]; then
+  [[ -x "$ROOT/initialization/scripts/dump-junie.sh" ]] || \
+    fail "initialization/scripts/dump-junie.sh exists but is not executable"
+else
+  fail "initialization/scripts/dump-junie.sh is missing"
+fi
+# SEED_OWNED_PATHS must include 'scripts' so a re-hire cleans and reinstalls it
+grep -qE '^\s+scripts\s*$' "$ROOT/scripts/hire-junie.sh" || \
+  fail "hire-junie.sh SEED_OWNED_PATHS must include 'scripts'"
+
 log "variant-minimal regression guard"
 offenders=$(grep -rn --exclude-dir=.git -- '--variant minimal' . 2>/dev/null | \
   grep -v '^\./docs/implementation-status.md:' | \
@@ -78,7 +93,8 @@ for required_dir in \
     initialization/plugins/marinator-delegation \
     initialization/plugins/marinator-delegation/scripts \
     initialization/plugins/autonomous-work \
-    initialization/plugins/autonomous-work/scripts; do
+    initialization/plugins/autonomous-work/scripts \
+    initialization/scripts; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
 done
 
@@ -90,6 +106,7 @@ for required_file in \
     initialization/docs/seed-HERMES.md \
     initialization/docs/tools.md \
     initialization/plugins/marinator-delegation/plugin.yaml \
+    initialization/scripts/dump-junie.sh \
     initialization/plugins/marinator-delegation/__init__.py \
     initialization/plugins/marinator-delegation/tools.py \
     initialization/plugins/marinator-delegation/runner.py \
@@ -183,6 +200,9 @@ for plugin_py in initialization/plugins/*/*.py; do
   [[ -f "$plugin_py" ]] || continue
   python3 -m py_compile "$plugin_py" || fail "python syntax error in $plugin_py"
 done
+
+log "dump/rehire disaster recovery tests"
+"$ROOT/scripts/test-dump-rehire.sh" || fail "dump/rehire disaster recovery tests failed"
 
 log "autonomous-work plugin tests"
 "$ROOT/scripts/test-autonomous-work.sh" || fail "autonomous-work plugin tests failed"
