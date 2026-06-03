@@ -97,30 +97,30 @@ Junie will follow the initialization workflow, inspect the project, ask question
 Setup and initialization do not install cron jobs by default. Autonomous-work
 windows are normally started by owner/admin request through Telegram or another
 Hermes session. Add recurring Hermes cron jobs only after explicit owner/admin
-approval, because watchdog, health-check, and scheduled overnight-start jobs
+decision, because watchdog, health-check, and scheduled overnight-start jobs
 change Junie's operational behavior.
 
-### Watchdog (optional, approval-gated)
+### Watchdog (optional, operator-configured)
 
-If approved, create from a `hermes -p junie-live` session:
+If enabled, create from a `hermes -p junie-live` session:
 ```
 Create a cron job named "junie-watchdog" that runs every 15 minutes.
 It should check: code mutex state (stale holders), stuck backlog items,
 recent progress. If something looks wrong, report via Telegram.
 ```
 
-### Health check (optional, approval-gated)
+### Health check (optional, operator-configured)
 
-If approved:
+If enabled:
 ```
 Create a daily cron job named "junie-health-check" at 9am.
 It should check: backlog status, open PRs, pending decisions.
 Report a brief summary via Telegram.
 ```
 
-### Overnight controller (optional, approval-gated, disabled by default)
+### Overnight controller (optional, disabled by default)
 
-Only enable after explicit admin approval:
+Only enable after explicit admin decision:
 ```
 Create a cron job named "junie-overnight" at 1am, paused.
 It should run an autonomous work window selecting and completing

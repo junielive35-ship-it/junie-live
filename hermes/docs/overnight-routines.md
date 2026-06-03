@@ -77,7 +77,7 @@ outcomes, final reports, orchestrator review, verification evidence, or git
 status checks.
 
 Cron is not the primary control plane. Owner/admin-requested AW windows are the
-default. Hermes cron may be used only after explicit approval for:
+default. Hermes cron may be used only after explicit owner/admin decision for:
 - **Watchdog** (optional, every 15 min): independently monitors code mutex,
   stuck items, and routine health. Reports to the owner.
 - **Scheduled overnight start** (optional, deferred): a cron job that calls

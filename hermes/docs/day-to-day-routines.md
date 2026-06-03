@@ -62,7 +62,7 @@ Track CI status, respond to reviews, delegate fixes, detect stale PRs, communica
 ## Optional scheduled routines (via Hermes cron)
 
 Setup does not install these routines by default. Create them only after explicit
-owner/admin approval, using Hermes cron rather than shell crontab entries.
+owner/admin decision, using Hermes cron rather than shell crontab entries.
 
 ### 5. Watchdog (optional, every 15 minutes)
 
