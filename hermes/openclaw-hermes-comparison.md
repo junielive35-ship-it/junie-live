@@ -123,18 +123,22 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 
 The MVP priority is the autonomous ownership loop: strategy → backlog → mutex → delegation → review → commit → reflection.
 
-**OpenClaw** has the advantage here:
-- The shell scripts implementing the autonomous loop already exist and are tested
-- The overnight controller, watchdog, and report are implemented
-- `verify.sh` validates the system end-to-end
-- Deterministic orchestration means predictable behavior during the critical MVP phase
+**Hermes** is the current MVP path:
+- The Autonomous Work plugin provides durable bounded windows and deterministic phase artifacts
+- Marinator provides the supervised OpenCode boundary for code-changing work
+- `./hermes/scripts/verify.sh` now covers autonomous-work, Marinator delegation, dump/rehire, and initialization-gate regressions
+- Profile memory/docs keep the strategic state native to Hermes instead of relying on OpenClaw workspace files
 
-**Hermes** requires:
-- The autonomous work loop to be orchestrated by the LLM (less predictable)
-- Real-world testing to validate that cron + delegate_task + memory works reliably for multi-hour autonomous windows
-- Building confidence that the LLM won't make bad orchestration decisions
+**OpenClaw** remains useful as historical context and a benchmark:
+- Its shell scripts are still a reference for deterministic controller/watchdog/report behavior
+- Its broader test suite is a reminder to keep expanding Hermes regression coverage where it protects real MVP risks
 
-**Verdict for MVP**: OpenClaw has a head start. The deterministic scripts are valuable for the first real autonomous runs.
+**Remaining Hermes MVP risk**:
+- Sustained-load confidence is still developing for long autonomous windows
+- Cron watchdog/health jobs are optional and approval-gated, not installed by default
+- The AW plugin + Marinator + memory/docs loop needs continued real-world runs and regression coverage
+
+**Verdict for MVP**: continue stabilizing the Hermes-native AW + Marinator path. Use OpenClaw as a comparison baseline, not as the recommended runtime for new Junie Live MVP work.
 
 ### For long-term product vision
 
@@ -161,7 +165,7 @@ The long-term vision is a persistent senior-engineer-style agent with product ow
 | Capability | Better platform | Why |
 | --- | --- | --- |
 | Deterministic overnight loops | OpenClaw | Shell scripts are predictable |
-| Flexible coding delegation | Hermes | Any model, any tool, delegate_task |
+| Flexible coding delegation | Hermes | Marinator boundary for code changes; native subagents for non-code work |
 | Strategic memory | Hermes | Auto-injected, always present |
 | Self-improvement | Hermes | Skills, memory, session_search |
 | Team communication | Hermes | Multi-platform gateway |
@@ -170,18 +174,18 @@ The long-term vision is a persistent senior-engineer-style agent with product ow
 | Setup simplicity | Hermes | Profile + persona + skills |
 | Test coverage | OpenClaw | 2400-line verify.sh |
 | Provider flexibility | Hermes | 20+ providers |
-| Autonomous work reliability | OpenClaw (currently) | Deterministic controller loop |
+| Autonomous work reliability | Hermes path under active validation | AW plugin state machine plus Marinator artifacts; OpenClaw remains a deterministic benchmark |
 
 ## 4. Recommendation
 
-**Short-term**: Use the OpenClaw implementation for the first real autonomous runs. Its deterministic scripts and comprehensive tests reduce risk during MVP validation.
+**Short-term**: use the Hermes-native implementation as the active MVP path: owner/admin-triggered Autonomous Work windows, Marinator for code-changing work, profile memory/docs for strategic context, and repo verification before commits. Keep OpenClaw as a benchmark for deterministic behavior and test coverage.
 
-**Medium-term**: Run both implementations in parallel on a low-stakes project. Compare:
-- Autonomous work reliability (does Hermes's LLM-driven loop produce equivalent outcomes?)
+**Medium-term**: keep validating Hermes on low-stakes autonomous windows. Compare against OpenClaw's historical behavior where useful:
+- Autonomous work reliability (does the AW plugin + Marinator loop produce equivalent or better outcomes?)
 - Token cost (Hermes orchestration costs tokens; OpenClaw orchestration is free)
 - Maintainability (how easy is it to fix issues in each?)
 - Adaptability (how easy is it to add new behaviors?)
 
-**Long-term**: Migrate to Hermes if the LLM-driven orchestration proves reliable. The flexibility, extensibility, and self-improvement capabilities are better aligned with the Junie Live vision. Consider porting the most valuable shell-script logic into Hermes skills or `no_agent` cron scripts as a hybrid approach.
+**Long-term**: keep the product centered on Hermes if the AW + Marinator loop continues to prove reliable. The flexibility, extensibility, and self-improvement capabilities are better aligned with the Junie Live vision. Port only the most valuable deterministic lessons from OpenClaw into Hermes-native plugins, skills, tests, or explicitly approved cron jobs.
 
-**Hybrid approach** (recommended): Use Hermes as the primary platform with targeted shell scripts for critical deterministic paths. Hermes supports `no_agent` cron jobs that run scripts without an LLM, and the `terminal` tool can execute shell scripts. The best of both worlds: Hermes for orchestration + communication + memory, shell scripts for predictable autonomous loops.
+**Cron stance**: do not use cron as the primary control plane. Owner/admin-triggered AW windows are the default. Hermes cron can be added later for watchdog, health, or scheduled-start routines only after explicit approval.
