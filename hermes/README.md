@@ -33,6 +33,22 @@ Hermes-native implementation of [Junie Live](../idea.md): a persistent, product-
 
 The hire script creates the Hermes profile, installs Junie seed files, configures Telegram DM access for the admin ID, and starts the gateway. See [docs/setup.md](docs/setup.md) for manual setup options.
 
+## Dump / rehire
+
+After hire, Junie can dump its live Hermes profile from inside the profile:
+
+```bash
+~/.hermes/profiles/junie-live/scripts/dump-junie.sh --output /tmp/junie-live.tgz
+```
+
+Restore is an operator action from this repo:
+
+```bash
+JUNIE_HERMES_ROOT=~/.hermes ./hermes/scripts/rehire-junie.sh /tmp/junie-live.tgz --profile junie-live
+```
+
+The dump includes config, `.env`, `state.db`, sessions, skills, plugins, and Junie state. `rehire-junie.sh` restores the profile and restarts the gateway without running `gateway install`.
+
 ## What is this?
 
 This directory contains everything needed to run Junie Live on top of [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) instead of OpenClaw. The behavioral contract — product ownership, strategic validation, delegation, review, reflection, autonomous work windows — stays the same. Junie Live's task-solving loop is called the **Marinator** when referring to validation/decomposition, delegation, result checking, fix requests, verification, acceptance/reporting, and reflection as one loop. The implementation leverages Hermes-native features instead of shell scripts and OpenClaw workspace conventions.
