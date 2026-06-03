@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN_DIR="$ROOT/initialization/plugins/autonomous-work"
+HOT_SWAP_SCRIPT="$ROOT/scripts/hot-swap-autonomous-work-plugin.sh"
 
 fail_count=0
 pass_count=0
@@ -828,6 +829,49 @@ if grep -A10 'return json.dumps({' "$PLUGIN_DIR/tools.py" | grep -qF 'enable_deb
   pass
 else
   fail "tools.py start return JSON missing enable_debug_messages"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 35: hot-swap script stages safely and excludes generated artifacts ===\n'
+tmp_root="$(mktemp -d)"
+cleanup_hot_swap_test() { rm -rf -- "$tmp_root"; }
+trap cleanup_hot_swap_test EXIT
+test_repo="$tmp_root/repo"
+test_profile="$tmp_root/hermes-home/profiles/junie-live"
+test_seed="$test_repo/hermes/initialization/plugins/autonomous-work"
+mkdir -p "$test_seed/__pycache__" "$test_profile/plugins/autonomous-work" "$test_profile/junie-live/state/backlog/items"
+printf 'name: autonomous-work\n' > "$test_seed/plugin.yaml"
+printf 'print("new")\n' > "$test_seed/tools.py"
+printf 'cached' > "$test_seed/__pycache__/tools.cpython-312.pyc"
+printf 'cached' > "$test_seed/tools.pyc"
+printf 'old' > "$test_profile/plugins/autonomous-work/old.py"
+printf 'state' > "$test_profile/junie-live/state/backlog/items/keep.md"
+
+if "$HOT_SWAP_SCRIPT" --repo "$test_repo" --profile-dir "$test_profile" --dry-run >/dev/null; then
+  pass
+else
+  fail "hot-swap dry-run failed"
+fi
+
+if HERMES_HOME="$test_profile" "$HOT_SWAP_SCRIPT" --repo "$test_repo" --dry-run >/dev/null; then
+  pass
+else
+  fail "hot-swap dry-run failed when HERMES_HOME points at active profile dir"
+fi
+
+if "$HOT_SWAP_SCRIPT" --repo "$test_repo" --profile-dir "$test_profile" >/dev/null; then
+  if [[ -f "$test_profile/plugins/autonomous-work/plugin.yaml" ]] && \
+     [[ -f "$test_profile/plugins/autonomous-work/tools.py" ]] && \
+     [[ ! -e "$test_profile/plugins/autonomous-work/__pycache__" ]] && \
+     [[ ! -e "$test_profile/plugins/autonomous-work/tools.pyc" ]] && \
+     [[ -f "$test_profile/junie-live/state/backlog/items/keep.md" ]] && \
+     compgen -G "$test_profile/backups/autonomous-work-hot-swap/autonomous-work-*" >/dev/null; then
+    pass
+  else
+    fail "hot-swap did not install expected files, exclude caches, preserve state, or create backup"
+  fi
+else
+  fail "hot-swap execution failed"
 fi
 
 printf '\n'
