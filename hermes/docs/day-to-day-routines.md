@@ -59,9 +59,12 @@ Responsibilities:
 
 Track CI status, respond to reviews, delegate fixes, detect stale PRs, communicate blockers, update backlog state.
 
-## Scheduled routines (via Hermes cron)
+## Optional scheduled routines (via Hermes cron)
 
-### 5. Watchdog (every 15 minutes)
+Setup does not install these routines by default. Create them only after explicit
+owner/admin approval, using Hermes cron rather than shell crontab entries.
+
+### 5. Watchdog (optional, every 15 minutes)
 
 Checks:
 - Code mutex state (stale holders)
@@ -69,7 +72,7 @@ Checks:
 - Missing progress from active work
 - Broken routine state
 
-### 6. Health check (daily)
+### 6. Health check (optional, daily)
 
 Reports:
 - Backlog summary (queued, in-progress, blocked)

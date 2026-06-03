@@ -92,28 +92,33 @@ Send `/start` to the Telegram bot, then provide:
 
 Junie will follow the initialization workflow, inspect the project, ask questions, and build its durable context.
 
-## Post-Setup: Create Cron Jobs
+## Post-Setup: Optional Cron Jobs
 
-After initialization, create the recommended cron jobs from a Hermes session:
+Setup and initialization do not install cron jobs by default. Autonomous-work
+windows are normally started by owner/admin request through Telegram or another
+Hermes session. Add recurring Hermes cron jobs only after explicit owner/admin
+approval, because watchdog, health-check, and scheduled overnight-start jobs
+change Junie's operational behavior.
 
-### Watchdog (recommended, runs every 15 minutes)
+### Watchdog (optional, approval-gated)
 
-From a `hermes -p junie-live` session:
+If approved, create from a `hermes -p junie-live` session:
 ```
 Create a cron job named "junie-watchdog" that runs every 15 minutes.
 It should check: code mutex state (stale holders), stuck backlog items,
 recent progress. If something looks wrong, report via Telegram.
 ```
 
-### Health check (daily)
+### Health check (optional, approval-gated)
 
+If approved:
 ```
 Create a daily cron job named "junie-health-check" at 9am.
 It should check: backlog status, open PRs, pending decisions.
 Report a brief summary via Telegram.
 ```
 
-### Overnight controller (disabled by default)
+### Overnight controller (optional, approval-gated, disabled by default)
 
 Only enable after explicit admin approval:
 ```

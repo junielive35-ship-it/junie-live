@@ -118,7 +118,7 @@ hermes/
 
 6. **Delegation** — Coding work is delegated via `marinator_delegate` (the Marinator code-delegation tool). The orchestrator never codes directly. Non-code subtasks may use `delegate_task` instead.
 
-7. **Cron** — Hermes cron jobs replace shell crontab entries. Watchdog, health checks, and overnight routines are native cron jobs created during setup.
+7. **Cron** — Hermes cron jobs replace shell crontab entries when recurring routines are explicitly approved. Setup does not install watchdog, health-check, or overnight-start jobs by default; owner/admin-triggered autonomous-work windows are the default control plane.
 
 8. **Telegram** — Hermes gateway provides native Telegram integration with DM allowlisting, the same as the OpenClaw version.
 
