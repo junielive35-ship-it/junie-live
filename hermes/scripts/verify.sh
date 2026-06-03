@@ -207,6 +207,9 @@ log "dump/rehire disaster recovery tests"
 log "autonomous-work plugin tests"
 "$ROOT/scripts/test-autonomous-work.sh" || fail "autonomous-work plugin tests failed"
 
+log "marinator delegation regression tests"
+"$ROOT/scripts/test-marinator-delegation.sh" || fail "marinator delegation regression tests failed"
+
 log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
 
