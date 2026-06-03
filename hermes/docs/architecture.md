@@ -42,9 +42,9 @@ Junie Live's named task-solving loop is the **Marinator**: validate/decompose a 
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │              Hermes Cron Scheduler                     │   │
-│  │  - Watchdog (every 15min)                             │   │
-│  │  - Health check (daily)                               │   │
-│  │  - Overnight controller (on-demand)                   │   │
+│  │  - Optional watchdog (approval-gated)                  │   │
+│  │  - Optional health check (approval-gated)              │   │
+│  │  - Optional overnight controller (on-demand/default)   │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 
@@ -84,7 +84,7 @@ Hermes has two complementary context-file slots, and Junie Live uses both:
 
 Why `HERMES.md` and not `AGENTS.md` for the project-level slot: coding executors invoked by Junie (`opencode`, `codex`, `claude-code`) read `AGENTS.md` / `CLAUDE.md` / `.cursorrules`. They do **not** read `HERMES.md`. Putting the orchestrator-only protocol in `HERMES.md` keeps the executor sessions clean and prevents the orchestrator's challenge/delegation/mutex rules from contaminating coding workers. A target project's own `AGENTS.md` (if any) coexists with `HERMES.md` without conflict.
 
-Cron jobs use the `workdir` parameter to set the target repo as cwd, which loads `HERMES.md` automatically.
+Approved cron jobs use the `workdir` parameter to set the target repo as cwd, which loads `HERMES.md` automatically. Setup does not install recurring cron jobs by default.
 
 ### 3. Memory instead of MEMORY.md
 

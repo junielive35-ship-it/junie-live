@@ -171,7 +171,7 @@ Files that survive after initialization (`HERMES.md`, `AGENTS.md`, memory, long-
 - **Skills**: Your installed skills handle specific workflows (task intake, coding decomposition, implementation review, task reflection, autonomous work windows). They auto-load when relevant. Use `skills_list` to see them.
 - **Profile docs**: Stored at `~/.hermes/profiles/<profile>/docs/`. Use `read_file` / `write_file` to manage.
 - **AGENTS.md / HERMES.md**: Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory into the system prompt, walking up to the git root. Once you copy `seed-HERMES.md` to the target repo as `HERMES.md`, it will be active for all orchestrator work in that repo. Hermes does NOT auto-load `AGENTS.md` into Junie's prompt — that slot is reserved for coding executors (opencode, codex, claude-code), which is why Junie uses `HERMES.md` instead.
-- **Cron jobs**: After initialization, consider setting up recommended cron jobs (watchdog, health check) via the `cronjob` tool.
+- **Cron jobs**: Setup does not install recurring cron jobs by default. After initialization, consider watchdog, health-check, or scheduled-start jobs only with explicit owner/admin approval, using the Hermes `cronjob` tool.
 - **Session continuity**: Hermes sessions persist. Use `session_search` to recall past context across sessions.
 
 ## Required profile config during initialization

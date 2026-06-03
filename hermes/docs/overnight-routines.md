@@ -10,7 +10,8 @@ An administrator should be able to say "work overnight on backlog items" immedia
 
 ### 1. Watchdog
 
-Runs every 15 minutes via Hermes cron. Independently monitors:
+When explicitly approved and enabled, runs every 15 minutes via Hermes cron.
+Setup does not install it by default. It independently monitors:
 
 - Code mutex held past stale threshold without recent progress
 - Stuck backlog items (in_progress without active owner)
@@ -24,7 +25,7 @@ If issues are found, reports to the owner via Telegram.
 Starts a bounded autonomous work window. Can be triggered by:
 
 - Admin message in Telegram ("work autonomously for 9 hours")
-- Hermes cron (scheduled overnight work, disabled by default)
+- Hermes cron (scheduled overnight work, optional and disabled by default)
 - Manual `hermes -p junie-live chat -q '...'` invocation
 
 The controller:
@@ -75,9 +76,10 @@ Those messages improve operator visibility only: they do not replace backlog
 outcomes, final reports, orchestrator review, verification evidence, or git
 status checks.
 
-Cron is not the primary control plane. Hermes cron may be used only for:
-- **Watchdog** (every 15 min): independently monitors code mutex, stuck items,
-  and routine health. Reports to the owner.
+Cron is not the primary control plane. Owner/admin-requested AW windows are the
+default. Hermes cron may be used only after explicit approval for:
+- **Watchdog** (optional, every 15 min): independently monitors code mutex,
+  stuck items, and routine health. Reports to the owner.
 - **Scheduled overnight start** (optional, deferred): a cron job that calls
   `autonomous_work_start` at a specific time.
 
