@@ -6,7 +6,7 @@ This file is temporary but durable across sessions. Follow it until initializati
 
 When initialization is complete, delete this file and update your memory to mark initialization as done. Do not ask the owner to approve onboarding or confirm that initialization is complete. The owner is not responsible for reviewing Junie Live internals. Escalate only when a blocking contradiction, missing authority decision, or unreconcilable project fact prevents safe initialization.
 
-Important: saying "initialization done" is a completion guarantee, not a progress marker. It means the profile now contains a sufficient, internally consistent operating model of the assigned role, project strategy, architecture, implementation status, design choices, tools, authority boundaries, and owner preferences — grounded in the target repo and current runtime state. If that is not true yet, initialization is not complete.
+Important: saying "initialization done" is a completion guarantee, not a progress marker. It means the profile now contains a sufficient, internally consistent operating model of the assigned role, project strategy/target-state, architecture, implementation status, design choices, tools, authority boundaries, and owner preferences — grounded in the target repo and current runtime state. Junie must be able to explain how to identify the next useful piece of work from current project state, initialized strategy, and available context (repo, admin history, owner preferences, conversation). If that is not true yet, initialization is not complete.
 
 ## Initialization mode
 
@@ -45,6 +45,8 @@ Before initialization is complete, collect or infer these inputs:
 
 If any required input is missing and cannot be safely inferred, ask one concise question that unblocks initialization.
 
+If docs, backlog, or status files are absent, infer what you can from repo structure, code, tests, git history, build/CI configuration, and available admin/owner communication. Do not use "no docs" as a reason to declare nothing useful can be identified — a senior developer can derive actionable understanding from the repo alone. Ask focused strategy questions only when the repo + history + preferences together provide insufficient grounds for safe autonomous work.
+
 ## Initialization workflow
 
 1. Inspect your Hermes profile setup:
@@ -64,18 +66,20 @@ If any required input is missing and cannot be safely inferred, ask one concise 
    - **operational specifics** (capture for `docs/tools.md`): exact install / build / test / lint / run-locally commands, default branch name, branch-naming convention, PR target, required CI checks, deployment command, rollback procedure, approval requirements, issue tracker URL, analytics/error-reporting dashboards;
    - current git state.
 4. Build an initial project model:
-   - product purpose;
+   - product purpose, strategy, and target-state goals;
    - owned area;
    - architecture summary;
    - important constraints;
    - known risks and unknowns;
-   - current task/backlog/PR state, if discoverable.
+   - current task/backlog/PR state, if discoverable;
+   - how to recognize useful work from current repo state vs strategy/target-state.
 5. Build a current-status model before normal work:
    - distinguish implemented behavior, partial implementation, contract-only/aspirational docs, deferred work, and unknowns;
    - connect current work to the project strategy and active hypotheses;
    - record where future sessions can verify that status;
    - if project docs describe capabilities that are not implemented, label them clearly instead of treating the docs as current reality;
-   - reconcile profile status docs with the target repo code and repo docs before completion. A post-initialization task such as "reconcile profile status docs" is evidence that initialization is not complete.
+   - reconcile profile status docs with the target repo code and repo docs before completion. A post-initialization task such as "reconcile profile status docs" is evidence that initialization is not complete;
+   - compare current repo state against initialized strategy/target-state to identify gaps that suggest useful work.
 6. Extract cross-cutting invariants and bypass risks from target project docs, user/team instructions, and existing workflow rules:
    - identify rules that should apply across future features, triggers, entrypoints, or operational paths;
    - name the shared loop or protocol that preserves each invariant;
@@ -114,11 +118,11 @@ If any required input is missing and cannot be safely inferred, ask one concise 
     - every process-affecting contradiction (spec↔implementation, spec↔spec, or comments↔code) has an explicit owner-confirmed resolution: fixed with approval, or accepted as a known deviation. Listing unresolved process-affecting contradictions in the completion report is not sufficient to finish initialization, and contradictions must not be fixed silently before the owner confirms;
     - owner operating preferences, durable product principles, and autonomous/proactive ownership model are recorded;
     - memory has the strategic compass, profile docs have the detailed operating model;
-    - profile docs contain a complete enough model of the owned area to support normal work: role, strategy, architecture, design choices, implementation status, verification approach, approval boundaries, and operational commands are all captured directly or by precise links to repo docs;
+    - profile docs contain a complete enough model of the owned area to support normal work: role, strategy/target-state, how to identify next useful work from current state vs strategy, architecture, design choices, implementation status, verification approach, approval boundaries, and operational commands are all captured directly or by precise links to repo docs;
     - profile docs are reconciled against the current target repo code and docs. They must not contain stale seed examples, generic placeholders, or TODOs for facts that can be recovered from the repo, profile config, installed skills, scripts, git metadata, or existing sessions;
-    - `docs/strategy.md` states product purpose, owned area, current strategy, goals/non-goals, priorities/tradeoffs, risks, proactive ownership model, and open questions;
-    - `docs/architecture.md` states system overview, key components, important flows, constraints, verification approach, operational notes, and unknowns, with repo-doc references instead of duplicated long-form architecture text where appropriate;
-    - `docs/implementation-status.md` contains a project-specific capability/status matrix with evidence, gaps, and next actions; it must not contain example rows;
+    - `docs/strategy.md` states product purpose, owned area, current strategy, target-state goals, how to identify next useful work from current state vs strategy, goals/non-goals, priorities/tradeoffs, risks, proactive ownership model, and open questions;
+    - `docs/architecture.md` (optional — useful when the repo has meaningful architecture to capture; may be omitted with a note if the project is simple and architecture is self-evident) states system overview, key components, important flows, constraints, verification approach, operational notes, and unknowns, with repo-doc references instead of duplicated long-form architecture text where appropriate;
+    - `docs/implementation-status.md` (optional — useful for tracking complex capability matrices; may be omitted if status is self-evident from the repo) contains a project-specific capability/status matrix with evidence, gaps, and next actions, if such tracking adds value. Implementation status is an input for deriving work, not the sole source of truth — empty backlog or no status matrix is not evidence that work is exhausted;
     - `docs/design-decisions.md` records accepted durable decisions discovered during initialization, or says none were found yet and where future decisions should be recorded;
     - any remaining TODO/unknown in profile docs is explicitly labeled as an external-access or owner-decision dependency, with why it is non-blocking. Do not use a later backlog/autonomous-work item to finish core initialization understanding;
     - `docs/tools.md` is populated with the operational cheat-sheet (dev commands, git conventions, deployment, escalation contacts). Do not delete INITIALIZATION.md while required seed TODOs remain for project path, mutex scope/escalation, or core dev commands (install/build/test/lint), unless those fields are marked N/A with a one-line reason or listed as non-blocking unknowns where allowed;

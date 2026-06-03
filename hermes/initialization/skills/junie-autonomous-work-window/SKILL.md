@@ -37,6 +37,15 @@ Before starting:
 4. Check the code mutex state. If held, do not start.
 5. Never work on `main` branch. Verify branch before starting.
 
+## Autonomous work derivation
+
+During the autonomous work window, the system derives candidates by comparing current project state against the initialized strategy/target-state:
+
+- The backlog is a cache/queue of known items, not an exhaustive inventory of possible work. An empty backlog does not mean work is exhausted.
+- Docs, status files, and existing backlog items are optional inputs. If they exist, use them; if not, inspect repo structure, code, tests, git history, and the admin/owner prompt.
+- The primary derivation mechanism: identify gaps between current repo state and the target-state defined during initialization. Each safe, repo-visible gap is a candidate.
+- Stop/finalize only after attempting to derive work from all available sources (strategy/state comparison, owner prompt, conversation signals, docs, backlog). If no safe repo-visible work can be derived, report that clearly instead of doing invisible housekeeping.
+
 ## Implementation
 
 Use the Autonomous Work Window plugin tools:
