@@ -335,11 +335,13 @@ else
   log "  WARNING: plugins/autonomous-work not found in seed; skipping plugin setup"
 fi
 
-# ── Step 5: Configure Telegram + forward provider keys into profile .env ──
+# ═══════════════════════════════════════════════════════════════════
+#  Step 5: Secrets / env — Telegram, provider keys, Slack tokens
+# ═══════════════════════════════════════════════════════════════════
+#
 # Junie runs under its own Hermes profile, which loads ONLY
 # $HERMES_HOME/profiles/<profile>/.env (not the root $HERMES_HOME/.env).
-# So we have to copy any LLM provider keys the user already has at root
-# into the junie-live .env, or the agent can't authenticate to its model.
+# So we copy credentials into the junie-live .env here.
 #
 # The Telegram home channel for a DM equals the user's Telegram ID, so we
 # default it to the admin's ID — that makes cron deliveries land in the
@@ -394,6 +396,35 @@ if [[ "$FORWARD_KEYS" -eq 1 && -f "$ROOT_ENV" ]]; then
       forwarded_names+=("$key")
     fi
   done
+fi
+
+# ── Slack tokens from ~/slack-tokens ──
+SLACK_TOKENS_SOURCE="$(getent passwd "$(id -u)" | cut -d: -f6)/slack-tokens"
+if [[ -f "$SLACK_TOKENS_SOURCE" ]]; then
+  SLACK_FORWARDABLE_KEYS=(
+    SLACK_BOT_TOKEN
+    SLACK_APP_TOKEN
+    SLACK_ALLOWED_USERS
+    SLACK_ALLOW_ALL_USERS
+    SLACK_HOME_CHANNEL
+    SLACK_HOME_CHANNEL_NAME
+    SLACK_ALLOWED_CHANNELS
+  )
+  slack_count=0
+  slack_names=()
+  echo "" >> "$PROFILE_ENV"
+  echo "# Slack tokens from $SLACK_TOKENS_SOURCE" >> "$PROFILE_ENV"
+  for key in "${SLACK_FORWARDABLE_KEYS[@]}"; do
+    line="$(grep -E "^${key}=." "$SLACK_TOKENS_SOURCE" | head -n1 || true)"
+    if [[ -n "$line" ]]; then
+      echo "$line" >> "$PROFILE_ENV"
+      slack_count=$((slack_count + 1))
+      slack_names+=("$key")
+    fi
+  done
+  if [[ "$slack_count" -gt 0 ]]; then
+    log "  Forwarded $slack_count Slack credential(s) from $SLACK_TOKENS_SOURCE: ${slack_names[*]}"
+  fi
 fi
 
 log "  Telegram configured (DM restricted to admin $ADMIN_TELEGRAM_ID; home channel set to admin DM)"
