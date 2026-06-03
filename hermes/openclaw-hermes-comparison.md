@@ -135,7 +135,7 @@ The MVP priority is the autonomous ownership loop: strategy → backlog → mute
 
 **Remaining Hermes MVP risk**:
 - Sustained-load confidence is still developing for long autonomous windows
-- Cron watchdog/health jobs are optional and approval-gated, not installed by default
+- Cron watchdog/health jobs are optional and operator-configured, not installed by default
 - The AW plugin + Marinator + memory/docs loop needs continued real-world runs and regression coverage
 
 **Verdict for MVP**: continue stabilizing the Hermes-native AW + Marinator path. Use OpenClaw as a comparison baseline, not as the recommended runtime for new Junie Live MVP work.
@@ -188,4 +188,4 @@ The long-term vision is a persistent senior-engineer-style agent with product ow
 
 **Long-term**: keep the product centered on Hermes if the AW + Marinator loop continues to prove reliable. The flexibility, extensibility, and self-improvement capabilities are better aligned with the Junie Live vision. Port only the most valuable deterministic lessons from OpenClaw into Hermes-native plugins, skills, tests, or explicitly approved cron jobs.
 
-**Cron stance**: do not use cron as the primary control plane. Owner/admin-triggered AW windows are the default. Hermes cron can be added later for watchdog, health, or scheduled-start routines only after explicit approval.
+**Cron stance**: do not use cron as the primary control plane. Owner/admin-triggered AW windows are the default. Hermes cron can be added later for watchdog, health, or scheduled-start routines only after explicit owner/admin decision.

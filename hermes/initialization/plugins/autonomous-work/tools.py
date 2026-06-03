@@ -573,7 +573,7 @@ def _apply_transitions(
                 "selected_item_started_at": None,
             })
             outcome = terminal_outcome.get("outcome", "done")
-            if outcome in ("blocked", "failed", "needs_approval"):
+            if outcome in ("blocked", "failed", "needs_approval", "deferred"):
                 blocked = window.get("blocked_items", [])
                 blocked.append(terminal_outcome)
                 state.update_window(window_path, {"blocked_items": blocked})
@@ -831,7 +831,7 @@ def _parse_outcome_from_text(text: str) -> Optional[str]:
     lines = text.strip().splitlines()
     for line in lines:
         stripped = line.strip().lower()
-        for outcome in ("done", "blocked", "needs_approval", "failed", "skipped"):
+        for outcome in ("done", "blocked", "deferred", "needs_approval", "failed", "skipped"):
             if stripped.startswith(f"outcome: {outcome}") or stripped == outcome:
                 return outcome
             if stripped.startswith(f"outcome_status={outcome}"):

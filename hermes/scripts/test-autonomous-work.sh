@@ -394,10 +394,13 @@ import os, tempfile
 # Outcome parsing
 assert tools_mod._parse_outcome_from_text('outcome: done') == 'done'
 assert tools_mod._parse_outcome_from_text('outcome: blocked') == 'blocked'
+assert tools_mod._parse_outcome_from_text('outcome: deferred') == 'deferred'
 assert tools_mod._parse_outcome_from_text('outcome: failed') == 'failed'
 assert tools_mod._parse_outcome_from_text('outcome: needs_approval') == 'needs_approval'
 assert tools_mod._parse_outcome_from_text('outcome: skipped') == 'skipped'
 assert tools_mod._parse_outcome_from_text('outcome_status=done') == 'done'
+assert tools_mod._parse_outcome_from_text('outcome_status=deferred') == 'deferred'
+assert tools_mod._parse_outcome_from_text('outcome_status: deferred') == 'deferred'
 assert tools_mod._parse_outcome_from_text('random text') is None
 
 # Candidates detection with selection.md

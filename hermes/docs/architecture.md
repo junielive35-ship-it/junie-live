@@ -41,10 +41,10 @@ Junie Live's named task-solving loop is the **Marinator**: validate/decompose a 
 │     └───────────────┘     └────────────────────┘            │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │              Hermes Cron Scheduler                     │   │
-│  │  - Optional watchdog (approval-gated)                  │   │
-│  │  - Optional health check (approval-gated)              │   │
-│  │  - Optional overnight controller (on-demand/default)   │   │
+│  │              Hermes Cron Scheduler                   │   │
+│  │  - Optional watchdog (operator-configured)           │   │
+│  │  - Optional health check (operator-configured)       │   │
+│  │  - Optional overnight controller (on-demand/default) │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 
