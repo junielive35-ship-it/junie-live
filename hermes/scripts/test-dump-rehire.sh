@@ -114,24 +114,12 @@ echo "1234" > "$PROFILE_DIR/gateway.pid"
 # ── Runtime manifest setup for wheel artifact tests ──
 RUNTIME_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
 mkdir -p "$RUNTIME_MANIFEST_DIR"
-export ROOT RUNTIME_MANIFEST_DIR
-python3 <<'PYRT'
-import json, os
-manifest = {
-    "package": "junie-runtime",
-    "module": "junie_runtime",
-    "version": "0.1.0",
-    "source_type": "path",
-    "source_path": os.path.join(os.environ['ROOT'], 'junie_runtime'),
-    "runtime_path": "hermes/junie_runtime",
-    "installed_python": "python3",
-    "installed_at": "2026-01-01T00:00:00Z"
-}
-p = os.path.join(os.environ['RUNTIME_MANIFEST_DIR'], 'junie_runtime.json')
-with open(p, 'w') as f:
-    json.dump(manifest, f, indent=2)
-print('  Runtime manifest created for test')
-PYRT
+HELPER="$ROOT/initialization/scripts/junie-runtime-artifact.py"
+python3 "$HELPER" write-install-manifest \
+  --runtime-dir "$ROOT/junie_runtime" \
+  --repo-root "$ROOT" \
+  --manifest-dir "$RUNTIME_MANIFEST_DIR" \
+  --installed-python "python3" >/dev/null
 
 # ── Helper ──
 archive_contents() {
@@ -580,13 +568,13 @@ OVERRIDE_DUMP="$TMP/override-dump.tgz"
 mkdir -p "$OVERRIDE_HOME/profiles/$PROFILE"
 echo "config: override" > "$OVERRIDE_HOME/profiles/$PROFILE/config.yaml"
 # Create runtime manifest for override profile
-mkdir -p "$OVERRIDE_HOME/profiles/$PROFILE/junie-live/runtime"
-python3 -c "
-import json, os
-d = os.path.join('$OVERRIDE_HOME', 'profiles', '$PROFILE', 'junie-live', 'runtime')
-os.makedirs(d, exist_ok=True)
-json.dump({'source_path': '$ROOT/junie_runtime', 'version': '0.1.0', 'installed_python': 'python3'}, open(os.path.join(d, 'junie_runtime.json'), 'w'), indent=2)
-"
+OVERRIDE_MANIFEST_DIR="$OVERRIDE_HOME/profiles/$PROFILE/junie-live/runtime"
+mkdir -p "$OVERRIDE_MANIFEST_DIR"
+python3 "$ROOT/initialization/scripts/junie-runtime-artifact.py" write-install-manifest \
+  --runtime-dir "$ROOT/junie_runtime" \
+  --repo-root "$ROOT" \
+  --manifest-dir "$OVERRIDE_MANIFEST_DIR" \
+  --installed-python "python3" >/dev/null
 
 rc=0
 JUNIE_HERMES_ROOT="$OVERRIDE_HOME" \
@@ -649,8 +637,8 @@ PROFILE_LOCAL_SCRIPTS_DIR="$FAKE_HERMES_HOME/profiles/$PROFILE/scripts"
 mkdir -p "$PROFILE_LOCAL_SCRIPTS_DIR"
 cp "$DUMP_SCRIPT" "$PROFILE_LOCAL_SCRIPTS_DIR/dump-junie.sh"
 chmod +x "$PROFILE_LOCAL_SCRIPTS_DIR/dump-junie.sh"
-# Also copy runtime-paths.sh (sourced by dump-junie.sh)
-cp "$ROOT/initialization/scripts/runtime-paths.sh" "$PROFILE_LOCAL_SCRIPTS_DIR/runtime-paths.sh"
+# Also copy junie-runtime-artifact.py (called by dump-junie.sh)
+cp "$ROOT/initialization/scripts/junie-runtime-artifact.py" "$PROFILE_LOCAL_SCRIPTS_DIR/junie-runtime-artifact.py"
 
 LOCAL_DUMP_OUTPUT="$TMP/local-dump.tgz"
 rc=0
@@ -701,34 +689,11 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 35: runtime manifest includes sha256 and installed_python ===\n'
 
-# Extract manifest from archive and verify fields
-MANIFEST_CHECK="$(python3 -c "
-import json, sys, tarfile
-try:
-    tf = tarfile.open('$DUMP_OUTPUT', 'r:gz')
-    # Find manifest member regardless of ./ prefix
-    manifest_member = None
-    for m in tf.getmembers():
-        if 'junie_runtime.json' in m.name and 'runtime' in m.name:
-            manifest_member = m
-            break
-    if manifest_member is None:
-        print('ERROR: manifest member not found in archive')
-        sys.exit(1)
-    f = tf.extractfile(manifest_member)
-    m = json.load(f)
-    has_sha = bool(m.get('wheel_sha256'))
-    has_py = bool(m.get('installed_python'))
-    has_fn = bool(m.get('wheel_filename'))
-    print(f'sha256={\"yes\" if has_sha else \"no\"} installed_python={\"yes\" if has_py else \"no\"} wheel_filename={\"yes\" if has_fn else \"no\"}')
-except Exception as e:
-    print(f'ERROR: {e}')
-" 2>&1)"
-
-if echo "$MANIFEST_CHECK" | grep -q 'sha256=yes.*installed_python=yes.*wheel_filename=yes'; then
+if python3 "$HELPER" archive-manifest-summary "$DUMP_OUTPUT" wheel_sha256 installed_python wheel_filename >/dev/null 2>&1; then
   pass
   printf '  OK: manifest has sha256, installed_python, wheel_filename\n'
 else
+  MANIFEST_CHECK="$(python3 "$HELPER" archive-manifest-summary "$DUMP_OUTPUT" wheel_sha256 installed_python 2>&1)"
   fail "manifest missing required fields: $MANIFEST_CHECK"
 fi
 
@@ -753,16 +718,12 @@ if [[ "$rc" -eq 0 ]]; then
   # Verify restore manifest was written
   RESTORE_MANIFEST="$HASH_REHIRE_HOME/profiles/$PROFILE/junie-live/runtime/junie_runtime.json"
   if [[ -f "$RESTORE_MANIFEST" ]]; then
-    HAS_RESTORE="$(python3 -c "
-import json
-m = json.load(open('$RESTORE_MANIFEST'))
-print('restored_at' in m and 'restored_from_archive' in m and 'installed_python' in m)
-")"
-    if [[ "$HAS_RESTORE" == "True" ]]; then
+    if python3 "$HELPER" manifest-has-fields "$RESTORE_MANIFEST" restored_at restored_from_archive installed_python >/dev/null 2>&1; then
       pass
       printf '  OK: rehire succeeded and restore manifest has metadata\n'
     else
-      fail "restore manifest missing restore metadata"
+      HAS_RESTORE="$(python3 "$HELPER" manifest-has-fields "$RESTORE_MANIFEST" restored_at restored_from_archive installed_python 2>&1)"
+      fail "restore manifest missing restore metadata: $HAS_RESTORE"
     fi
   else
     fail "restore manifest not found at $RESTORE_MANIFEST"
@@ -780,12 +741,7 @@ mkdir -p "$CORRUPT_DIR"
 tar -xzf "$DUMP_OUTPUT" -C "$CORRUPT_DIR" 2>/dev/null
 
 # Corrupt the manifest hash
-python3 -c "
-import json
-m = json.load(open('$CORRUPT_DIR/runtime/junie_runtime.json'))
-m['wheel_sha256'] = '0000000000000000000000000000000000000000000000000000000000000000'
-json.dump(m, open('$CORRUPT_DIR/runtime/junie_runtime.json', 'w'), indent=2)
-" 2>/dev/null || true
+python3 "$HELPER" corrupt-manifest-hash "$CORRUPT_DIR/runtime/junie_runtime.json" 2>/dev/null || true
 
 tar -czf "$CORRUPT_ARCHIVE" -C "$CORRUPT_DIR" . 2>/dev/null
 

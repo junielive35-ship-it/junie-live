@@ -63,13 +63,13 @@ Example:
 
 The mutex logic lives in the shared `junie_runtime` Python package (`hermes/junie_runtime/src/junie_runtime/mutex.py`), which is the single source of truth. The `code-mutex.sh` shell script is a thin compatibility wrapper around `python -m junie_runtime.cli.mutex`; it contains no mutex logic itself.
 
-The runtime package must be installed into the Hermes Python environment:
+The runtime package must be installed:
 
 ```bash
 python3 -m pip install -e /path/to/junie-live/hermes/junie_runtime
 ```
 
-The `code-mutex.sh` wrapper resolves the Hermes Python interpreter automatically: it checks `JUNIE_HERMES_PYTHON` env var, then the `hermes` CLI shebang, then falls back to `python3`. The profile runtime manifest (`junie-live/runtime/junie_runtime.json`) records which interpreter was used at install time.
+The `code-mutex.sh` wrapper uses `python3` directly for the runtime CLI. The profile runtime manifest (`junie-live/runtime/junie_runtime.json`) records which interpreter was used at install time.
 
 ## Installed command interface
 
