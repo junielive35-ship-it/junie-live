@@ -1,3 +1,5 @@
 HERMES.md
 .junie
 .idea
+__pycache__/
+*.pyc
