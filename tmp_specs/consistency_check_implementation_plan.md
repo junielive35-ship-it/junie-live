@@ -6,7 +6,7 @@
 
 **Architecture:** Build a shared profile-local maintenance runner invoked by a debug slash/admin command (`/check_consistency`) and by future cron/script execution. The runner performs deterministic preflight/state handling, then launches a headless Hermes audit agent with a self-contained prompt. The main orchestrator consumes the resulting `PENDING_CONTRADICTIONS.md`; it does not choose to run the routine via a normal tool schema.
 
-**Tech Stack:** Python profile runner/CLI, Hermes CLI headless `hermes chat`, Junie profile state under `$HERMES_HOME/junie-live/state/consistency/`, existing code mutex state/CLI only where necessary, repo `verify.sh` regression suite. Avoid adding new Bash entrypoints unless there is no viable Hermes/Python integration path.
+**Tech Stack:** Python profile runner/CLI, Hermes CLI headless `hermes chat`, Junie profile state under `$HERMES_HOME/junie-live/state/consistency/`, direct Python handling of the existing code mutex state, and the existing repo `verify.sh` gate. Do not add new Bash entrypoints or Bash tests for this feature.
 
 ---
 
@@ -41,7 +41,7 @@
 - `hermes/initialization/scripts/consistency_check.py` — shared Python runner/CLI installed into the live profile; deterministic preflight/state/prompt/report orchestration.
 - `hermes/initialization/docs/consistency-check-prompt.md` — prompt template for the headless audit agent.
 - `hermes/initialization/plugins/consistency-check/` — only if Hermes supports a profile-local slash/admin command hook without exposing a model-loop tool. If not, do not create a model tool; use the Python runner directly and document the manual command.
-- `hermes/scripts/test-consistency-check.sh` — repo regression tests.
+- `hermes/scripts/test_consistency_check.py` — Python regression tests.
 
 **Modify:**
 - `hermes/initialization/INITIALIZATION.md` — require branch detection and initial consistency checkpoint/state setup.
@@ -178,7 +178,7 @@ The prompt must instruct the audit agent to:
 **Files:**
 - Create/modify: `hermes/initialization/scripts/consistency_check.py`
 - Modify: `hermes/scripts/hire-junie.sh`
-- Test: `hermes/scripts/test-consistency-check.sh`
+- Test: `hermes/scripts/test_consistency_check.py`
 
 **Behavior:**
 - Resolve profile dir via `$HERMES_HOME` and `$HERMES_PROFILE`, never by naïvely appending to rewritten `$HOME`.
@@ -206,7 +206,7 @@ The prompt must instruct the audit agent to:
 
 **Files:**
 - Modify: `hermes/initialization/scripts/consistency_check.py`
-- Test: `hermes/scripts/test-consistency-check.sh`
+- Test: `hermes/scripts/test_consistency_check.py`
 
 **Preflight order:**
 1. Resolve profile dir/state dir/repo.
@@ -236,7 +236,7 @@ The prompt must instruct the audit agent to:
 **Files:**
 - Create: `hermes/initialization/docs/consistency-check-prompt.md`
 - Modify: `hermes/initialization/scripts/consistency_check.py`
-- Test: `hermes/scripts/test-consistency-check.sh`
+- Test: `hermes/scripts/test_consistency_check.py`
 
 **Behavior:**
 - Render prompt from template plus `input.json` facts.
@@ -269,7 +269,7 @@ The prompt must instruct the audit agent to:
 
 **Files:**
 - Modify: `hermes/initialization/scripts/consistency_check.py`
-- Test: `hermes/scripts/test-consistency-check.sh`
+- Test: `hermes/scripts/test_consistency_check.py`
 
 **Behavior:**
 - Require structured output from audit agent, preferably JSON fenced in Markdown or a strict Markdown section format.
@@ -297,7 +297,7 @@ The prompt must instruct the audit agent to:
 - Preferred create: `hermes/initialization/plugins/consistency-check/` if Hermes profile plugins support gateway/slash/admin hooks.
 - Otherwise modify: `hermes/scripts/hire-junie.sh` to install a Hermes quick command or documented admin command that invokes the runner outside the normal model-loop tool schema.
 - Modify docs accordingly.
-- Test: `hermes/scripts/test-consistency-check.sh`
+- Test: `hermes/scripts/test_consistency_check.py`
 
 **Required behavior:**
 - `/check_consistency` runs the shared runner and returns `report.md` to the requesting Telegram chat/admin channel.
@@ -342,18 +342,18 @@ The prompt must instruct the audit agent to:
 - Modify: `hermes/scripts/hire-junie.sh`
 - Modify: `hermes/scripts/verify.sh`
 - Modify: `hermes/scripts/test-initialization-gate.sh` if needed
-- Create/modify: `hermes/scripts/test-consistency-check.sh`
+- Create/modify: `hermes/scripts/test_consistency_check.py`
 
 **Behavior:**
 - `hire-junie.sh` creates `$STATE_DIR/consistency` along with existing state dirs.
 - Fresh profile gets scripts, docs, and any plugin/hook files.
 - Rehire clears stale consistency state like other operational state.
-- `verify.sh` checks required consistency files and runs `test-consistency-check.sh`.
+- `verify.sh` checks required consistency files and runs `test_consistency_check.py`.
 - Tests use temp dirs/repos and must not touch the live profile.
 
 **Verification:**
 - `python3 -m py_compile hermes/initialization/scripts/consistency_check.py`
-- `./hermes/scripts/test-consistency-check.sh`
+- `python3 hermes/scripts/test_consistency_check.py`
 - Full `./hermes/scripts/verify.sh` from a clean tree.
 
 ---
