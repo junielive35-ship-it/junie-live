@@ -231,6 +231,10 @@ state/
     runs/<job_id>/
   autonomous_work/
     windows/<window_id>/
+  consistency/
+    consistency-state.json
+    PENDING_CONTRADICTIONS.md
+    runs/<run_id>/
   reflections/
   overnight/
   logs/

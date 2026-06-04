@@ -162,6 +162,7 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 | Detailed docs | Target repo `docs/` or profile `docs/` | File read/write |
 | Code mutex | `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` | `code-mutex.sh` |
 | Marinator runs | `~/.hermes/profiles/junie-live/junie-live/state/marinator/runs/` | `marinator_delegate` plugin |
+| Consistency state | `~/.hermes/profiles/junie-live/junie-live/state/consistency/` | `consistency_check.py` runner |
 | Backlog items | `~/.hermes/profiles/junie-live/junie-live/state/backlog/` | Scripts/cron |
 | Operational logs | `~/.hermes/profiles/junie-live/junie-live/state/logs/` | Scripts/cron |
 | Skills | `~/.hermes/profiles/junie-live/skills/` | skill_manage |

@@ -117,7 +117,15 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
     - the mutex state directory at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) was created by the hire script;
     - record the administrator/owner escalation path for held or stale mutex decisions in memory.
 12. Check memory size after editing. If it is too large or close to budget, move details into profile docs and keep only the strategic core in memory.
-13. Decide whether initialization is complete:
+13. Initialize consistency check state:
+    - Run `python3 hermes/initialization/scripts/consistency_check.py init --repo <target-repo>` from the seed dir.
+    - This detects the main branch (`main`, else `master`, else asks the owner) and writes initial `consistency-state.json` with `main_branch`, `last_checkpoint_commit`, and `last_scan_at`.
+    - Creates empty `PENDING_CONTRADICTIONS.md` if missing.
+    - Optionally seed `relevant_artifacts` with clearly relevant root architecture diagrams/images discovered during initialization.
+    - If branch detection is ambiguous (neither `main` nor `master` exists locally), explain to the owner that consistency diffs and checkpoints depend on the main branch and ask which branch to use.
+    - Do not overwrite existing consistency state unless starting fresh.
+    - The consistency runner is at `hermes/initialization/scripts/consistency_check.py`. It is **not** a normal model-loop tool — it is a maintenance entrypoint invoked via CLI, admin command, or future cron. The orchestrator must not invoke it as a normal tool.
+14. Decide whether initialization is complete:
     - required inputs are captured or safely inferred;
     - no blocking contradiction remains;
     - every process-affecting contradiction (spec↔implementation, spec↔spec, or comments↔code) has an explicit owner-confirmed resolution: fixed with approval, or accepted as a known deviation. Listing unresolved process-affecting contradictions in the completion report is not sufficient to finish initialization, and contradictions must not be fixed silently before the owner confirms;

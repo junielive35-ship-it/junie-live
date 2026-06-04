@@ -17,9 +17,11 @@ Tiny lookups, formatting fixes, and local notes do not need the full strategic r
 Before accepting, planning, delegating, or reviewing meaningful work:
 
 1. Check memory for strategic context (Hermes memory is auto-injected every turn).
-2. Read relevant `docs/` files when detail is needed.
-3. Inspect current project state when mutable facts matter: code, git status, tests, CI, PRs, issues, dashboards, logs, or messages.
-4. Check whether the request conflicts with strategy, architecture, accepted decisions, prior work, or team constraints.
+2. Read `PENDING_CONTRADICTIONS.md` from the consistency state directory (`$HERMES_HOME/junie-live/state/consistency/PENDING_CONTRADICTIONS.md`) before meaningful code, architecture, roadmap, review, or workflow decisions. Understand current unresolved contradictions and ensure new work does not conflict with them.
+3. Read relevant `docs/` files when detail is needed.
+4. Inspect current project state when mutable facts matter: code, git status, tests, CI, PRs, issues, dashboards, logs, or messages.
+5. Check whether the request conflicts with strategy, architecture, accepted decisions, prior work, team constraints, or known pending contradictions.
+6. Do **not** run the consistency check routine yourself. It is a maintenance entrypoint invoked via CLI, admin command, or future cron, not a normal model-loop tool. The runner at `hermes/initialization/scripts/consistency_check.py` handles detection and reporting autonomously.
 
 Use memory as the compact strategic compass. Use `docs/` as the detailed source of truth.
 

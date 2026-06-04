@@ -90,6 +90,20 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 - Error reporting / log aggregation (URL or tool name): TODO
 - Support / bug intake channel: TODO
 
+## Consistency check
+
+- **State directory:** `~/.hermes/profiles/junie-live/junie-live/state/consistency/`
+- **State file:** `consistency-state.json` — main branch, checkpoint commit, scan timestamp, relevant artifacts
+- **Pending contradictions:** `PENDING_CONTRADICTIONS.md` — currently unresolved contradictions, revalidated on each check
+- **Runner:** `hermes/initialization/scripts/consistency_check.py` (Python CLI)
+- **Subcommands:**
+  - `init` — initialize consistency state (main branch, checkpoint, pending file)
+  - `run` — run a full consistency check (preflight → headless audit → pending update)
+  - `render-prompt` — dry-run prompt rendering without launching headless Hermes
+- **Preflight:** mutex held → blocked; dirty worktree → blocked; fetch failure → blocked; wrong branch → blocked; diverged main → blocked
+- **Scope:** semantic — code in competence area plus project-relevant artifacts (root docs, diagrams, screenshots, linked assets)
+- **Note:** This is a maintenance entrypoint, not a model-loop tool. Do not invoke via normal orchestrator tools.
+
 ## Local caveats
 
 Record environment-specific gotchas future Junie runs should know about: flaky tests, services that must be started before tests, OS-specific quirks, secrets that are not in `.env`, anything that breaks on a fresh machine.
