@@ -30,7 +30,7 @@ Avoid HTML comments or other prompt-injection-looking markup in `SOUL.md`, becau
 
 ### `HERMES.md`
 
-Target-repo operating protocol for the orchestrator.
+Target-repo operating protocol for the orchestrator. Although the file lives at the target repo root for Hermes auto-load semantics, treat it as Junie agent operating state, not ordinary repository documentation.
 
 Installed location in an initialized target repo:
 
@@ -56,6 +56,8 @@ Hermes auto-loads `HERMES.md` from the current working directory, walking up to 
 - recurring routines and change rules.
 
 `HERMES.md` is deliberately separate from `AGENTS.md`. Coding executors such as OpenCode, Codex, and Claude Code commonly read `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`; they should not inherit orchestrator-only rules such as challenge protocol, no-direct-coding constraints for the orchestrator, or mutex escalation procedures. Keeping the Junie orchestrator protocol in `HERMES.md` keeps worker sessions cleaner.
+
+For consistency checks, bucket conflicts involving `HERMES.md` as agent-state / project-contract conflicts, not as ordinary repo-doc conflicts, even when the file is physically stored in the repository.
 
 ### `INITIALIZATION.md`
 

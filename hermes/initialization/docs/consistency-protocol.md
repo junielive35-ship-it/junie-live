@@ -10,6 +10,13 @@ Use this file to keep project strategy, docs, memory, skills, and workflow rules
 - Task/backlog/decision state.
 - Current memory and relevant docs.
 
+## Source boundaries
+
+- Treat the project-local `HERMES.md` as agent operating state, even when it physically lives at the target repo root and is ignored by git.
+- Do not classify `HERMES.md` as ordinary repo documentation for contradiction buckets; classify conflicts involving it as agent-state / project-contract conflicts.
+- Keep this protocol project-agnostic: every initialized Junie profile should resolve its own competence-area paths, main branch, checkpoint commit, and state-file paths during initialization instead of hard-coding one repo.
+- Consistency-check state should be initialized during profile initialization, including the main branch, initial checkpoint commit, and initial scan timestamp.
+
 ## What to detect
 
 - Contradictory strategy or priorities.
