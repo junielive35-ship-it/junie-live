@@ -104,27 +104,34 @@ if [[ -e "$SEED_DIR/BOOTSTRAP.md" ]]; then
   exit 1
 fi
 command -v hermes >/dev/null || { err "hermes CLI not found in PATH"; exit 1; }
-[[ "$BACKUP" -eq 1 ]] && { command -v tar >/dev/null || { err "tar not found in PATH (required for backup; pass --no-backup to skip)"; exit 1; }; }
+# ── Early: install/check junie_runtime before any profile ops ──
+RUNTIME_DIR="$HERMES_VERSION_ROOT/junie_runtime"
+if [[ -d "$RUNTIME_DIR" ]]; then
+  log "Installing junie_runtime package..."
+  if python3 -m pip install -e "$RUNTIME_DIR" -q 2>/dev/null; then
+    log "  junie_runtime installed from $RUNTIME_DIR"
+  else
+    err "Failed to install junie_runtime from $RUNTIME_DIR"
+    exit 1
+  fi
+else
+  err "junie_runtime directory not found: $RUNTIME_DIR"
+  exit 1
+fi
 
-HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
-PROFILE_DIR="$HERMES_HOME/profiles/$PROFILE"
-STATE_DIR="$PROFILE_DIR/junie-live/state"
-BACKUP_DIR="$HERMES_HOME/backups"
-
-# ── Step 1: Back up any existing profile + state ──
+# ── Step 1: Back up any existing profile via dump-junie.sh ──
 if [[ "$BACKUP" -eq 1 ]]; then
-  ts="$(date +%Y%m%d-%H%M%S)"
-  items=()
-  [[ -e "$PROFILE_DIR" ]] && items+=("profiles/$PROFILE")
-  # Back up both old and new state locations for compatibility
-  OLD_STATE="$HERMES_HOME/junie-live/state"
-  [[ -e "$OLD_STATE" ]] && items+=("junie-live/state")
-  [[ -e "$STATE_DIR" ]] && items+=("profiles/$PROFILE/junie-live/state")
-  if [[ "${#items[@]}" -gt 0 ]]; then
-    mkdir -p "$BACKUP_DIR"
-    backup="$BACKUP_DIR/${PROFILE}-before-hire-$ts.tgz"
-    tar -czf "$backup" -C "$HERMES_HOME" "${items[@]}"
+  if hermes profile show "$PROFILE" >/dev/null 2>&1; then
+    backup="$(python3 -m junie_runtime.paths backup-path --profile "$PROFILE" --kind before-hire)"
+    mkdir -p "$(dirname "$backup")"
+    log "Creating pre-hire backup via dump-junie.sh..."
+    "$HERMES_VERSION_ROOT/distribution/scripts/dump-junie.sh" --profile "$PROFILE" --output "$backup" >/dev/null || {
+      err "Backup via dump-junie.sh failed"
+      exit 1
+    }
     log "Backup: $backup"
+  else
+    log "Profile $PROFILE does not exist — skipping backup"
   fi
 fi
 
@@ -160,6 +167,7 @@ else
 fi
 
 # Post-install sanity checks
+PROFILE_DIR="$(python3 -m junie_runtime.paths profile-dir --profile "$PROFILE")"
 [[ -f "$PROFILE_DIR/INITIALIZATION.md" ]] || { err "installed profile missing INITIALIZATION.md: $PROFILE_DIR"; exit 1; }
 if [[ -e "$PROFILE_DIR/BOOTSTRAP.md" ]]; then
   err "installed profile unexpectedly contains BOOTSTRAP.md: $PROFILE_DIR/BOOTSTRAP.md"
@@ -180,32 +188,15 @@ else
   exit 1
 fi
 
-# ── Step 4: Install shared junie_runtime package ──
-# junie_runtime is a shared Python package installed into the Hermes Python
-# environment, not copied into the profile payload. The code-mutex.sh wrapper
-# requires it.
-RUNTIME_DIR="$HERMES_VERSION_ROOT/junie_runtime"
-if [[ -d "$RUNTIME_DIR" ]]; then
-  log "Installing junie_runtime package..."
-  if python3 -m pip install -e "$RUNTIME_DIR" -q 2>/dev/null; then
-    log "  junie_runtime installed from $RUNTIME_DIR"
-  else
-    err "Failed to install junie_runtime from $RUNTIME_DIR"
-    exit 1
-  fi
-else
-  err "junie_runtime directory not found: $RUNTIME_DIR"
-  exit 1
-fi
-
 # ── Step 4b: Create state directories ──
+STATE_DIR="$(python3 -m junie_runtime.paths state-root --profile "$PROFILE")"
 log "Creating state directories..."
 mkdir -p "$STATE_DIR"/{backlog/items,backlog/archive,reflections,overnight,logs}
 mkdir -p "$STATE_DIR"/marinator/runs
 mkdir -p "$STATE_DIR"/autonomous_work/windows
 
 # ── Step 4c: Write runtime manifest ──
-RUNTIME_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
+RUNTIME_MANIFEST_DIR="$(python3 -m junie_runtime.paths runtime-manifest-dir --profile "$PROFILE")"
 mkdir -p "$RUNTIME_MANIFEST_DIR"
 python3 "$HERMES_VERSION_ROOT/distribution/scripts/junie-runtime-artifact.py" write-install-manifest \
   --runtime-dir "$RUNTIME_DIR" \

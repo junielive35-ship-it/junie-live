@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from junie_runtime import paths
@@ -139,6 +140,164 @@ def test_hermes_home_profile_scoped_home() -> None:
             os.environ.pop("HOME", None)
         if saved_hh is not None:
             os.environ["HERMES_HOME"] = saved_hh
+
+
+def test_hermes_root_default() -> None:
+    saved_hh = os.environ.pop("HERMES_HOME", None)
+    saved_home = os.environ.get("HOME")
+    os.environ["HOME"] = "/home/regular/user"
+    try:
+        result = paths.hermes_root()
+        assert result == os.path.expanduser("~/.hermes")
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        if saved_home is not None:
+            os.environ["HOME"] = saved_home
+        else:
+            os.environ.pop("HOME", None)
+
+
+def test_hermes_root_junie_hermes_root() -> None:
+    saved_jhr = os.environ.get("JUNIE_HERMES_ROOT")
+    os.environ["JUNIE_HERMES_ROOT"] = "/custom/root"
+    try:
+        assert paths.hermes_root() == "/custom/root"
+    finally:
+        if saved_jhr is not None:
+            os.environ["JUNIE_HERMES_ROOT"] = saved_jhr
+        else:
+            os.environ.pop("JUNIE_HERMES_ROOT", None)
+
+
+def test_hermes_root_hermes_home_with_profile(tmp_path) -> None:
+    root = tmp_path / "hermes"
+    profiles = root / "profiles" / "test-p"
+    profiles.mkdir(parents=True)
+    saved_hh = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = str(root)
+    try:
+        result = paths.hermes_root(profile="test-p")
+        assert result == str(root)
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        else:
+            os.environ.pop("HERMES_HOME", None)
+
+
+def test_hermes_root_profile_scoped() -> None:
+    saved_hh = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = "/home/user/.hermes/profiles/junie-live"
+    try:
+        result = paths.hermes_root(profile="junie-live")
+        assert result == "/home/user/.hermes"
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        else:
+            os.environ.pop("HERMES_HOME", None)
+
+
+def test_hermes_root_fallback_to_home_hermes(tmp_path) -> None:
+    root = tmp_path / ".hermes"
+    (root / "profiles" / "test-p").mkdir(parents=True)
+    saved_hh = os.environ.pop("HERMES_HOME", None)
+    saved_home = os.environ.get("HOME")
+    os.environ["HOME"] = str(tmp_path)
+    try:
+        result = paths.hermes_root(profile="test-p")
+        assert result == str(root)
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        if saved_home is not None:
+            os.environ["HOME"] = saved_home
+        else:
+            os.environ.pop("HOME", None)
+        # Remove the created dir to avoid side effects
+        import shutil
+        shutil.rmtree(str(root), ignore_errors=True)
+
+
+def test_backup_dir() -> None:
+    result = paths.backup_dir(home="/root/.hermes")
+    assert result == "/root/.hermes/backups"
+
+
+def test_runtime_manifest_dir() -> None:
+    result = paths.runtime_manifest_dir(home="/root/.hermes", profile="test-p")
+    assert result == "/root/.hermes/profiles/test-p/junie-live/runtime"
+
+
+def test_cli_hermes_root() -> None:
+    import subprocess
+    saved_hh = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = "/custom/hermes"
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "junie_runtime.paths", "hermes-root"],
+            capture_output=True, text=True, check=True,
+        )
+        assert result.stdout.strip() == "/custom/hermes"
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        else:
+            os.environ.pop("HERMES_HOME", None)
+
+
+def test_cli_profile_dir() -> None:
+    import subprocess
+    saved_hh = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = "/custom/hermes"
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "junie_runtime.paths", "profile-dir", "--profile", "test-p"],
+            capture_output=True, text=True, check=True,
+        )
+        assert result.stdout.strip() == "/custom/hermes/profiles/test-p"
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        else:
+            os.environ.pop("HERMES_HOME", None)
+
+
+def test_cli_backup_path() -> None:
+    import subprocess
+    saved_hh = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = "/custom/hermes"
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "junie_runtime.paths", "backup-path", "--profile", "test-p", "--kind", "before-hire"],
+            capture_output=True, text=True, check=True,
+        )
+        out = result.stdout.strip()
+        assert out.startswith("/custom/hermes/backups/test-p-before-hire-")
+        assert out.endswith(".tgz")
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        else:
+            os.environ.pop("HERMES_HOME", None)
+
+
+def test_cli_runtime_manifest_dir() -> None:
+    import subprocess
+    saved_hh = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = "/custom/hermes"
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "junie_runtime.paths", "runtime-manifest-dir", "--profile", "test-p"],
+            capture_output=True, text=True, check=True,
+        )
+        assert result.stdout.strip() == "/custom/hermes/profiles/test-p/junie-live/runtime"
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        else:
+            os.environ.pop("HERMES_HOME", None)
 
 
 def test_profile_dir_via_hermes_home_profile_scoped() -> None:
