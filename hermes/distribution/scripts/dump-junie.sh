@@ -36,44 +36,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ── Resolve Hermes root (robust against profile-scoped HERMES_HOME) ──
-resolve_hermes_root() {
-  local profile="$1"
-
-  # Priority 1: explicit override
-  if [[ -n "${JUNIE_HERMES_ROOT:-}" ]]; then
-    HERMES_ROOT="$JUNIE_HERMES_ROOT"
-    return 0
-  fi
-
-  local hh="${HERMES_HOME:-$HOME/.hermes}"
-
-  # Priority 2: $HERMES_HOME/profiles/$profile exists — hh is already root
-  if [[ -d "$hh/profiles/$profile" ]]; then
-    HERMES_ROOT="$hh"
-    return 0
-  fi
-
-  # Priority 3: $HERMES_HOME looks like the profile dir itself
-  # (e.g. /home/.../.hermes/profiles/junie-live)
-  local base; base="$(basename "$hh")"
-  local parent; parent="$(basename "$(dirname "$hh")")"
-  if [[ "$base" == "$profile" && "$parent" == "profiles" ]]; then
-    HERMES_ROOT="$(dirname "$(dirname "$hh")")"
-    return 0
-  fi
-
-  # Priority 4: $HOME/.hermes/profiles/$profile exists
-  if [[ -d "$HOME/.hermes/profiles/$profile" ]]; then
-    HERMES_ROOT="$HOME/.hermes"
-    return 0
-  fi
-
-  # Fallback
-  HERMES_ROOT="$hh"
-}
-
-resolve_hermes_root "$PROFILE"
+# ── Resolve Hermes root via junie_runtime path helper ──
+HERMES_ROOT="$(python3 -m junie_runtime.paths hermes-root --profile "$PROFILE")"
 PROFILE_DIR="$HERMES_ROOT/profiles/$PROFILE"
 [[ -d "$PROFILE_DIR" ]] || { err "profile not found: $PROFILE_DIR"; exit 1; }
 

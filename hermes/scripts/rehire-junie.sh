@@ -61,38 +61,8 @@ done
 [[ -f "$ARCHIVE" ]] || { err "archive not found: $ARCHIVE"; exit 1; }
 command -v hermes >/dev/null || { err "hermes CLI not found in PATH"; exit 1; }
 
-# ── Resolve Hermes root (robust against profile-scoped HERMES_HOME) ──
-resolve_hermes_root() {
-  local profile="$1"
-
-  if [[ -n "${JUNIE_HERMES_ROOT:-}" ]]; then
-    HERMES_ROOT="$JUNIE_HERMES_ROOT"
-    return 0
-  fi
-
-  local hh="${HERMES_HOME:-$HOME/.hermes}"
-
-  if [[ -d "$hh/profiles/$profile" ]]; then
-    HERMES_ROOT="$hh"
-    return 0
-  fi
-
-  local base; base="$(basename "$hh")"
-  local parent; parent="$(basename "$(dirname "$hh")")"
-  if [[ "$base" == "$profile" && "$parent" == "profiles" ]]; then
-    HERMES_ROOT="$(dirname "$(dirname "$hh")")"
-    return 0
-  fi
-
-  if [[ -d "$HOME/.hermes/profiles/$profile" ]]; then
-    HERMES_ROOT="$HOME/.hermes"
-    return 0
-  fi
-
-  HERMES_ROOT="$hh"
-}
-
-resolve_hermes_root "$PROFILE"
+# ── Resolve Hermes root via junie_runtime path helper ──
+HERMES_ROOT="$(python3 -m junie_runtime.paths hermes-root --profile "$PROFILE")"
 PROFILE_DIR="$HERMES_ROOT/profiles/$PROFILE"
 
 log "archive:       $ARCHIVE"

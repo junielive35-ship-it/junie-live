@@ -1116,6 +1116,224 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+printf '\n=== Hire-junie.sh: backup behavior tests ===\n'
+
+# Create a minimal temp hire tree so the hire script resolves its siblings
+# (dump-junie.sh, junie-runtime-artifact.py, junie_runtime/) via relative
+# paths without ever touching tracked repo files.
+HIRE_TREE="$TMP/hire-backup-test-root"
+mkdir -p "$HIRE_TREE"/{scripts,distribution/scripts}
+# Copy the real hire script into the tree (always chmod +x).
+cp "$HIRE_SCRIPT" "$HIRE_TREE/scripts/hire-junie.sh"
+chmod +x "$HIRE_TREE/scripts/hire-junie.sh"
+# Provide a real junie-runtime-artifact.py so post-install manifest writes work.
+cp "$ROOT/distribution/scripts/junie-runtime-artifact.py" "$HIRE_TREE/distribution/scripts/junie-runtime-artifact.py"
+# Symlink the runtime source so pip install -e works inside the test.
+ln -s "$ROOT/junie_runtime" "$HIRE_TREE/junie_runtime"
+
+# Overwrite the dump binary with a controlled stub (only in the temp tree).
+HIRE_TREE_DUMP="$HIRE_TREE/distribution/scripts/dump-junie.sh"
+DUMP_STUB_LOG="$TMP/dump-stub.log"
+
+install_dump_stub() {
+  local exit_code="$1"
+  cat > "$HIRE_TREE_DUMP" <<DUMPSTUB
+#!/usr/bin/env bash
+set -euo pipefail
+echo "called: \$*" >> "$DUMP_STUB_LOG"
+output=""
+while [[ \$# -gt 0 ]]; do
+  case "\$1" in --output) output="\$2"; shift 2 ;; --profile) shift 2 ;; *) shift ;; esac
+done
+[[ -n "\$output" ]] && mkdir -p "\$(dirname "\$output")" && touch "\$output"
+exit $exit_code
+DUMPSTUB
+  chmod +x "$HIRE_TREE_DUMP"
+}
+
+TEST_HIRE="$HIRE_TREE/scripts/hire-junie.sh"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Hire test D: profile exists + backup enabled → dump, then delete, then install ===\n'
+
+D_BIN_DIR="$TMP/hire-d-bin"
+D_HOME="$TMP/hire-d-home"
+D_LOG="$TMP/hire-d-hermes.log"
+mkdir -p "$D_BIN_DIR" "$D_HOME/profiles/junie-live"
+make_hire_fake_hermes "$D_BIN_DIR/hermes" "$D_LOG" 1
+rm -f "$DUMP_STUB_LOG"
+install_dump_stub 0
+
+D_OUT="$TMP/hire-d-out.txt"
+D_EXIT=0
+PATH="$D_BIN_DIR:$PATH" \
+HERMES_HOME="$D_HOME" \
+"$TEST_HIRE" \
+  --telegram-token "tok_test" \
+  --admin-telegram-id "12345" \
+  --seed-dir "$HIRE_SEED_DIR" \
+  --no-restart \
+  --no-forward-keys \
+  >"$D_OUT" 2>&1 || D_EXIT=$?
+
+if [[ "$D_EXIT" -eq 0 ]]; then
+  pass
+  printf '  OK: hire with backup succeeded (rc=0)\n'
+else
+  fail "hire with backup failed (rc=$D_EXIT); output: $(head -5 "$D_OUT" | tr '\n' ';')"
+fi
+
+# dump-junie.sh was invoked
+if [[ -s "$DUMP_STUB_LOG" ]]; then
+  pass
+  printf '  OK: dump-junie.sh was called\n'
+else
+  fail "dump-junie.sh was NOT called"
+fi
+
+# profile delete was called (in the hermes log)
+if grep -q 'hermes profile delete.*-y' "$D_LOG" 2>/dev/null; then
+  pass
+  printf '  OK: hermes profile delete was called\n'
+else
+  fail "hermes profile delete was NOT called"
+fi
+
+# profile delete happened AFTER dump (dump log has content AND delete in hermes log)
+# Since dump runs synchronously before Step 2, if both markers exist the order is correct.
+# Additional proof: check the backup output mentions success
+if grep -q 'Backup:' "$D_OUT" 2>/dev/null; then
+  pass
+  printf '  OK: backup output reported\n'
+else
+  fail "backup output not reported"
+fi
+
+# profile install was called
+if grep -q 'hermes profile install' "$D_LOG" 2>/dev/null; then
+  pass
+  printf '  OK: profile install was called\n'
+else
+  fail "profile install was NOT called"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Hire test E: dump failure → abort, no delete ===\n'
+
+E_BIN_DIR="$TMP/hire-e-bin"
+E_HOME="$TMP/hire-e-home"
+E_LOG="$TMP/hire-e-hermes.log"
+mkdir -p "$E_BIN_DIR" "$E_HOME/profiles/junie-live"
+make_hire_fake_hermes "$E_BIN_DIR/hermes" "$E_LOG" 1
+rm -f "$DUMP_STUB_LOG"
+install_dump_stub 1  # stub exits 1
+
+E_OUT="$TMP/hire-e-out.txt"
+E_EXIT=0
+PATH="$E_BIN_DIR:$PATH" \
+HERMES_HOME="$E_HOME" \
+"$TEST_HIRE" \
+  --telegram-token "tok_test" \
+  --admin-telegram-id "12345" \
+  --seed-dir "$HIRE_SEED_DIR" \
+  --no-restart \
+  --no-forward-keys \
+  >"$E_OUT" 2>&1 || E_EXIT=$?
+
+if [[ "$E_EXIT" -ne 0 ]]; then
+  pass
+  printf '  OK: hire aborted on dump failure (rc=%d)\n' "$E_EXIT"
+else
+  fail "hire should have failed when dump fails (rc=0)"
+fi
+
+# dump-junie.sh was invoked (stub was called)
+if [[ -s "$DUMP_STUB_LOG" ]]; then
+  pass
+  printf '  OK: dump-junie.sh was called (before failure)\n'
+else
+  fail "dump-junie.sh was NOT called"
+fi
+
+# profile delete was NOT called
+if grep -q 'hermes profile delete' "$E_LOG" 2>/dev/null; then
+  fail "hermes profile delete was called despite dump failure"
+else
+  pass
+  printf '  OK: hermes profile delete was NOT called after dump failure\n'
+fi
+
+# Error message mentions backup failure
+if grep -qi 'Backup.*fail\|dump.*fail\|backup via dump' "$E_OUT" 2>/dev/null; then
+  pass
+  printf '  OK: error message reports backup failure\n'
+else
+  fail "no backup failure error message"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Hire test F: profile does not exist + backup enabled → no dump, no delete, install ===\n'
+
+F_BIN_DIR="$TMP/hire-f-bin"
+F_HOME="$TMP/hire-f-home"
+F_LOG="$TMP/hire-f-hermes.log"
+mkdir -p "$F_BIN_DIR" "$F_HOME"  # No profile dir
+make_hire_fake_hermes "$F_BIN_DIR/hermes" "$F_LOG" 0
+rm -f "$DUMP_STUB_LOG"
+install_dump_stub 0  # stub would succeed, but shouldn't be called
+
+F_OUT="$TMP/hire-f-out.txt"
+F_EXIT=0
+PATH="$F_BIN_DIR:$PATH" \
+HERMES_HOME="$F_HOME" \
+"$TEST_HIRE" \
+  --telegram-token "tok_test" \
+  --admin-telegram-id "12345" \
+  --seed-dir "$HIRE_SEED_DIR" \
+  --no-restart \
+  --no-forward-keys \
+  >"$F_OUT" 2>&1 || F_EXIT=$?
+
+if [[ "$F_EXIT" -eq 0 ]]; then
+  pass
+  printf '  OK: hire without profile succeeded (rc=0)\n'
+else
+  fail "hire without profile failed (rc=$F_EXIT); output: $(head -5 "$F_OUT" | tr '\n' ';')"
+fi
+
+# dump-junie.sh was NOT invoked
+if [[ -s "$DUMP_STUB_LOG" ]]; then
+  fail "dump-junie.sh was called but profile did not exist"
+else
+  pass
+  printf '  OK: dump-junie.sh was NOT called (no profile)\n'
+fi
+
+# profile delete was NOT called
+if grep -q 'hermes profile delete' "$F_LOG" 2>/dev/null; then
+  fail "hermes profile delete was called but profile did not exist"
+else
+  pass
+  printf '  OK: hermes profile delete was NOT called\n'
+fi
+
+# profile install WAS called
+if grep -q 'hermes profile install' "$F_LOG" 2>/dev/null; then
+  pass
+  printf '  OK: profile install was called\n'
+else
+  fail "profile install was NOT called"
+fi
+
+# "skipping backup" message logged
+if grep -qi 'skipping backup' "$F_OUT" 2>/dev/null; then
+  pass
+  printf '  OK: "skipping backup" message logged\n'
+else
+  fail '"skipping backup" message not found'
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '\n=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"
 
