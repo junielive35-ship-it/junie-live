@@ -61,12 +61,16 @@ command -v hermes >/dev/null || { err "hermes CLI not found in PATH"; exit 1; }
 STAGING_DIR="$(mktemp -d)"
 trap 'rm -rf "$STAGING_DIR" ${RUNTIME_BUILD_COPY:-}' EXIT
 
-NATIVE_EXPORT="$STAGING_DIR/native-export.tgz"
+NATIVE_EXPORT="$STAGING_DIR/native-export.tar.gz"
 export HERMES_HOME="$HERMES_ROOT"
 
 log "exporting profile via Hermes-native export..."
 hermes profile export "$PROFILE" -o "$NATIVE_EXPORT" || {
   err "hermes profile export failed for $PROFILE"
+  exit 1
+}
+[[ -s "$NATIVE_EXPORT" ]] || {
+  err "hermes profile export did not create archive: $NATIVE_EXPORT"
   exit 1
 }
 

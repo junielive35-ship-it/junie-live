@@ -288,7 +288,7 @@ fi
 # ═══════════════════════════════════════════════════════════════════
 #
 # Junie runs under its own Hermes profile, which loads ONLY
-# $HERMES_HOME/profiles/<profile>/.env (not the root $HERMES_HOME/.env).
+# $HERMES_ROOT/profiles/<profile>/.env (not the root $HERMES_ROOT/.env).
 # So we copy credentials into the junie-live .env here.
 #
 # The Telegram home channel for a DM equals the user's Telegram ID, so we
@@ -296,7 +296,8 @@ fi
 # admin's DM automatically (no manual /sethome needed).
 log "Configuring profile .env..."
 PROFILE_ENV="$PROFILE_DIR/.env"
-ROOT_ENV="$HERMES_HOME/.env"
+HERMES_ROOT="$(python3 -m junie_runtime.paths hermes-root --profile "$PROFILE")"
+ROOT_ENV="$HERMES_ROOT/.env"
 
 # Provider API keys (and any other env vars) that should be forwarded from
 # the root .env if present. Keep this list aligned with what Hermes treats
