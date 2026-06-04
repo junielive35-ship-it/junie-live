@@ -194,6 +194,10 @@ To update the shared `junie_runtime` package after changes:
 python3 -m pip install -e hermes/junie_runtime  # re-installs to pick up changes
 ```
 
+### Disaster recovery (dump / rehire)
+
+`dump-junie.sh` now includes exact `junie_runtime` wheel and provenance manifest in the archive (under `runtime/`). `rehire-junie.sh` restores the exact wheel from the archive, verifies its SHA-256 hash, and writes restore metadata to the profile runtime manifest. If the runtime artifact is missing from the dump archive, rehire fails clearly instead of silently installing from a sibling source directory. There is no profile-local venv — the wheel is installed into the Hermes Python environment.
+
 Or selectively update a skill:
 ```bash
 cp hermes/initialization/skills/junie-task-reflection/SKILL.md \
