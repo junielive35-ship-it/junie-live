@@ -132,10 +132,7 @@ else
 fi
 
 # ── Restore junie_runtime from archive wheel artifact ──
-# Source shared helpers for Hermes Python resolution
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../initialization/scripts/runtime-paths.sh
-. "$SCRIPT_DIR/../initialization/scripts/runtime-paths.sh"
 
 ARCHIVE_RUNTIME_DIR="$HERMES_ROOT/runtime"
 ARCHIVE_MANIFEST="$ARCHIVE_RUNTIME_DIR/junie_runtime.json"
@@ -144,9 +141,10 @@ if [[ -f "$ARCHIVE_MANIFEST" ]]; then
   log "runtime manifest found in archive: $ARCHIVE_MANIFEST"
 
   # Read manifest fields
-  WHEEL_FILENAME="$(python3 -c "import json; print(json.load(open('$ARCHIVE_MANIFEST')).get('wheel_filename',''))")"
-  EXPECTED_HASH="$(python3 -c "import json; print(json.load(open('$ARCHIVE_MANIFEST')).get('wheel_sha256',''))")"
-  EXPECTED_VERSION="$(python3 -c "import json; print(json.load(open('$ARCHIVE_MANIFEST')).get('version',''))")"
+  HELPER="$SCRIPT_DIR/../initialization/scripts/junie-runtime-artifact.py"
+  WHEEL_FILENAME="$(python3 "$HELPER" read-manifest-field "$ARCHIVE_MANIFEST" wheel_filename)"
+  EXPECTED_HASH="$(python3 "$HELPER" read-manifest-field "$ARCHIVE_MANIFEST" wheel_sha256)"
+  EXPECTED_VERSION="$(python3 "$HELPER" read-manifest-field "$ARCHIVE_MANIFEST" version)"
 
   WHEEL_PATH="$ARCHIVE_RUNTIME_DIR/$WHEEL_FILENAME"
   if [[ -z "$WHEEL_FILENAME" || ! -f "$WHEEL_PATH" ]]; then
@@ -167,19 +165,15 @@ if [[ -f "$ARCHIVE_MANIFEST" ]]; then
 
   log "wheel hash verified: $WHEEL_FILENAME"
 
-  # Install using resolved Hermes Python
-  HERMES_PY="$(resolve_hermes_python)" || exit 1
-  ensure_hermes_pip "$HERMES_PY" || exit 1
-
   log "installing junie_runtime from archive wheel..."
-  "$HERMES_PY" -m pip install --force-reinstall "$WHEEL_PATH" -q || {
+  python3 -m pip install --force-reinstall "$WHEEL_PATH" -q || {
     err "Failed to install junie_runtime from $WHEEL_PATH"
     exit 1
   }
   log "  junie_runtime installed from archive wheel"
 
   # Verify installed version matches manifest
-  INSTALLED_VERSION="$("$HERMES_PY" -c "import junie_runtime; print(junie_runtime.__version__)" 2>/dev/null || true)"
+  INSTALLED_VERSION="$(python3 -m pip show junie-runtime 2>/dev/null | sed -n 's/^Version: //p')"
   if [[ -n "$EXPECTED_VERSION" && "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]]; then
     err "installed junie_runtime version mismatch: expected $EXPECTED_VERSION, got $INSTALLED_VERSION"
     exit 1
@@ -189,14 +183,11 @@ if [[ -f "$ARCHIVE_MANIFEST" ]]; then
   # Write restored manifest to profile runtime state
   RESTORE_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
   mkdir -p "$RESTORE_MANIFEST_DIR"
-  python3 -c "
-import json, datetime, os
-m = json.load(open('$ARCHIVE_MANIFEST'))
-m['restored_at'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-m['restored_from_archive'] = os.path.basename('$ARCHIVE')
-m['installed_python'] = '$HERMES_PY'
-json.dump(m, open('$RESTORE_MANIFEST_DIR/junie_runtime.json', 'w'), indent=2)
-" || {
+  python3 "$HELPER" write-restore-manifest \
+    --archive-manifest "$ARCHIVE_MANIFEST" \
+    --output-dir "$RESTORE_MANIFEST_DIR" \
+    --archive "$ARCHIVE" \
+    --installed-python "python3" || {
     err "failed to write restored manifest"
     exit 1
   }

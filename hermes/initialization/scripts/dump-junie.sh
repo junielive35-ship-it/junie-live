@@ -97,63 +97,13 @@ trap 'rm -rf "$STAGING_DIR" ${RUNTIME_BUILD_COPY:-}' EXIT
 ARCHIVE_PROFILE_DIR="$STAGING_DIR/profiles/$PROFILE"
 mkdir -p "$(dirname "$ARCHIVE_PROFILE_DIR")"
 
-log "staging profile copy (safe SQLite snapshot via python sqlite3.backup)..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-export PROFILE_DIR ARCHIVE_PROFILE_DIR
-python3 <<'PYEOF'
-import os, shutil, sqlite3, sys
+log "staging profile copy (safe SQLite snapshot via junie-runtime-artifact)..."
 
-src_root = os.environ['PROFILE_DIR']
-dst_root = os.environ['ARCHIVE_PROFILE_DIR']
-
-ALWAYS_EXCLUDE = {'__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache'}
-TOP_LEVEL_EXCLUDE = {'cache', 'logs', 'backups'}
-EXCLUDE_FILE_SUFFIXES = {'.pyc', '.pyo', '.pid', '.lock'}
-EXCLUDE_SIDECAR_SUFFIXES = {'.db-wal', '.db-shm', '.db-journal'}
-
-for dirpath, dirnames, filenames in os.walk(src_root):
-    rel_dir = os.path.relpath(dirpath, src_root)
-    dirnames[:] = [
-        d for d in dirnames
-        if d not in ALWAYS_EXCLUDE
-        and not (d in TOP_LEVEL_EXCLUDE and rel_dir == '.')
-    ]
-
-    for f in filenames:
-        src = os.path.join(dirpath, f)
-        rel = os.path.relpath(src, src_root)
-        dst = os.path.join(dst_root, rel)
-
-        # Check file-level exclusions
-        if any(rel.endswith(suf) for suf in EXCLUDE_FILE_SUFFIXES):
-            continue
-        if any(rel.endswith(suf) for suf in EXCLUDE_SIDECAR_SUFFIXES):
-            continue
-
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-
-        if f.endswith('.db'):
-            try:
-                con = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
-                try:
-                    backup_con = sqlite3.connect(str(dst))
-                    try:
-                        con.backup(backup_con)
-                    finally:
-                        backup_con.close()
-                finally:
-                    con.close()
-            except (sqlite3.Error, Exception):
-                shutil.copy2(src, dst)
-        else:
-            shutil.copy2(src, dst)
-PYEOF
+python3 "$SCRIPT_DIR/junie-runtime-artifact.py" snapshot-profile "$PROFILE_DIR" "$ARCHIVE_PROFILE_DIR"
 
 # ── Build runtime wheel artifact ──
-# Source shared helpers for Hermes Python resolution
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./runtime-paths.sh
-. "$SCRIPT_DIR/runtime-paths.sh"
 
 RUNTIME_MANIFEST_SRC="$PROFILE_DIR/junie-live/runtime/junie_runtime.json"
 ARCHIVE_RUNTIME_DIR="$STAGING_DIR/runtime"
@@ -161,14 +111,7 @@ ARCHIVE_RUNTIME_DIR="$STAGING_DIR/runtime"
 if [[ -f "$RUNTIME_MANIFEST_SRC" ]]; then
   log "runtime manifest found: $RUNTIME_MANIFEST_SRC"
 
-  RUNTIME_SOURCE="$(python3 -c "
-import json
-try:
-    m = json.load(open('$RUNTIME_MANIFEST_SRC'))
-    print(m.get('source_path', ''))
-except Exception:
-    print('')
-")"
+  RUNTIME_SOURCE="$(python3 "$SCRIPT_DIR/junie-runtime-artifact.py" read-manifest-field "$RUNTIME_MANIFEST_SRC" source_path)"
   if [[ -z "$RUNTIME_SOURCE" || ! -d "$RUNTIME_SOURCE" ]]; then
     err "runtime source path not found: ${RUNTIME_SOURCE:-'(empty)'}"
     err "  (recorded in $RUNTIME_MANIFEST_SRC)"
@@ -183,10 +126,7 @@ except Exception:
 
   mkdir -p "$ARCHIVE_RUNTIME_DIR"
 
-  HERMES_PY="$(resolve_hermes_python)" || exit 1
-  ensure_hermes_pip "$HERMES_PY" || exit 1
-
-  "$HERMES_PY" -m pip wheel --no-deps "$RUNTIME_BUILD_COPY" -w "$ARCHIVE_RUNTIME_DIR" -q || {
+  python3 -m pip wheel --no-deps "$RUNTIME_BUILD_COPY" -w "$ARCHIVE_RUNTIME_DIR" -q || {
     err "pip wheel failed for $RUNTIME_SOURCE"
     exit 1
   }
@@ -205,14 +145,11 @@ except Exception:
   WHEEL_BASENAME="$(basename "$WHEEL_FILE")"
 
   # Copy manifest to archive with wheel info
-  python3 -c "
-import json, datetime
-m = json.load(open('$RUNTIME_MANIFEST_SRC'))
-m['wheel_filename'] = '$WHEEL_BASENAME'
-m['wheel_sha256'] = '$WHEEL_HASH'
-m['wheel_built_at'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-json.dump(m, open('$ARCHIVE_RUNTIME_DIR/junie_runtime.json', 'w'), indent=2)
-"
+  python3 "$SCRIPT_DIR/junie-runtime-artifact.py" enrich-archive-manifest \
+    --input "$RUNTIME_MANIFEST_SRC" \
+    --output "$ARCHIVE_RUNTIME_DIR/junie_runtime.json" \
+    --wheel-filename "$WHEEL_BASENAME" \
+    --wheel-sha256 "$WHEEL_HASH"
   log "  wheel: $WHEEL_BASENAME ($WHEEL_HASH)"
 else
   err "runtime manifest not found: $RUNTIME_MANIFEST_SRC"
