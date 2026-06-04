@@ -219,6 +219,6 @@ log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
 
 log "consistency check tests"
-"$ROOT/scripts/test-consistency-check.sh" || fail "consistency check tests failed"
+python3 "$ROOT/scripts/test_consistency_check.py" || fail "consistency check tests failed"
 
 log "all checks passed"

@@ -219,16 +219,40 @@ def is_diverged(repo: str, main_branch: str) -> tuple[bool, str]:
     return False, ""
 
 
-def mutex_is_held() -> tuple[bool, str]:
+def mutex_acquire(holder_id: str, reason: str, repo: str = "", branch: str = "") -> tuple[bool, str]:
+    mutex_dir = get_mutex_dir()
+    try:
+        os.mkdir(mutex_dir)
+    except FileExistsError:
+        holder_file = os.path.join(mutex_dir, "holder.json")
+        if os.path.isfile(holder_file):
+            holder = read_json(holder_file) or {}
+            stored_id = holder.get("holder_id", "unknown")
+            return False, f"mutex held by {stored_id}"
+        return False, "mutex directory exists but holder.json is missing"
+    holder = {
+        "holder_id": holder_id,
+        "reason": reason,
+        "repo": repo,
+        "branch": branch,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "pid": os.getpid(),
+    }
+    atomic_write_json(os.path.join(mutex_dir, "holder.json"), holder)
+    return True, ""
+
+
+def mutex_release(holder_id: str) -> None:
     mutex_dir = get_mutex_dir()
     if not os.path.isdir(mutex_dir):
-        return False, ""
+        return
     holder_file = os.path.join(mutex_dir, "holder.json")
     if os.path.isfile(holder_file):
         holder = read_json(holder_file) or {}
-        holder_id = holder.get("holder_id", "unknown")
-        return True, f"mutex held by {holder_id}"
-    return True, "mutex directory exists but holder.json is missing"
+        if holder.get("holder_id", "") != holder_id:
+            return
+    shutil.rmtree(mutex_dir, ignore_errors=True)
 
 
 # ── Stable ID generation ──
@@ -324,7 +348,7 @@ Pending contradictions for revalidation:
 Relevant artifacts:
 {artifacts_text}
 
-Output sections: new, still_open, resolved, silent_agent_doc_fixes, blocked_or_questions, state_update.
+Output sections (use ## headings): new, still_open, resolved, silent_agent_doc_fixes, blocked_or_questions, state_update.
 """
 
 
@@ -458,63 +482,109 @@ def _parse_audit_output(output: str) -> dict:
     current_section = None
     current_items = []
     for line in output.split("\n"):
-        if line.startswith("### ") and current_section:
-            current_items.append(line)
-        elif line.startswith("## "):
+        if line.startswith("## "):
             section_name = line.strip("# ").strip().lower().replace(" ", "_")
+            if current_section and current_items:
+                sections[current_section].append("\n".join(current_items))
+            current_items = []
             if section_name in sections:
-                if current_section and current_items:
-                    sections[current_section].append("\n".join(current_items))
                 current_section = section_name
-                current_items = []
             else:
-                if current_section and current_items:
-                    sections[current_section].append("\n".join(current_items))
                 current_section = None
-                current_items = []
+        elif current_section and line.startswith("### ") and current_section in sections:
+            if current_items:
+                joined = "\n".join(current_items).strip()
+                if joined:
+                    sections[current_section].append(joined)
+            current_items = [line]
         elif current_section:
             current_items.append(line)
     if current_section and current_items:
-        sections[current_section].append("\n".join(current_items))
+        joined = "\n".join(current_items).strip()
+        if joined:
+            sections[current_section].append(joined)
     return sections
 
 
-def _update_pending_file(pending_path: str, parsed: dict, state: dict) -> list[str]:
-    resolved_ids = []
-    for block in parsed.get("resolved", []):
-        m = re.search(r"CC-[a-f0-9]+", block)
+def _extract_item_id(block: str) -> Optional[str]:
+    m = re.search(r"### (CC-[a-f0-9]+):", block)
+    return m.group(1) if m else None
+
+
+def _parse_existing_items(text: str) -> dict[str, str]:
+    items: dict[str, str] = {}
+    current_id = None
+    current_block: list[str] = []
+    for line in text.split("\n"):
+        m = re.match(r"^### (CC-[a-f0-9]+):", line)
         if m:
+            if current_id and current_block:
+                items[current_id] = "\n".join(current_block)
+            current_id = m.group(1)
+            current_block = [line]
+        elif current_id is not None:
+            current_block.append(line)
+    if current_id is not None and current_block:
+        items[current_id] = "\n".join(current_block)
+    return items
+
+
+SEVERITY_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3, "Unknown": 99}
+
+
+def _severity_key(item: tuple[str, str]) -> tuple:
+    _, block = item
+    m = re.search(r"Severity:\s*(\S+)", block)
+    sev = m.group(1) if m else "Unknown"
+    return (SEVERITY_ORDER.get(sev, 99), item[0])
+
+
+def _update_pending_file(pending_path: str, parsed: dict, state: dict) -> list[str]:
+    resolved_ids: list[str] = []
+    for block in parsed.get("resolved", []):
+        for m in re.finditer(r"CC-[a-f0-9]+", block):
             resolved_ids.append(m.group(0))
 
     existing = read_text(pending_path) or ""
-    if resolved_ids:
-        lines = existing.split("\n")
-        keep = []
-        skip = False
-        skip_section = False
-        for line in lines:
-            if re.match(r"^### CC-", line):
-                sid = line.split(":")[0].strip("# ")
-                if sid in resolved_ids:
-                    skip = True
-                else:
-                    skip = False
-            if line.startswith("## "):
-                skip_section = False
-            if not skip:
-                keep.append(line)
-        new_pending = "\n".join(keep)
-    else:
-        new_pending = existing
+    items = _parse_existing_items(existing)
 
-    new_entries = []
+    for rid in resolved_ids:
+        items.pop(rid, None)
+
     for block in parsed.get("new", []):
-        if block.strip():
-            new_entries.append(block.strip())
-            new_pending += "\n" + block.strip() + "\n"
+        bid = _extract_item_id(block)
+        if bid:
+            items[bid] = block.strip()
 
-    if new_pending.strip():
-        atomic_write_text(pending_path, new_pending)
+    for block in parsed.get("still_open", []):
+        bid = _extract_item_id(block)
+        if bid:
+            items[bid] = block.strip()
+
+    sorted_items = sorted(items.items(), key=_severity_key)
+
+    header = """# Pending Contradictions
+
+Current unresolved contradictions known to Junie. The consistency runner revalidates this file on every successful check and removes items that are no longer present on main.
+
+"""
+    body_parts: list[str] = []
+    current_sev: Optional[str] = None
+    for item_id, block in sorted_items:
+        m = re.search(r"Severity:\s*(\S+)", block)
+        sev = m.group(1) if m else "Unknown"
+        if sev != current_sev:
+            if current_sev is not None:
+                body_parts.append("")
+            body_parts.append(f"## {sev}")
+            body_parts.append("")
+            current_sev = sev
+        body_parts.append(block)
+
+    body = "\n".join(body_parts)
+    new_pending = header + body + "\n"
+
+    atomic_write_text(pending_path, new_pending)
 
     return resolved_ids
 
@@ -529,222 +599,256 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
     repo = os.path.abspath(repo)
 
-    # Check mutex
-    held, msg = mutex_is_held()
-    if held:
-        print(f"BLOCKED: {msg}", file=sys.stderr)
-        return 2
-
-    # Check worktree cleanliness
-    if not git_is_clean(repo):
-        print("BLOCKED: working tree is dirty. Commit, stash, or remove changes first.", file=sys.stderr)
-        return 2
-
-    # Fetch
-    ok, err = fetch_origin(repo)
-    if not ok:
-        print(f"BLOCKED: fetch failed: {err}", file=sys.stderr)
-        return 2
-
-    # Load state
-    state_path = get_state_path()
-    state = read_json(state_path)
-    if not state:
-        print("ERROR: consistency state not found. Run 'consistency_check.py init' first.", file=sys.stderr)
-        return 1
-
-    main_branch = state["main_branch"]
-
-    # Check branch
-    current_branch = get_current_branch(repo)
-    if current_branch != main_branch:
-        print(f"BLOCKED: on branch '{current_branch}', expected '{main_branch}'", file=sys.stderr)
-        return 2
-
-    # Check diverged
-    diverged, div_msg = is_diverged(repo, main_branch)
-    if diverged:
-        print(f"BLOCKED: {div_msg}", file=sys.stderr)
-        return 2
-
-    last_checkpoint = state.get("last_checkpoint_commit", "")
-    head_sha = get_head_sha(repo)
-    if not head_sha:
-        print("ERROR: could not determine HEAD sha", file=sys.stderr)
-        return 1
-
-    if last_checkpoint == head_sha:
-        print("No new commits since last checkpoint. Nothing to check.")
-
-    commit_range = f"{last_checkpoint}..{head_sha}" if last_checkpoint else head_sha
-
-    # Get changed files
-    if last_checkpoint:
-        r = run_git(["diff", "--name-only", f"{last_checkpoint}..{head_sha}"], repo)
-    else:
-        r = run_git(["diff", "--name-only", "HEAD"], repo)
-    changed = [l.strip() for l in r.stdout.strip().split("\n") if l.strip()] if r.returncode == 0 else []
-
-    # Create run
+    # Create run_id early for blocked artifact recording
     run_id = f"cc-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:6]}"
     run_dir = get_run_dir(run_id)
     os.makedirs(run_dir, exist_ok=True)
-    os.makedirs(os.path.join(run_dir, "control"), exist_ok=True)
-    os.makedirs(os.path.join(run_dir, "locks"), exist_ok=True)
 
-    # Write input.json
-    input_data = {
-        "run_id": run_id,
-        "repo": repo,
-        "main_branch": main_branch,
-        "last_checkpoint_commit": last_checkpoint,
-        "head_sha": head_sha,
-        "commit_range": commit_range,
-        "changed_files": changed,
-        "state": state,
-    }
-    atomic_write_json(os.path.join(run_dir, "input.json"), input_data)
+    # Acquire mutex (atomic mkdir).  If it already exists the mutex is held.
+    current_branch = get_current_branch(repo) or ""
+    mutex_holder_id = f"junie:consistency-check:{run_id}"
+    acquired, mutex_msg = mutex_acquire(mutex_holder_id, "consistency check", repo, current_branch)
+    if not acquired:
+        _write_run_artifacts(run_dir, "blocked", "mutex_held", mutex_msg)
+        print(f"BLOCKED: {mutex_msg}", file=sys.stderr)
+        return 2
 
-    # Render prompt
-    hermes_md = os.path.join(repo, "HERMES.md")
-    if not os.path.isfile(hermes_md):
-        hermes_md = os.path.join(repo, ".hermes.md")
+    try:
+        # Preflight: worktree cleanliness
+        if not git_is_clean(repo):
+            _write_run_artifacts(run_dir, "blocked", "dirty_worktree",
+                                 "Working tree is dirty. Commit, stash, or remove changes first.")
+            print("BLOCKED: working tree is dirty.", file=sys.stderr)
+            return 2
 
-    profile_docs = os.path.join(get_profile_dir(), "docs")
-    pending_content = read_text(get_pending_path()) or "(no pending contradictions)"
-    relevant = state.get("relevant_artifacts", [])
+        # Preflight: fetch
+        ok, err = fetch_origin(repo)
+        if not ok:
+            _write_run_artifacts(run_dir, "blocked", "fetch_failed", err, {
+                "run_id": run_id, "repo": repo, "reason": "fetch_failed"})
+            print(f"BLOCKED: fetch failed: {err}", file=sys.stderr)
+            return 2
 
-    prompt = render_prompt(
-        repo_path=repo,
-        hermes_md_path=hermes_md,
-        profile_docs_dir=profile_docs,
-        pending_path=get_pending_path(),
-        state_path=state_path,
-        run_dir=run_dir,
-        commit_range=commit_range,
-        changed_files=changed,
-        pending_content=pending_content,
-        relevant_artifacts=relevant,
-    )
+        # Load state
+        state_path = get_state_path()
+        state = read_json(state_path)
+        if not state:
+            print("ERROR: consistency state not found. Run 'consistency_check.py init' first.", file=sys.stderr)
+            return 1
 
-    # Write prompt
-    prompt_path = os.path.join(run_dir, "prompt.md")
-    atomic_write_text(prompt_path, prompt)
+        main_branch = state["main_branch"]
 
-    # Dry-run mode
-    if args.dry_run:
-        print(f"DRY RUN: run_id={run_id}")
-        print(f"Prompt written to: {prompt_path}")
-        print("Skipping headless Hermes invocation.")
+        # Preflight: correct branch
+        current_branch = get_current_branch(repo)
+        if current_branch != main_branch:
+            _write_run_artifacts(run_dir, "blocked", "wrong_branch",
+                                 f"On branch '{current_branch}', expected '{main_branch}'", {
+                                     "run_id": run_id, "repo": repo, "main_branch": main_branch,
+                                     "current_branch": current_branch})
+            print(f"BLOCKED: on branch '{current_branch}', expected '{main_branch}'", file=sys.stderr)
+            return 2
+
+        # Preflight: diverged main
+        diverged, div_msg = is_diverged(repo, main_branch)
+        if diverged:
+            _write_run_artifacts(run_dir, "blocked", "diverged", div_msg, {
+                "run_id": run_id, "repo": repo, "main_branch": main_branch, "diverged": div_msg})
+            print(f"BLOCKED: {div_msg}", file=sys.stderr)
+            return 2
+
+        last_checkpoint = state.get("last_checkpoint_commit", "")
+        head_sha = get_head_sha(repo)
+        if not head_sha:
+            print("ERROR: could not determine HEAD sha", file=sys.stderr)
+            return 1
+
+        if last_checkpoint == head_sha:
+            print("No new commits since last checkpoint. Nothing to check.")
+
+        commit_range = f"{last_checkpoint}..{head_sha}" if last_checkpoint else head_sha
+
+        # Get changed files
+        if last_checkpoint:
+            r = run_git(["diff", "--name-only", f"{last_checkpoint}..{head_sha}"], repo)
+        else:
+            r = run_git(["diff", "--name-only", "HEAD"], repo)
+        changed = [l.strip() for l in r.stdout.strip().split("\n") if l.strip()] if r.returncode == 0 else []
+
+        os.makedirs(os.path.join(run_dir, "control"), exist_ok=True)
+        os.makedirs(os.path.join(run_dir, "locks"), exist_ok=True)
+
+        # Write input.json
+        input_data = {
+            "run_id": run_id,
+            "repo": repo,
+            "main_branch": main_branch,
+            "last_checkpoint_commit": last_checkpoint,
+            "head_sha": head_sha,
+            "commit_range": commit_range,
+            "changed_files": changed,
+            "state": state,
+        }
+        atomic_write_json(os.path.join(run_dir, "input.json"), input_data)
+
+        # Render prompt
+        hermes_md = os.path.join(repo, "HERMES.md")
+        if not os.path.isfile(hermes_md):
+            hermes_md = os.path.join(repo, ".hermes.md")
+
+        profile_docs = os.path.join(get_profile_dir(), "docs")
+        pending_content = read_text(get_pending_path()) or "(no pending contradictions)"
+        relevant = state.get("relevant_artifacts", [])
+
+        prompt = render_prompt(
+            repo_path=repo,
+            hermes_md_path=hermes_md,
+            profile_docs_dir=profile_docs,
+            pending_path=get_pending_path(),
+            state_path=state_path,
+            run_dir=run_dir,
+            commit_range=commit_range,
+            changed_files=changed,
+            pending_content=pending_content,
+            relevant_artifacts=relevant,
+        )
+
+        # Write prompt
+        prompt_path = os.path.join(run_dir, "prompt.md")
+        atomic_write_text(prompt_path, prompt)
+
+        # Dry-run mode
+        if args.dry_run:
+            print(f"DRY RUN: run_id={run_id}")
+            print(f"Prompt written to: {prompt_path}")
+            print("Skipping headless Hermes invocation.")
+            return 0
+
+        # Launch headless Hermes
+        profile = os.environ.get("HERMES_PROFILE", "junie-live")
+        hermes_bin = shutil.which("hermes")
+        if not hermes_bin:
+            print("ERROR: 'hermes' not found in PATH", file=sys.stderr)
+            return 1
+
+        print(f"Launching headless Hermes audit (profile={profile})...")
+        try:
+            r = subprocess.run(
+                [hermes_bin, "-p", profile, "chat", "-q", prompt],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                timeout=args.timeout,
+            )
+            agent_output = r.stdout
+            agent_stderr = r.stderr
+            exit_code = r.returncode
+        except subprocess.TimeoutExpired:
+            print(f"ERROR: Hermes audit timed out after {args.timeout}s", file=sys.stderr)
+            _write_failed_run(run_dir, "timeout", f"Audit timed out after {args.timeout}s")
+            return 2
+        except FileNotFoundError:
+            print(f"ERROR: hermes binary not found at {hermes_bin}", file=sys.stderr)
+            return 1
+
+        # Write agent output
+        atomic_write_text(os.path.join(run_dir, "agent-output.md"), agent_output)
+        if agent_stderr:
+            atomic_write_text(os.path.join(run_dir, "agent-stderr.log"), agent_stderr)
+
+        if exit_code != 0:
+            print(f"ERROR: Hermes audit exited with code {exit_code}", file=sys.stderr)
+            _write_failed_run(run_dir, "hermes_failed", f"hermes exited with code {exit_code}")
+            return 2
+
+        # Parse output
+        parsed = _parse_audit_output(agent_output)
+
+        # Update pending file
+        resolved_ids = _update_pending_file(get_pending_path(), parsed, state)
+
+        # Write report
+        report_lines = [
+            f"# Consistency Check Report — {run_id}",
+            f"",
+            f"- Checked: {commit_range}",
+            f"- Changed files: {len(changed)}",
+            f"",
+        ]
+        for section_name in ("new", "still_open", "resolved", "silent_agent_doc_fixes", "blocked_or_questions", "state_update"):
+            items = parsed.get(section_name, [])
+            if items:
+                report_lines.append(f"## {section_name.replace('_', ' ').title()}")
+                report_lines.append("")
+                for item in items:
+                    report_lines.append(item if item.startswith("### ") else f"- {item}")
+                report_lines.append("")
+
+        if resolved_ids:
+            report_lines.append(f"Resolved IDs: {', '.join(resolved_ids)}")
+
+        report = "\n".join(report_lines)
+        atomic_write_text(os.path.join(run_dir, "report.md"), report)
+
+        # Write events
+        now = time.time()
+        iso = datetime.now(timezone.utc).isoformat()
+        event = json.dumps({"ts": now, "iso": iso, "type": "check_completed", "data": {"run_id": run_id, "commit_range": commit_range, "new_count": len(parsed.get("new", [])), "resolved_count": len(resolved_ids)}}, default=str) + "\n"
+        with open(os.path.join(run_dir, "events.jsonl"), "a") as f:
+            f.write(event)
+
+        # Write status
+        status = {
+            "run_id": run_id,
+            "status": "completed",
+            "checked_range": commit_range,
+            "new_count": len(parsed.get("new", [])),
+            "resolved_count": len(resolved_ids),
+            "completed_at": iso,
+        }
+        atomic_write_json(os.path.join(run_dir, "status.json"), status)
+
+        # Update checkpoint
+        state["last_checkpoint_commit"] = head_sha
+        state["last_scan_at"] = datetime.now(timezone.utc).isoformat()
+        state["last_successful_run_id"] = run_id
+        atomic_write_json(state_path, state)
+
+        print(report)
+        print(f"\nCheckpoint updated to {head_sha}")
         return 0
 
-    # Launch headless Hermes
-    profile = os.environ.get("HERMES_PROFILE", "junie-live")
-    hermes_bin = shutil.which("hermes")
-    if not hermes_bin:
-        print("ERROR: 'hermes' not found in PATH", file=sys.stderr)
-        return 1
+    finally:
+        mutex_release(mutex_holder_id)
 
-    print(f"Launching headless Hermes audit (profile={profile})...")
-    try:
-        r = subprocess.run(
-            [hermes_bin, "-p", profile, "chat", "-q", prompt],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            timeout=args.timeout,
-        )
-        agent_output = r.stdout
-        agent_stderr = r.stderr
-        exit_code = r.returncode
-    except subprocess.TimeoutExpired:
-        print(f"ERROR: Hermes audit timed out after {args.timeout}s", file=sys.stderr)
-        _write_failed_run(run_dir, "timeout", f"Audit timed out after {args.timeout}s")
-        return 2
-    except FileNotFoundError:
-        print(f"ERROR: hermes binary not found at {hermes_bin}", file=sys.stderr)
-        return 1
 
-    # Write agent output
-    atomic_write_text(os.path.join(run_dir, "agent-output.md"), agent_output)
-    if agent_stderr:
-        atomic_write_text(os.path.join(run_dir, "agent-stderr.log"), agent_stderr)
-
-    if exit_code != 0:
-        print(f"ERROR: Hermes audit exited with code {exit_code}", file=sys.stderr)
-        _write_failed_run(run_dir, "hermes_failed", f"hermes exited with code {exit_code}")
-        return 2
-
-    # Parse output
-    parsed = _parse_audit_output(agent_output)
-
-    # Update pending file
-    resolved_ids = _update_pending_file(get_pending_path(), parsed, state)
-
-    # Write report
-    report_lines = [
-        f"# Consistency Check Report — {run_id}",
-        f"",
-        f"- Checked: {commit_range}",
-        f"- Changed files: {len(changed)}",
-        f"",
-    ]
-    for section_name in ("new", "still_open", "resolved", "silent_agent_doc_fixes", "blocked_or_questions", "state_update"):
-        items = parsed.get(section_name, [])
-        if items:
-            report_lines.append(f"## {section_name.replace('_', ' ').title()}")
-            report_lines.append("")
-            for item in items:
-                report_lines.append(item if item.startswith("### ") else f"- {item}")
-            report_lines.append("")
-
-    if resolved_ids:
-        report_lines.append(f"Resolved IDs: {', '.join(resolved_ids)}")
-
-    report = "\n".join(report_lines)
-    atomic_write_text(os.path.join(run_dir, "report.md"), report)
-
-    # Write events
-    events_path = os.path.join(run_dir, "events.jsonl")
-    now = time.time()
+def _write_run_artifacts(run_dir: str, status_val: str, reason: str, detail: str, input_data: Optional[dict] = None) -> None:
     iso = datetime.now(timezone.utc).isoformat()
-    event = json.dumps({"ts": now, "iso": iso, "type": "check_completed", "data": {"run_id": run_id, "commit_range": commit_range, "new_count": len(parsed.get("new", [])), "resolved_count": len(resolved_ids)}}, default=str) + "\n"
-    with open(events_path, "a") as f:
-        f.write(event)
-
-    # Write status
-    status = {
+    run_id = os.path.basename(run_dir)
+    atomic_write_json(os.path.join(run_dir, "status.json"), {
         "run_id": run_id,
-        "status": "completed",
-        "checked_range": commit_range,
-        "new_count": len(parsed.get("new", [])),
-        "resolved_count": len(resolved_ids),
-        "completed_at": iso,
-    }
-    atomic_write_json(os.path.join(run_dir, "status.json"), status)
-
-    # Update checkpoint
-    state["last_checkpoint_commit"] = head_sha
-    state["last_scan_at"] = datetime.now(timezone.utc).isoformat()
-    state["last_successful_run_id"] = run_id
-    atomic_write_json(state_path, state)
-
-    print(report)
-    print(f"\nCheckpoint updated to {head_sha}")
-    return 0
-
-
-def _write_failed_run(run_dir: str, reason: str, detail: str) -> None:
-    iso = datetime.now(timezone.utc).isoformat()
-    status = {
-        "run_id": os.path.basename(run_dir),
-        "status": "failed",
+        "status": status_val,
         "reason": reason,
         "detail": detail,
         "failed_at": iso,
-    }
-    atomic_write_json(os.path.join(run_dir, "status.json"), status)
-    atomic_write_text(os.path.join(run_dir, "report.md"), f"# Consistency Check — Failed\n\nReason: {reason}\n\nDetail: {detail}\n")
+    })
+    atomic_write_text(os.path.join(run_dir, "report.md"),
+        f"# Consistency Check — {status_val.title()}\n\nReason: {reason}\n\nDetail: {detail}\n")
+    if input_data:
+        atomic_write_json(os.path.join(run_dir, "input.json"), input_data)
+    event = json.dumps({
+        "ts": time.time(),
+        "iso": iso,
+        "type": f"{status_val}_preflight",
+        "data": {"reason": reason, "detail": detail},
+    }, default=str) + "\n"
+    events_path = os.path.join(run_dir, "events.jsonl")
+    os.makedirs(os.path.dirname(events_path), exist_ok=True)
+    with open(events_path, "a") as f:
+        f.write(event)
+
+
+def _write_failed_run(run_dir: str, reason: str, detail: str) -> None:
+    _write_run_artifacts(run_dir, "failed", reason, detail)
 
 
 # ── CLI ──

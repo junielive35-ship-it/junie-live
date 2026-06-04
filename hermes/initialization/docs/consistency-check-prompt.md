@@ -39,7 +39,7 @@ If a contradiction between repo and agent state was explicitly accepted by the o
 
 Your output must contain these sections in order. Use Markdown headings.
 
-### new
+## new
 
 List newly discovered contradictions that were not in the pending set. Each entry:
 
@@ -59,23 +59,23 @@ List newly discovered contradictions that were not in the pending set. Each entr
 
 Stable ID: normalized hash of bucket + claim + involved paths. Not timestamp-based.
 
-### still_open
+## still_open
 
 List pending contradictions that remain unresolved. Use the same format but include `Last seen` and `Last checked commit`.
 
-### resolved
+## resolved
 
 List pending contradictions that are no longer present on main. Include the stable ID, title, and a brief reason.
 
-### silent_agent_doc_fixes
+## silent_agent_doc_fixes
 
 List any minor agent-doc-only fixes you applied. Include file path and what was fixed.
 
-### blocked_or_questions
+## blocked_or_questions
 
 List anything that blocked the check or needs owner clarification.
 
-### state_update
+## state_update
 
 Any formalized known exceptions, decisions, or rules that should be recorded in agent state.
 
