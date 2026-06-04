@@ -119,7 +119,8 @@ for required_file in \
     initialization/plugins/autonomous-work/prompts.py \
     initialization/plugins/autonomous-work/backlog.py \
     initialization/plugins/autonomous-work/scripts/aw-runner.sh \
-    initialization/docs/backlog-protocol.md; do
+    initialization/docs/backlog-protocol.md \
+    initialization/docs/consistency-check-prompt.md; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 
@@ -201,6 +202,10 @@ for plugin_py in initialization/plugins/*/*.py; do
   python3 -m py_compile "$plugin_py" || fail "python syntax error in $plugin_py"
 done
 
+log "consistency check runner python syntax"
+python3 -m py_compile "$ROOT/initialization/scripts/consistency_check.py" || \
+  fail "python syntax error in consistency_check.py"
+
 log "dump/rehire disaster recovery tests"
 "$ROOT/scripts/test-dump-rehire.sh" || fail "dump/rehire disaster recovery tests failed"
 
@@ -212,5 +217,8 @@ log "marinator delegation regression tests"
 
 log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
+
+log "consistency check tests"
+python3 "$ROOT/scripts/test_consistency_check.py" || fail "consistency check tests failed"
 
 log "all checks passed"

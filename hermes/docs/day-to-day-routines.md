@@ -80,13 +80,21 @@ Reports:
 - Pending decisions/approvals
 - Blocked work items
 
-### 7. MD consistency scan
+### 7. Consistency check scan
 
 Detects contradictions between:
 - Strategy and implementation
 - Docs and code
 - Memory and docs
 - Skills and current workflow
+- Repo docs and agent state
+
+The consistency check is a maintenance entrypoint, not a model-loop tool. Invoked via:
+- CLI: `python3 "$HERMES_HOME/scripts/consistency_check.py" run --repo <path>`
+- Future cron: recurring checks require owner approval
+- Future slash: `/check_consistency` deferred until Hermes supports safe profile-local hooks
+
+Error artifacts live at `~/.hermes/profiles/junie-live/junie-live/state/consistency/runs/<run_id>/`. Check the runner's `report.md` or the main `PENDING_CONTRADICTIONS.md` for current state.
 
 ### 8. Backlog management
 

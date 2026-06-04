@@ -117,7 +117,21 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
     - the mutex state directory at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) was created by the hire script;
     - record the administrator/owner escalation path for held or stale mutex decisions in memory.
 12. Check memory size after editing. If it is too large or close to budget, move details into profile docs and keep only the strategic core in memory.
-13. Decide whether initialization is complete:
+13. Initialize consistency check state:
+    - Run the installed profile runner **in foreground via the terminal tool** and inspect its exit code and output before continuing:
+      ```bash
+      python3 "$HERMES_HOME/scripts/consistency_check.py" init --repo <target-repo>
+      ```
+    - Do not run it with `background=true`, shell backgrounding (`&`), cron, or any fire-and-forget path during initialization. Initialization must wait for this command to finish so the orchestrator sees the result.
+    - Exit 0 means the runner detected the main branch (`main`, else `master`) and wrote initial `consistency-state.json` with `main_branch`, `last_checkpoint_commit`, and `last_scan_at`. Record the branch/checkpoint in `docs/tools.md` / relevant profile docs if useful, then continue initialization.
+    - Non-zero with ambiguous branch means initialization remains blocked: explain to the owner that consistency diffs and checkpoints depend on the main branch, ask which branch to use, then rerun with `--main-branch <branch>`.
+    - Any other non-zero result blocks initialization until resolved; do not delete `INITIALIZATION.md` while consistency state is missing.
+    - The runner creates empty `PENDING_CONTRADICTIONS.md` if missing.
+    - Optionally seed `relevant_artifacts` with clearly relevant root architecture diagrams/images discovered during initialization.
+    - Do not overwrite existing consistency state unless starting fresh.
+    - The installed runner path is `$HERMES_HOME/scripts/consistency_check.py` after hire. The repo seed path `hermes/initialization/scripts/consistency_check.py` is only the source copied into the profile.
+    - The consistency runner is **not** a normal model-loop tool — it is a maintenance entrypoint invoked via foreground CLI during initialization, admin command, or future cron. The orchestrator must not invoke it as a normal tool.
+14. Decide whether initialization is complete:
     - required inputs are captured or safely inferred;
     - no blocking contradiction remains;
     - every process-affecting contradiction (spec↔implementation, spec↔spec, or comments↔code) has an explicit owner-confirmed resolution: fixed with approval, or accepted as a known deviation. Listing unresolved process-affecting contradictions in the completion report is not sufficient to finish initialization, and contradictions must not be fixed silently before the owner confirms;
