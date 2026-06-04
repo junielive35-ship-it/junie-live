@@ -59,9 +59,19 @@ Example:
 }
 ```
 
+## Implementation
+
+The mutex logic lives in the shared `junie_runtime` Python package (`hermes/junie_runtime/src/junie_runtime/mutex.py`), which is the single source of truth. The `code-mutex.sh` shell script is a thin compatibility wrapper around `python -m junie_runtime.cli.mutex`; it contains no mutex logic itself.
+
+The runtime package must be installed into the Hermes Python environment:
+
+```bash
+python3 -m pip install -e /path/to/junie-live/hermes/junie_runtime
+```
+
 ## Installed command interface
 
-The reusable seed ships the implementation as `hermes/initialization/scripts/code-mutex.sh`. During hire, the script is installed into the profile and should be invoked from there:
+The reusable seed ships the wrapper as `hermes/initialization/scripts/code-mutex.sh`. During hire, the script is installed into the profile and should be invoked from there:
 
 ```bash
 ~/.hermes/profiles/junie-live/scripts/code-mutex.sh status
@@ -70,7 +80,7 @@ The reusable seed ships the implementation as `hermes/initialization/scripts/cod
 ~/.hermes/profiles/junie-live/scripts/code-mutex.sh check-stale [--stale-minutes N] [--auto-recover]
 ```
 
-Use the profile-local script instead of ad hoc shell snippets whenever possible. It centralizes path resolution, holder metadata, stale detection, and release checks.
+Use the profile-local script instead of ad hoc shell snippets whenever possible. It centralizes path resolution, holder metadata, stale detection, and release checks. Note that the script delegates entirely to the Python runtime package, so `junie_runtime` must be importable.
 
 Status states:
 

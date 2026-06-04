@@ -7,14 +7,15 @@
 - Your Telegram user ID
 - An LLM provider configured in Hermes (OpenRouter, Anthropic, etc.) — for orchestrator turns
 - [opencode](https://github.com/sst/opencode) installed at `~/.opencode/bin/opencode` — for code-changing delegations
-- An OpenRouter API key — for opencode (see step 4 below for installation)
+- An OpenRouter API key — for opencode (see step 5 below for installation)
+- Python 3.10+ with `pip` available
 
 ## Quick Setup
 
 ```bash
 cd ~/code/junie-live
 
-# Run the hire script
+# Run the hire script (installs junie_runtime package automatically)
 ./hermes/scripts/hire-junie.sh \
   --telegram-token "$JUNIE_TELEGRAM_BOT_TOKEN" \
   --admin-telegram-id YOUR_TELEGRAM_ID
@@ -35,7 +36,17 @@ Copy the entire initialization directory to the profile (`SOUL.md`, skills, docs
 cp -a hermes/initialization/. ~/.hermes/profiles/junie-live/
 ```
 
-### 3. Configure Telegram
+### 3. Install shared runtime package
+
+The `junie_runtime` package provides the code mutex and other shared primitives. Install it into the Hermes Python environment:
+
+```bash
+python3 -m pip install -e hermes/junie_runtime
+```
+
+This is a shared package used by all Junie profiles in this Hermes install, not profile-local code. It must be importable for `code-mutex.sh` to work.
+
+### 4. Configure Telegram
 
 Add the Telegram token to the profile's .env:
 ```bash
@@ -47,7 +58,7 @@ Configure the gateway:
 hermes -p junie-live gateway setup
 ```
 
-### 4. Configure opencode for code-changing delegations
+### 5. Configure opencode for code-changing delegations
 
 Junie delegates all code-changing work to [opencode](https://github.com/sst/opencode) via the `marinator_delegate` Hermes plugin. OpenCode authenticates *independently* of Hermes — it does not read the profile's `.env`. You must configure it once at the system level:
 
@@ -175,6 +186,12 @@ To update the Junie Live seed files after improvements:
 ./hermes/scripts/hire-junie.sh \
   --telegram-token "$JUNIE_TELEGRAM_BOT_TOKEN" \
   --admin-telegram-id YOUR_TELEGRAM_ID
+```
+
+To update the shared `junie_runtime` package after changes:
+
+```bash
+python3 -m pip install -e hermes/junie_runtime  # re-installs to pick up changes
 ```
 
 Or selectively update a skill:

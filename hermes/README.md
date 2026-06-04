@@ -31,7 +31,7 @@ Hermes-native implementation of [Junie Live](../idea.md): a persistent, product-
 
 5. Send `/start` to the Junie bot in Telegram.
 
-The hire script creates the Hermes profile, installs Junie seed files, configures Telegram DM access for the admin ID, and starts the gateway. See [docs/setup.md](docs/setup.md) for manual setup options.
+The hire script creates the Hermes profile, installs Junie seed files, configures Telegram DM access for the admin ID, installs the shared `junie_runtime` package into the Hermes Python environment, and starts the gateway. See [docs/setup.md](docs/setup.md) for manual setup options.
 
 ## Dump / rehire
 
@@ -69,6 +69,19 @@ This directory contains everything needed to run Junie Live on top of [Hermes Ag
 ```
 hermes/
 ├── README.md                          # This file
+├── junie_runtime/                     # Shared Python package (pip-installable)
+│   ├── pyproject.toml
+│   ├── src/junie_runtime/
+│   │   ├── __init__.py
+│   │   ├── paths.py                   # Hermes profile path resolution
+│   │   ├── state.py                   # Atomic state file helpers
+│   │   ├── events.py                  # JSONL event helpers
+│   │   ├── mutex.py                   # Code mutex implementation
+│   │   └── cli/mutex.py               # Mutex CLI entrypoint
+│   └── tests/
+│       ├── test_paths.py
+│       ├── test_state.py
+│       └── test_mutex.py
 ├── initialization/                    # Reusable seed for new Junie instances
 │   ├── SOUL.md                        # Personality + always-on operating rules (auto-loaded by Hermes from profile)
 │   ├── INITIALIZATION.md              # One-shot init workflow (deleted by Junie when init completes)
@@ -95,10 +108,12 @@ hermes/
 ├── scripts/
 │   ├── hire-junie.sh                  # Creates profile, installs skills, sets up gateway
 │   ├── verify.sh                      # Repo verification (bash syntax, links, structure)
-│   └── code-mutex.sh                  # Lightweight mutex using state files
+│   ├── rehire-junie.sh                # Restore profile from disaster recovery archive
+│   └── test-*.sh                      # Regression test suites
 ├── docs/
 │   ├── setup.md                       # Full setup guide
 │   ├── architecture.md                # Hermes-specific architecture
+│   ├── code-mutex.md                  # Code mutex protocol docs
 │   ├── overnight-routines.md          # Autonomous work window contract
 │   └── day-to-day-routines.md         # Operational routines
 └── openclaw-hermes-comparison.md      # Platform comparison for decision-making
