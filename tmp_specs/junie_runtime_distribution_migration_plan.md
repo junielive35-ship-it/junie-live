@@ -7,7 +7,7 @@
 - `junie_runtime` is a normal Python package shared by the whole Hermes install / Python environment, not profile-local code.
 - Profiles own state/config/docs/skills/plugins; they do not own separate runtime versions or profile-local venvs.
 - Profile distribution is the canonical long-term delivery mechanism for Junie profile assets.
-- `hermes/initialization/` is legacy/prototype seed material and should disappear or become a temporary migration/compatibility source during the transition.
+- `hermes/initialization/` has been removed; all profile assets now live under `hermes/distribution/`.
 - Bash may remain only as a thin compatibility wrapper around Python/runtime entrypoints.
 - No new runtime logic should be copied between scripts, plugins, workers, or initialization files.
 
@@ -113,7 +113,7 @@ Introduce globally installed `junie_runtime` and make Python mutex the single so
 
 ### Modify
 
-- `hermes/initialization/scripts/code-mutex.sh` or its migrated distribution equivalent:
+- `hermes/distribution/scripts/code-mutex.sh`:
   - convert to thin wrapper around `python -m junie_runtime.cli.mutex ...`;
   - keep current command contract and output shape.
 - `hermes/scripts/verify.sh`:
