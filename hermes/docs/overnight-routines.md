@@ -93,11 +93,13 @@ cronjob(action="create", name="junie-watchdog", schedule="*/15 * * * *",
 
 ## Verification failure handling
 
-Verification failures get up to 7 fix attempts. Each retry delegates the fix back to a subagent with the verification failure context. If all retries fail:
-1. Block the current task
+Verification failures are handled by the orchestrator's judgment, not by a hard-coded retry count. Each rejected result may be followed by a Marinator follow-up run with the verification failure context, or the orchestrator may restructure, wait, kill, or block based on evidence, risk, and the requested user outcome.
+
+If the task is blocked:
+1. Block the current task with evidence and gaps
 2. Release the code mutex
 3. Preserve diff/status/logs
-4. Continue to next backlog item (if within failure budget)
+4. Continue to next backlog item only if doing so is safe within the current autonomous-work window
 
 ## Local failure continuation
 

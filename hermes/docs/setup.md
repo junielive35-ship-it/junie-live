@@ -148,7 +148,7 @@ backlog items until 8am or blockers.
 ├── sessions/             # Session history
 └── state.db              # Session database
 
-~/.hermes/junie-live/
+~/.hermes/profiles/junie-live/junie-live/
 └── state/
     ├── code_mutex/       # Mutex state files
     ├── backlog/          # Hermes-native backlog items (Markdown + YAML frontmatter)
@@ -159,6 +159,8 @@ backlog items until 8am or blockers.
     ├── overnight/        # Overnight routine state
     ├── autonomous_work/  # AW window directories and artifacts
     └── logs/             # Operational logs
+
+The duplicate-looking `junie-live/junie-live` is expected in the current implementation: the first segment is the Hermes profile name, and the second is Junie Live's app-state namespace inside that profile. Legacy `~/.hermes/junie-live/state/` is used only for backup/cleanup compatibility.
 
 <target-repo>/
 └── HERMES.md             # Project-level operating protocol (installed by Junie during init)

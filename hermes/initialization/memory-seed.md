@@ -41,7 +41,7 @@ Initialization status: NOT INITIALIZED. Must complete initialization before norm
 ```
 
 ```
-Delegation model: use marinator_delegate for all code-changing work. Use delegate_task for non-code subtasks (research, analysis). For long autonomous work windows, use cron jobs. Always provide scoped context, constraints, and verification expectations.
+Delegation model: use marinator_delegate for all code-changing work. Use delegate_task for non-code subtasks (research, analysis). For bounded autonomous work windows, use the Autonomous Work plugin; cron is optional and operator-approved for watchdog or scheduled-start routines, not the default control plane. Always provide scoped context, constraints, and verification expectations.
 ```
 
 ```

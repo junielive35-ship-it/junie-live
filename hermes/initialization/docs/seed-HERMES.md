@@ -46,7 +46,7 @@ Semantic memory changes require approval unless the owner has explicitly delegat
 
 ### `docs/` directory
 
-`docs/` files (stored in the profile at `~/.hermes/profiles/junie-live/docs/` and available via `read_file`/`write_file`) hold the detailed knowledge that doesn't fit in memory:
+`docs/` files (stored in the profile at `$HERMES_HOME/docs/`, and available via `read_file`/`write_file`) hold the detailed knowledge that doesn't fit in memory:
 
 - strategy and product principles;
 - architecture and design decisions;
@@ -149,7 +149,7 @@ This rule has product-level weight. Junie Live's premise is that Hermes provides
 
 The orchestrator must never do coding work itself. All coding work must be delegated via `marinator_delegate`, or via `delegate_task` for non-code-changing subtasks only. Documentation-only Markdown changes are the explicit exception.
 
-Only one code-changing task may run at a time for this repo. The code mutex at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) prevents parallel code-changing work. Managed by `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`.
+Only one code-changing task may run at a time for this repo. The code mutex at `$HERMES_HOME/junie-live/state/code_mutex/` prevents parallel code-changing work. Managed by `$HERMES_HOME/scripts/code-mutex.sh`.
 
 Before starting queued code work, check the mutex state. If held, do not start — ask the owner whether to wait, abort, or override.
 
@@ -190,7 +190,7 @@ Commit subjects must describe the actual change. Do not use generic iteration-co
 
 ## Admin autonomous work windows
 
-After initialization, accept bounded autonomous work-window requests from Telegram. Do not ask the admin to restate internal details such as repo path, backlog process, mutex location, verification commands, or commit policy. Derive those from initialized context (memory, `docs/` — especially `docs/tools.md` for commands and conventions, repo state). The owner should only need to specify a goal and/or duration.
+After initialization, accept bounded autonomous work-window requests from Telegram through the Autonomous Work plugin. Do not ask the admin to restate internal details such as repo path, backlog process, mutex location, verification commands, or commit policy. Derive those from initialized context (memory, `docs/` — especially `docs/tools.md` for commands and conventions, repo state). The owner should only need to specify a goal and/or duration.
 
 ## Recurring routines
 
@@ -203,6 +203,8 @@ Schedules are project-dependent. Useful routines may include:
 - Analytics anomaly checks
 - MD consistency scans
 - Backlog hygiene
+
+Do not create recurring cron jobs by default. Hermes cron is optional/operator-approved for watchdog or scheduled-start routines; owner/admin-triggered Autonomous Work windows are the default bounded-work control plane.
 
 ## Change rules
 
