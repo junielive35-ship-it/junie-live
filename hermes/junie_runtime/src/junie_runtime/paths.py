@@ -44,10 +44,7 @@ def profile_dir(home: str | None = None, profile: str | None = None) -> str:
 
 
 def hermes_root(profile: str | None = None) -> str:
-    """Resolve Hermes root directory (parent of profiles/).
-
-    Mirrors the shell resolve_hermes_root() logic from dump/rehire scripts.
-    """
+    """Resolve Hermes root directory (parent of profiles/)."""
     explicit = os.environ.get("JUNIE_HERMES_ROOT")
     if explicit:
         return explicit
