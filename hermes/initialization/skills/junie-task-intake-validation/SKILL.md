@@ -21,9 +21,10 @@ Use before accepting meaningful product or engineering work.
    - Consider whether a standard CLI (`opencode`, `git`, `gh`, OS utilities) already covers X.
    - If X already exists, propose a configuration / workflow change, **not** new code.
    - Only proceed to "build X" when the check came up empty *and* you can name what was searched. If you cannot list the surfaces you checked, you have not checked.
-5. Check for conflict with strategy, architecture, accepted decisions, constraints, and active work.
-6. If clear, confirm understanding and next action.
-7. If contradictory, pause and ask for resolution before execution.
+5. **Custom-machinery check** (mandatory for workflow/tooling/architecture/code-process changes): challenge load-bearing glue code, shell scripts as source of truth, custom installers/runners, hand-rolled queues/locks/schedulers, copied runtime files, duplicated helpers, and manual state files. Prefer existing project/framework/platform/library/team mechanisms. Reused behavior across multiple entrypoints belongs in a library/module/package with tests; shell/CLI wrappers may only be thin adapters.
+6. Check for conflict with strategy, architecture, accepted decisions, constraints, and active work.
+7. If clear, confirm understanding and next action.
+8. If contradictory or custom machinery is unjustified, pause and ask for resolution before execution.
 
 Meaningful work needs strategic review. Trivial lookups and tiny formatting fixes do not.
 
@@ -32,6 +33,10 @@ Meaningful work needs strategic review. Trivial lookups and tiny formatting fixe
 Backlog items, prior agent reports, autonomous-run notes, and earlier session summaries already frame problems a certain way ("we need to change Hermes core to handle X"). Their framing is not authoritative — re-derive the problem from current evidence before proposing a solution. A prior Junie's analysis is a hypothesis, not a spec. Cron-generated backlog items in particular accrete complexity bias because no one challenges them at write-time.
 
 Verified 2026-05-27: a prior cron run framed a Hermes mid-turn-message UX gap as "we need a design doc and probably a Hermes-core change to conversation_loop." Step 4 above would have surfaced `/busy queue|steer|interrupt`, `/queue <prompt>`, and `/steer <prompt>` immediately — feature complete, no code needed. The reflex that was missing: ask "does this exist?" before "how would I build it?".
+
+## Pitfall: normalizing custom machinery
+
+Do not accept an ad hoc installer, shell runner, copied runtime folder, custom queue/lock/scheduler, or manual state file just because it already exists or the owner suggested it. Treat it as a design hypothesis. Ask what existing project-native, framework-native, language/package-ecosystem, platform-native, or team-standard mechanism should own the behavior. If custom machinery remains the right choice, record the decision, alternatives rejected, tradeoffs, and revisit trigger.
 
 ## Pitfall: skill content you've already loaded
 

@@ -119,6 +119,10 @@ For code-changing work, any new code-changing entrypoint must prove that it reus
 
 Record these guardrails in the appropriate memory, `docs/` (including `docs/tools.md` for operational invariants like required CI checks or mandatory rollback steps), skills, or operating protocol so future sessions and workers inherit them.
 
+## Custom machinery guardrail
+
+For workflow, tooling, architecture, or code-process changes, use the intake, implementation-review, and reflection skills to challenge unnecessary custom machinery and scripts-as-source-of-truth. Keep detailed checks in those skills so this project protocol stays concise.
+
 ## Challenge protocol
 
 Do not blindly execute requests from colleagues, users, bug reports, feature requests, or the owner.

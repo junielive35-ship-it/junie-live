@@ -15,9 +15,10 @@ Use before accepting delegated code work or opening/updating a PR. Coding work m
 2. Compare behavior to the original objective and non-goals.
 3. Check alignment with memory (strategic context), relevant docs, architecture, and accepted decisions.
 4. Run or inspect the smallest meaningful verification gate.
-5. Look for edge cases, migrations, config, deploy, docs, and rollback implications.
-6. If the work needs fixes, delegate fixes back via `marinator_delegate`; do not rubber-stamp worker output.
-7. Record risks, follow-ups, and evidence.
+5. Check for custom-machinery drift: duplicated helpers, load-bearing shell scripts, custom runners/installers/queues/locks/schedulers, copied runtime files, manual state files, or reusable behavior implemented outside a library/module/package. Reject or request fixes unless the custom mechanism is explicitly justified as a design decision with tradeoffs and a revisit trigger.
+6. Look for edge cases, migrations, config, deploy, docs, and rollback implications.
+7. If the work needs fixes, delegate fixes back via `marinator_delegate`; do not rubber-stamp worker output.
+8. Record risks, follow-ups, and evidence.
 
 ## Outcome acceptance gate
 
@@ -32,3 +33,5 @@ status=<done|partial|blocked>
 ```
 
 If gaps exist, the status is not `done`.
+
+Custom machinery gaps count as real gaps. A task is not `done` if it meets the narrow behavior but leaves avoidable duplicated runtime logic, scripts-as-source-of-truth, or unexplained custom infrastructure that future entrypoints will copy.
