@@ -231,7 +231,7 @@ def _cli(*args: str, mutex_dir: str | None = None) -> subprocess.CompletedProces
 
 
 def _shell_wrapper(*args: str, mutex_dir: str | None = None) -> subprocess.CompletedProcess:
-    script = os.path.join(ROOT, "initialization", "scripts", "code-mutex.sh")
+    script = os.path.join(ROOT, "distribution", "scripts", "code-mutex.sh")
     cmd = [script] + list(args)
     if mutex_dir is not None:
         cmd.extend(["--mutex-dir", mutex_dir])
