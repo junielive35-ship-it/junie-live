@@ -82,7 +82,7 @@ else
   REPO_DIR="$(canonical_dir "$REPO_DIR")" || fail "repo directory not found: $REPO_DIR"
 fi
 
-SOURCE_DIR="$REPO_DIR/hermes/initialization/plugins/autonomous-work"
+SOURCE_DIR="$REPO_DIR/hermes/distribution/plugins/autonomous-work"
 [[ -d "$SOURCE_DIR" ]] || fail "source plugin seed not found: $SOURCE_DIR"
 
 if [[ -n "$PROFILE_DIR" ]]; then

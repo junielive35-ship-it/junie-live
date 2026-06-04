@@ -4,8 +4,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNTIME_PATHS="$ROOT/initialization/scripts/runtime-paths.sh"
-CHECK_SCRIPT="$ROOT/initialization/scripts/initialization-check.sh"
+RUNTIME_PATHS="$ROOT/distribution/scripts/runtime-paths.sh"
+CHECK_SCRIPT="$ROOT/distribution/scripts/initialization-check.sh"
 
 fail_count=0
 pass_count=0
@@ -91,7 +91,7 @@ grep -q 'source.*RUNTIME_PATHS' "$CHECK_SCRIPT" && pass || fail "initialization-
 
 printf '\n=== SOUL.md: initialization gate does not depend on env vars ===\n'
 
-SOUL_MD="$ROOT/initialization/SOUL.md"
+SOUL_MD="$ROOT/distribution/SOUL.md"
 # The gate instruction should not reference $HERMES_PROFILE_DIR (which may be
 # unset in tool subprocesses). Use of $HERMES_HOME or $HERMES_PROFILE is ok
 # because the instruction tells the agent to verify with shell commands.
@@ -123,7 +123,7 @@ else
 fi
 
 printf '\n=== INITIALIZATION.md: first response greets, introduces Junie, then asks two questions ===\n'
-INIT_MD="$ROOT/initialization/INITIALIZATION.md"
+INIT_MD="$ROOT/distribution/INITIALIZATION.md"
 if grep -qi 'greet.*owner\|brief.*greeting\|say hello\|hello' "$INIT_MD" 2>/dev/null && \
    grep -qi 'two.*sentence\|couple.*sentence\|briefly.*introduce\|tell.*about.*yourself' "$INIT_MD" 2>/dev/null && \
    grep -qi 'MUST ask exactly those two questions and stop\|ask exactly those two questions and stop\|ask the owner the two initialization questions' "$INIT_MD" 2>/dev/null; then
@@ -132,10 +132,10 @@ else
   fail "INITIALIZATION.md must greet, briefly introduce Junie, then ask the two initialization questions"
 fi
 
-printf '\n=== seed-HERMES.md: no Initialization mode section ===\n'
-SEED_MD="$ROOT/initialization/docs/seed-HERMES.md"
+printf '\n=== HERMES.seed.md: no Initialization mode section ===\n'
+SEED_MD="$ROOT/distribution/HERMES.seed.md"
 if grep -q '## Initialization mode' "$SEED_MD" 2>/dev/null; then
-  fail "seed-HERMES.md still has an Initialization mode section"
+  fail "HERMES.seed.md still has an Initialization mode section"
 else
   pass
 fi
@@ -146,11 +146,11 @@ printf '\n=== Seed/guidance files: no \044HERMES_PROFILE_DIR mutex references ==
 # Plugin code (e.g. state.py) where HERMES_PROFILE_DIR is an optional override
 # is exempt.
 for doc in \
-  "$ROOT/initialization/memory-seed.md" \
-  "$ROOT/initialization/docs/code-mutex-protocol.md" \
-  "$ROOT/initialization/docs/tools.md" \
-  "$ROOT/initialization/docs/seed-HERMES.md" \
-  "$ROOT/initialization/skills/junie-coding-task-decomposition/SKILL.md"; do
+  "$ROOT/distribution/memory-seed.md" \
+  "$ROOT/distribution/docs/code-mutex-protocol.md" \
+  "$ROOT/distribution/docs/tools.md" \
+  "$ROOT/distribution/HERMES.seed.md" \
+  "$ROOT/distribution/skills/junie-coding-task-decomposition/SKILL.md"; do
   if grep -q '\$HERMES_PROFILE_DIR' "$doc" 2>/dev/null; then
     fail "$doc still references \$HERMES_PROFILE_DIR"
   else

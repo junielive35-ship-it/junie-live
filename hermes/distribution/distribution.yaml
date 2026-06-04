@@ -1,0 +1,31 @@
+name: junie-live
+version: 1.0.0
+description: "Junie Live — persistent product-owning senior SWE agent"
+hermes_requires: ">=0.12.0"
+author: "Junie Live"
+license: "MIT"
+
+# Junie ships more profile assets than the distribution defaults (SOUL.md,
+# skills/, cron/, mcp.json). List every path explicitly so that profile updates
+# refresh all seed files. config.yaml is deliberately omitted so the user's
+# model/provider/reasoning choices survive updates.
+distribution_owned:
+  - SOUL.md
+  - INITIALIZATION.md
+  - memory-seed.md
+  - HERMES.seed.md
+  - docs
+  - skills
+  - plugins
+  - scripts
+  - cron
+  - mcp.json
+  - distribution.yaml
+
+env_requires:
+  - name: TELEGRAM_BOT_TOKEN
+    description: "Telegram BotFather token for the Junie bot"
+    required: true
+  - name: TELEGRAM_ALLOWED_USERS
+    description: "Telegram admin/user ID allowed to DM the bot"
+    required: false

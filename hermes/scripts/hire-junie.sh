@@ -4,19 +4,20 @@ set -euo pipefail
 # hire-junie.sh — Set up a Junie Live instance on Hermes Agent
 #
 # One command does everything: creates a Hermes profile, backs up any existing
-# profile, installs SOUL.md / skills / docs / seed-HERMES.md / memory-seed.md /
-# INITIALIZATION.md (cleanly replacing any prior seed files of the same name
-# while preserving runtime state like memory, sessions, and config), configures
-# Telegram with DM restriction, creates state directories, installs and starts
-# the gateway. Mirrors the OpenClaw hire-junie.sh experience.
+# profile, installs SOUL.md / skills / docs / HERMES.seed.md / memory-seed.md /
+# INITIALIZATION.md via Hermes profile distribution (cleanly replacing any prior
+# distribution files of the same name while preserving runtime state like memory,
+# sessions, and config), configures Telegram with DM restriction, creates state
+# directories, installs and starts the gateway. Mirrors the OpenClaw
+# hire-junie.sh experience.
 
 usage() {
   cat <<'EOF'
 Usage:
   hire-junie.sh --telegram-token TOKEN --admin-telegram-id ID [options]
 
-Creates a Junie Live Hermes profile with Telegram gateway, installs all
-seed files, and starts the gateway. After success, send /start to the bot.
+Creates a Junie Live Hermes profile with Telegram gateway, installs the
+distribution, and starts the gateway. After success, send /start to the bot.
 
 Required:
   --telegram-token TOKEN      Telegram BotFather token for the Junie bot.
@@ -25,7 +26,8 @@ Required:
 
 Options:
   --profile NAME              Hermes profile name. Default: junie-live
-  --seed-dir DIR              Junie seed dir. Default: auto-detected from script location.
+  --seed-dir DIR              Hermes profile distribution directory.
+                              Default: hermes/distribution/.
   --model MODEL               Main model for the profile. Default: openai/gpt-5.5
                               (provider-relative ID; combined with --provider).
   --provider NAME             Inference provider for the profile. Default: openrouter
@@ -84,18 +86,22 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$SEED_DIR" || ! -d "$SEED_DIR" ]]; then
-  SEED_DIR="$HERMES_VERSION_ROOT/initialization"
+  # Default to the canonical distribution directory.
+  # The --seed-dir option is preserved for backwards compatibility but the
+  # canonical source is hermes/distribution/.
+  SEED_DIR="$HERMES_VERSION_ROOT/distribution"
 fi
 
-log "Will use $SEED_DIR as directory with seed files for Junie Live initialization"
+log "Will use distribution directory: $SEED_DIR"
 
 # ── Validation ──
 [[ -n "$TOKEN" ]] || { err "missing --telegram-token or JUNIE_TELEGRAM_BOT_TOKEN"; exit 2; }
 [[ -n "$ADMIN_TELEGRAM_ID" ]] || { err "missing required --admin-telegram-id"; exit 2; }
-[[ -d "$SEED_DIR" ]] || { err "seed dir not found: $SEED_DIR"; exit 1; }
-[[ -f "$SEED_DIR/INITIALIZATION.md" ]] || { err "seed dir must contain INITIALIZATION.md: $SEED_DIR"; exit 1; }
+[[ -d "$SEED_DIR" ]] || { err "distribution directory not found: $SEED_DIR"; exit 1; }
+[[ -f "$SEED_DIR/distribution.yaml" ]] || { err "distribution directory must contain distribution.yaml: $SEED_DIR"; exit 1; }
+[[ -f "$SEED_DIR/INITIALIZATION.md" ]] || { err "distribution directory must contain INITIALIZATION.md: $SEED_DIR"; exit 1; }
 if [[ -e "$SEED_DIR/BOOTSTRAP.md" ]]; then
-  err "seed dir must not contain BOOTSTRAP.md for Junie multi-round initialization: $SEED_DIR/BOOTSTRAP.md"
+  err "distribution directory must not contain BOOTSTRAP.md for Junie multi-round initialization: $SEED_DIR/BOOTSTRAP.md"
   exit 1
 fi
 command -v hermes >/dev/null || { err "hermes CLI not found in PATH"; exit 1; }
@@ -135,20 +141,24 @@ else
   hermes profile create "$PROFILE" --no-alias || { err "Failed to create profile $PROFILE"; exit 1; }
 fi
 
-# ── Step 3: Remove previously-installed seed files, then copy fresh seed ──
+# ── Step 3: Remove stale seed-owned paths, then install via Hermes-native distribution ──
 # We surgically remove only the top-level paths that have ever belonged to the
 # Junie seed. This guarantees stale seed files from earlier versions (e.g. an
 # old persona.md that has since been renamed/removed) don't survive a re-hire.
 # Runtime state (memories, sessions, state.db, cron, operational state) is
 # cleared separately in Step 3b after the fresh seed is installed.
 #
+# After cleanup, profile assets are installed via Hermes-native profile
+# distribution (hermes profile install) instead of manual cp -a.
+#
 # KEEP THIS LIST IN SYNC with the actual seed layout. Add historical names too
 # so that re-hiring an old install reliably cleans them out.
 SEED_OWNED_PATHS=(
-  # Current seed (initialization/* top-level entries)
+  # Current distribution layout
   SOUL.md
   INITIALIZATION.md
   memory-seed.md
+  HERMES.seed.md
   docs
   skills
   plugins
@@ -168,9 +178,17 @@ for rel in "${SEED_OWNED_PATHS[@]}"; do
 done
 log "  Removed $seed_removed prior seed entries"
 
-log "Installing seed files..."
-cp -a "$SEED_DIR/." "$PROFILE_DIR/"
-log "  Copied: SOUL.md, INITIALIZATION.md, memory-seed.md, skills, docs, plugins, scripts"
+log "Installing profile distribution..."
+if [[ -d "$SEED_DIR" ]]; then
+  hermes profile install "$SEED_DIR" --name "$PROFILE" --alias --force -y || {
+    err "Failed to install profile from distribution: $SEED_DIR"
+    exit 1
+  }
+  log "  Profile distribution installed from $SEED_DIR"
+else
+  err "Distribution directory not found: $SEED_DIR"
+  exit 1
+fi
 
 # ── Step 3b: Clear runtime state that would contradict fresh initialization ──
 # On re-hire the agent needs to re-initialize from scratch. Memory stores
@@ -278,12 +296,12 @@ mkdir -p "$STATE_DIR"/autonomous_work/windows
 # ── Step 4c: Write runtime manifest ──
 RUNTIME_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
 mkdir -p "$RUNTIME_MANIFEST_DIR"
-python3 "$HERMES_VERSION_ROOT/initialization/scripts/junie-runtime-artifact.py" write-install-manifest \
+python3 "$HERMES_VERSION_ROOT/distribution/scripts/junie-runtime-artifact.py" write-install-manifest \
   --runtime-dir "$RUNTIME_DIR" \
   --repo-root "$HERMES_VERSION_ROOT" \
   --manifest-dir "$RUNTIME_MANIFEST_DIR" \
   --installed-python "python3"
-log "  Package: junie-runtime, version: $(python3 "$HERMES_VERSION_ROOT/initialization/scripts/junie-runtime-artifact.py" read-manifest-field "$RUNTIME_MANIFEST_DIR/junie_runtime.json" version 2>/dev/null || echo 'unknown')"
+log "  Package: junie-runtime, version: $(python3 "$HERMES_VERSION_ROOT/distribution/scripts/junie-runtime-artifact.py" read-manifest-field "$RUNTIME_MANIFEST_DIR/junie_runtime.json" version 2>/dev/null || echo 'unknown')"
 
 # ── Plugin enable helper (preserves existing plugins.enabled) ──
 
@@ -330,8 +348,8 @@ PYENSURE
 }
 
 # ── Step 4b: Enable Marinator delegation plugin + toolsets ──
-# The plugin source was copied from initialization/plugins/ into
-# $PROFILE_DIR/plugins/ during seed installation. Now enable it and its
+# The plugin source was installed from distribution/plugins/ into
+# $PROFILE_DIR/plugins/ during profile install. Now enable it and its
 # toolsets for CLI and Telegram so marinator_delegate is available.
 if [[ -d "$PROFILE_DIR/plugins/marinator-delegation" ]]; then
   log "Enabling Marinator delegation plugin..."

@@ -59,16 +59,15 @@ else
   fail "hire-junie.sh must map /start to /steer initialization, not session reset"
 fi
 
-log "dump-junie.sh seed installation regression guard"
-# dump-junie.sh lives in initialization/scripts/ so the normal seed copy
-# (cp -a "$SEED_DIR/." "$PROFILE_DIR/") installs it into the profile at
-# $PROFILE_DIR/scripts/dump-junie.sh, making it runnable on a live VM
-# without the repo checkout.
-if [[ -f "$ROOT/initialization/scripts/dump-junie.sh" ]]; then
-  [[ -x "$ROOT/initialization/scripts/dump-junie.sh" ]] || \
-    fail "initialization/scripts/dump-junie.sh exists but is not executable"
+log "dump-junie.sh distribution regression guard"
+# dump-junie.sh lives in distribution/scripts/ so the Hermes profile
+# distribution installs it into the profile at $PROFILE_DIR/scripts/dump-junie.sh,
+# making it runnable on a live VM without the repo checkout.
+if [[ -f "$ROOT/distribution/scripts/dump-junie.sh" ]]; then
+  [[ -x "$ROOT/distribution/scripts/dump-junie.sh" ]] || \
+    fail "distribution/scripts/dump-junie.sh exists but is not executable"
 else
-  fail "initialization/scripts/dump-junie.sh is missing"
+  fail "distribution/scripts/dump-junie.sh is missing"
 fi
 # SEED_OWNED_PATHS must include 'scripts' so a re-hire cleans and reinstalls it
 grep -qE '^\s+scripts\s*$' "$ROOT/scripts/hire-junie.sh" || \
@@ -85,46 +84,50 @@ fi
 
 log "directory structure"
 for required_dir in \
-    initialization \
-    initialization/docs \
-    initialization/skills \
+    distribution \
+    distribution/docs \
+    distribution/skills \
     scripts \
     docs \
-    initialization/plugins/marinator-delegation \
-    initialization/plugins/marinator-delegation/scripts \
-    initialization/plugins/autonomous-work \
-    initialization/plugins/autonomous-work/scripts \
-    initialization/scripts; do
+    distribution/plugins/marinator-delegation \
+    distribution/plugins/marinator-delegation/scripts \
+    distribution/plugins/autonomous-work \
+    distribution/plugins/autonomous-work/scripts \
+    distribution/scripts; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
 done
 
+# Also verify that distribution has its manifest
+[[ -f "distribution/distribution.yaml" ]] || fail "missing distribution.yaml"
+
 for required_file in \
     README.md \
-    initialization/SOUL.md \
-    initialization/INITIALIZATION.md \
-    initialization/memory-seed.md \
-    initialization/docs/seed-HERMES.md \
-    initialization/docs/tools.md \
-    initialization/plugins/marinator-delegation/plugin.yaml \
-    initialization/scripts/dump-junie.sh \
-    initialization/plugins/marinator-delegation/__init__.py \
-    initialization/plugins/marinator-delegation/tools.py \
-    initialization/plugins/marinator-delegation/runner.py \
-    initialization/plugins/marinator-delegation/state.py \
-    initialization/plugins/marinator-delegation/scripts/marinator-worker.sh \
-    initialization/plugins/autonomous-work/plugin.yaml \
-    initialization/plugins/autonomous-work/__init__.py \
-    initialization/plugins/autonomous-work/tools.py \
-    initialization/plugins/autonomous-work/state.py \
-    initialization/plugins/autonomous-work/prompts.py \
-    initialization/plugins/autonomous-work/backlog.py \
-    initialization/plugins/autonomous-work/scripts/aw-runner.sh \
-    initialization/docs/backlog-protocol.md; do
+    distribution/distribution.yaml \
+    distribution/SOUL.md \
+    distribution/INITIALIZATION.md \
+    distribution/memory-seed.md \
+    distribution/HERMES.seed.md \
+    distribution/docs/tools.md \
+    distribution/plugins/marinator-delegation/plugin.yaml \
+    distribution/scripts/dump-junie.sh \
+    distribution/plugins/marinator-delegation/__init__.py \
+    distribution/plugins/marinator-delegation/tools.py \
+    distribution/plugins/marinator-delegation/runner.py \
+    distribution/plugins/marinator-delegation/state.py \
+    distribution/plugins/marinator-delegation/scripts/marinator-worker.sh \
+    distribution/plugins/autonomous-work/plugin.yaml \
+    distribution/plugins/autonomous-work/__init__.py \
+    distribution/plugins/autonomous-work/tools.py \
+    distribution/plugins/autonomous-work/state.py \
+    distribution/plugins/autonomous-work/prompts.py \
+    distribution/plugins/autonomous-work/backlog.py \
+    distribution/plugins/autonomous-work/scripts/aw-runner.sh \
+    distribution/docs/backlog-protocol.md; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 
 log "skill frontmatter"
-for skill_dir in initialization/skills/*/; do
+for skill_dir in distribution/skills/*/; do
   skill_file="$skill_dir/SKILL.md"
   [[ -f "$skill_file" ]] || continue
   grep -q '^---$' "$skill_file" || fail "skill missing frontmatter: $skill_file"
@@ -133,7 +136,7 @@ for skill_dir in initialization/skills/*/; do
 done
 
 log "marinator worker progress-summary regression guard"
-WORKER_SH="initialization/plugins/marinator-delegation/scripts/marinator-worker.sh"
+WORKER_SH="distribution/plugins/marinator-delegation/scripts/marinator-worker.sh"
 if [[ -f "$WORKER_SH" ]]; then
   # Positive checks: required prompt directives
   grep -qF 'Use only the stdout/stderr excerpts below' "$WORKER_SH" || \
@@ -190,13 +193,13 @@ else
 fi
 
 log "marinator plugin bash syntax"
-for plugin_script in initialization/plugins/*/scripts/*.sh; do
+for plugin_script in distribution/plugins/*/scripts/*.sh; do
   [[ -f "$plugin_script" ]] || continue
   bash -n "$plugin_script" || fail "bash syntax error in $plugin_script"
 done
 
 log "marinator plugin python syntax"
-for plugin_py in initialization/plugins/*/*.py; do
+for plugin_py in distribution/plugins/*/*.py; do
   [[ -f "$plugin_py" ]] || continue
   python3 -m py_compile "$plugin_py" || fail "python syntax error in $plugin_py"
 done

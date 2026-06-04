@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PLUGIN_DIR="$ROOT/initialization/plugins/autonomous-work"
+PLUGIN_DIR="$ROOT/distribution/plugins/autonomous-work"
 HOT_SWAP_SCRIPT="$ROOT/scripts/hot-swap-autonomous-work-plugin.sh"
 
 fail_count=0
@@ -841,7 +841,7 @@ cleanup_hot_swap_test() { rm -rf -- "$tmp_root"; }
 trap cleanup_hot_swap_test EXIT
 test_repo="$tmp_root/repo"
 test_profile="$tmp_root/hermes-home/profiles/junie-live"
-test_seed="$test_repo/hermes/initialization/plugins/autonomous-work"
+test_seed="$test_repo/hermes/distribution/plugins/autonomous-work"
 mkdir -p "$test_seed/__pycache__" "$test_profile/plugins/autonomous-work" "$test_profile/junie-live/state/backlog/items"
 printf 'name: autonomous-work\n' > "$test_seed/plugin.yaml"
 printf 'print("new")\n' > "$test_seed/tools.py"

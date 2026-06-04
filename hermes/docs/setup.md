@@ -29,11 +29,11 @@ cd ~/code/junie-live
 hermes profile create junie-live
 ```
 
-### 2. Install seed files
+### 2. Install profile distribution
 
-Copy the entire initialization directory to the profile (`SOUL.md`, skills, docs, `INITIALIZATION.md`, `memory-seed.md`):
+Install the Junie profile distribution, which provides `SOUL.md`, skills, docs, `INITIALIZATION.md`, `memory-seed.md`, plugins, and scripts:
 ```bash
-cp -a hermes/initialization/. ~/.hermes/profiles/junie-live/
+hermes profile install hermes/distribution --name junie-live --alias
 ```
 
 ### 3. Install shared runtime package
@@ -148,7 +148,7 @@ backlog items until 8am or blockers.
 ├── INITIALIZATION.md     # Initialization guide (deleted after init)
 ├── memory-seed.md        # Initial memory entries template
 ├── docs/                 # Profile docs (strategy, architecture, etc.)
-│   ├── seed-HERMES.md    # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
+│   ├── HERMES.seed.md    # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
 │   └── tools.md          # Operational cheat-sheet (commands, git conventions, deploy, escalation) — filled during init
 ├── skills/               # Installed skills
 │   ├── junie-autonomous-work-window/
@@ -179,13 +179,10 @@ The duplicate-looking `junie-live/junie-live` is expected in the current impleme
 
 ## Updating
 
-To update the Junie Live seed files after improvements:
+### Via profile distribution update
 
 ```bash
-# Re-run hire with existing profile (preserves memory and sessions)
-./hermes/scripts/hire-junie.sh \
-  --telegram-token "$JUNIE_TELEGRAM_BOT_TOKEN" \
-  --admin-telegram-id YOUR_TELEGRAM_ID
+hermes profile update junie-live
 ```
 
 To update the shared `junie_runtime` package after changes:
@@ -194,12 +191,19 @@ To update the shared `junie_runtime` package after changes:
 python3 -m pip install -e hermes/junie_runtime  # re-installs to pick up changes
 ```
 
+Or run the hire script for a full re-hire (preserves memory and sessions):
+```bash
+./hermes/scripts/hire-junie.sh \
+  --telegram-token "$JUNIE_TELEGRAM_BOT_TOKEN" \
+  --admin-telegram-id YOUR_TELEGRAM_ID
+```
+
 ### Disaster recovery (dump / rehire)
 
-`dump-junie.sh` now includes exact `junie_runtime` wheel and provenance manifest in the archive (under `runtime/`). `rehire-junie.sh` restores the exact wheel from the archive, verifies its SHA-256 hash, and writes restore metadata to the profile runtime manifest. If the runtime artifact is missing from the dump archive, rehire fails clearly instead of silently installing from a sibling source directory. There is no profile-local venv — the wheel is installed into the system Python environment.
+`dump-junie.sh` (in the profile's `scripts/`) wraps `hermes profile export`, then embeds the exact `junie_runtime` wheel and provenance manifest inside the single native-import-compatible profile directory at `junie-live/runtime_artifact/`. `rehire-junie.sh` wraps `hermes profile import`, restores the exact wheel from that embedded artifact, verifies its SHA-256 hash, and writes restore metadata to the profile runtime manifest. If the runtime artifact is missing from the dump archive, rehire fails clearly instead of silently installing from a sibling source directory. There is no profile-local venv — the wheel is installed into the system Python environment.
 
 Or selectively update a skill:
 ```bash
-cp hermes/initialization/skills/junie-task-reflection/SKILL.md \
+cp hermes/distribution/skills/junie-task-reflection/SKILL.md \
    ~/.hermes/profiles/junie-live/skills/junie-task-reflection/SKILL.md
 ```

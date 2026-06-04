@@ -2,6 +2,9 @@
 set -euo pipefail
 
 # rehire-junie.sh — Restore a Junie Live Hermes profile from a disaster recovery archive
+#
+# Uses Hermes-native profile import, then restores the embedded runtime wheel
+# artifact from within the profile tree under junie-live/runtime_artifact/.
 
 usage() {
   cat <<'EOF'
@@ -9,7 +12,7 @@ Usage:
   rehire-junie.sh <archive> [options]
 
 Restores a Junie Live Hermes profile from a disaster recovery archive created
-by dump-junie.sh. After restore, optionally starts/restarts the Telegram gateway.
+by dump-junie.sh.
 
 Arguments:
   archive                 Path to dump archive (.tgz created by dump-junie.sh)
@@ -37,7 +40,6 @@ while [[ $# -gt 0 ]]; do
     --force) FORCE=1; shift ;;
     --help|-h) usage; exit 0 ;;
     -*)
-      # If first positional looks like an option and isn't consumed above, check if it's the archive
       if [[ -z "$ARCHIVE" && -f "$1" ]]; then
         ARCHIVE="$1"; shift
       else
@@ -60,11 +62,9 @@ done
 command -v hermes >/dev/null || { err "hermes CLI not found in PATH"; exit 1; }
 
 # ── Resolve Hermes root (robust against profile-scoped HERMES_HOME) ──
-# Must be declared before first use; bash resolves at call time.
 resolve_hermes_root() {
   local profile="$1"
 
-  # Priority 1: explicit override
   if [[ -n "${JUNIE_HERMES_ROOT:-}" ]]; then
     HERMES_ROOT="$JUNIE_HERMES_ROOT"
     return 0
@@ -72,14 +72,11 @@ resolve_hermes_root() {
 
   local hh="${HERMES_HOME:-$HOME/.hermes}"
 
-  # Priority 2: $HERMES_HOME/profiles/$profile exists — hh is already root
   if [[ -d "$hh/profiles/$profile" ]]; then
     HERMES_ROOT="$hh"
     return 0
   fi
 
-  # Priority 3: $HERMES_HOME looks like the profile dir itself
-  # (e.g. /home/.../.hermes/profiles/junie-live)
   local base; base="$(basename "$hh")"
   local parent; parent="$(basename "$(dirname "$hh")")"
   if [[ "$base" == "$profile" && "$parent" == "profiles" ]]; then
@@ -87,13 +84,11 @@ resolve_hermes_root() {
     return 0
   fi
 
-  # Priority 4: $HOME/.hermes/profiles/$profile exists
   if [[ -d "$HOME/.hermes/profiles/$profile" ]]; then
     HERMES_ROOT="$HOME/.hermes"
     return 0
   fi
 
-  # Fallback
   HERMES_ROOT="$hh"
 }
 
@@ -118,10 +113,13 @@ if [[ -e "$PROFILE_DIR" ]]; then
   fi
 fi
 
-# ── Restore archive ──
-log "restoring archive..."
-mkdir -p "$HERMES_ROOT"
-tar -xzf "$ARCHIVE" -C "$HERMES_ROOT" || { err "failed to extract archive"; exit 1; }
+# ── Restore via Hermes-native import ──
+log "restoring archive via Hermes-native import..."
+export HERMES_HOME="$HERMES_ROOT"
+hermes profile import "$ARCHIVE" --name "$PROFILE" || {
+  err "hermes profile import failed"
+  exit 1
+}
 
 # ── Verify key files ──
 if [[ -f "$PROFILE_DIR/config.yaml" ]]; then
@@ -131,22 +129,21 @@ else
   exit 1
 fi
 
-# ── Restore junie_runtime from archive wheel artifact ──
+# ── Restore junie_runtime from embedded runtime_artifact ──
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ARCHIVE_RUNTIME_DIR="$HERMES_ROOT/runtime"
-ARCHIVE_MANIFEST="$ARCHIVE_RUNTIME_DIR/junie_runtime.json"
+RUNTIME_ARTIFACT_DIR="$PROFILE_DIR/junie-live/runtime_artifact"
+ARCHIVE_MANIFEST="$RUNTIME_ARTIFACT_DIR/junie_runtime.json"
 
 if [[ -f "$ARCHIVE_MANIFEST" ]]; then
   log "runtime manifest found in archive: $ARCHIVE_MANIFEST"
 
-  # Read manifest fields
-  HELPER="$SCRIPT_DIR/../initialization/scripts/junie-runtime-artifact.py"
+  HELPER="$SCRIPT_DIR/../distribution/scripts/junie-runtime-artifact.py"
   WHEEL_FILENAME="$(python3 "$HELPER" read-manifest-field "$ARCHIVE_MANIFEST" wheel_filename)"
   EXPECTED_HASH="$(python3 "$HELPER" read-manifest-field "$ARCHIVE_MANIFEST" wheel_sha256)"
   EXPECTED_VERSION="$(python3 "$HELPER" read-manifest-field "$ARCHIVE_MANIFEST" version)"
 
-  WHEEL_PATH="$ARCHIVE_RUNTIME_DIR/$WHEEL_FILENAME"
+  WHEEL_PATH="$RUNTIME_ARTIFACT_DIR/$WHEEL_FILENAME"
   if [[ -z "$WHEEL_FILENAME" || ! -f "$WHEEL_PATH" ]]; then
     err "wheel file not found: $WHEEL_PATH"
     err "  Archive may be corrupt. Re-dump with the current branch."
@@ -193,16 +190,16 @@ if [[ -f "$ARCHIVE_MANIFEST" ]]; then
   }
   log "  restore manifest written to $RESTORE_MANIFEST_DIR/junie_runtime.json"
 
-  # Clean up extracted runtime dir
-  rm -rf "$ARCHIVE_RUNTIME_DIR"
-elif [[ -d "$ARCHIVE_RUNTIME_DIR" ]]; then
-  err "runtime directory found in archive but no manifest: $ARCHIVE_RUNTIME_DIR"
+  # Clean up extracted runtime_artifact dir
+  rm -rf "$RUNTIME_ARTIFACT_DIR"
+elif [[ -d "$RUNTIME_ARTIFACT_DIR" ]]; then
+  err "runtime_artifact directory found in profile but no manifest: $RUNTIME_ARTIFACT_DIR"
   err "  Archive may be from an incompatible version."
   exit 1
 else
-  err "no runtime artifact found in archive at $ARCHIVE_RUNTIME_DIR"
+  err "no runtime artifact found in archive at $RUNTIME_ARTIFACT_DIR"
   err "  This dump does not contain a junie_runtime wheel artifact."
-  err "  Run a newer dump-junie.sh (feat/junie-runtime-mutex branch) to create one."
+  err "  Run a newer dump-junie.sh to create one."
   err "  Then re-run rehire-junie.sh with the fresh archive."
   exit 1
 fi

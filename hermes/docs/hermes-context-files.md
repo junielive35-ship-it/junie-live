@@ -41,7 +41,7 @@ Installed location in an initialized target repo:
 Seed source:
 
 ```text
-hermes/initialization/docs/seed-HERMES.md
+hermes/distribution/HERMES.seed.md
 ```
 
 Hermes auto-loads `HERMES.md` from the current working directory, walking up to the git root. Use it for project-level operating rules:
@@ -111,7 +111,7 @@ Installed location:
 Seed source:
 
 ```text
-hermes/initialization/docs/
+hermes/distribution/docs/
 ```
 
 Use this directory for detailed source-of-truth project knowledge that does not fit in memory:
@@ -154,7 +154,7 @@ Use it for implementation documentation that belongs with the reusable Hermes Ju
 - context-file model;
 - code mutex design.
 
-These files are not automatically installed into a hired profile unless they are also present under `hermes/initialization/docs/` or copied by the hire script. Keep that distinction explicit: `hermes/docs/` documents the implementation; `hermes/initialization/docs/` seeds live profile knowledge.
+These files are not automatically installed into a hired profile unless they are also present under `hermes/distribution/docs/` (the canonical seed source) or copied by the hire script. Keep that distinction explicit: `hermes/docs/` documents the implementation; `hermes/distribution/docs/` seeds live profile knowledge.
 
 ## Skills
 
@@ -169,7 +169,7 @@ Installed location:
 Seed source:
 
 ```text
-hermes/initialization/skills/
+hermes/distribution/skills/
 ```
 
 Use skills for repeatable Junie workflows, especially:
@@ -197,7 +197,7 @@ Installed location:
 Seed source:
 
 ```text
-hermes/initialization/plugins/
+hermes/distribution/plugins/
 ```
 
 Use plugins for Hermes-native tool integrations that Junie needs at runtime. Current core plugins include:
