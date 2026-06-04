@@ -191,7 +191,7 @@ To update the shared `junie_runtime` package after changes:
 python3 -m pip install -e hermes/junie_runtime  # re-installs to pick up changes
 ```
 
-Or run the hire script for a full re-hire (preserves memory and sessions):
+Or run the hire script for a full re-hire (deletes then reinstalls the profile):
 ```bash
 ./hermes/scripts/hire-junie.sh \
   --telegram-token "$JUNIE_TELEGRAM_BOT_TOKEN" \

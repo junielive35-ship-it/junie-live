@@ -894,6 +894,228 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+printf '\n=== Hire-junie.sh: native profile delete tests ===\n'
+
+HIRE_SCRIPT="$ROOT/scripts/hire-junie.sh"
+
+# Create a minimal seed directory for hire-junie.sh
+HIRE_SEED_DIR="$TMP/hire-seed"
+mkdir -p "$HIRE_SEED_DIR"/docs
+cat > "$HIRE_SEED_DIR/distribution.yaml" <<'EOF'
+distribution: junie-live
+version: "1.0"
+EOF
+echo "# SOUL.md" > "$HIRE_SEED_DIR/SOUL.md"
+echo "# INITIALIZATION.md" > "$HIRE_SEED_DIR/INITIALIZATION.md"
+echo "# tools.md" > "$HIRE_SEED_DIR/docs/tools.md"
+
+# Fake hermes factory for hire-junie tests.
+# Usage: make_hire_fake_hermes <bin_path> <log_path> <profile_exists (0|1)>
+# Creates a fake hermes that logs invocations and handles profile show/delete/install
+# plus all other commands hire-junie.sh calls.
+make_hire_fake_hermes() {
+  local bin="$1" log="$2" exists="$3"
+  cat > "$bin" <<FAKEHIRES
+#!/usr/bin/env bash
+set -euo pipefail
+LOG="$log"
+EXISTS=$exists
+{
+  printf 'hermes'
+  for a in "\$@"; do printf ' %q' "\$a"; done
+  printf '\n'
+} >> "\$LOG"
+
+case "\${1:-}" in
+  profile)
+    case "\${2:-}" in
+      show) [ "\$EXISTS" = "1" ] && exit 0 || exit 1 ;;
+      delete) rm -rf "\${HERMES_HOME:?}/profiles/\${3:?}" 2>/dev/null || true; exit 0 ;;
+      install)
+        sd="\${3:-}"
+        nm=""
+        args=("\$@")
+        for ((i=0; i<\${#args[@]}; i++)); do
+          if [ "\${args[\$i]}" = "--name" ] && [ \$((i+1)) -lt \${#args[@]} ]; then
+            nm="\${args[\$((i+1))]}"
+          fi
+        done
+        if [ -n "\$nm" ] && [ -n "\$sd" ] && [ -d "\$sd" ]; then
+          mkdir -p "\${HERMES_HOME:?}/profiles/\$nm"
+          cp -a "\$sd/." "\${HERMES_HOME:?}/profiles/\$nm/"
+        fi
+        exit 0
+        ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  -p)
+    # All hermes -p <profile> <subcommand> calls: plugins, tools, config, gateway
+    exit 0
+    ;;
+  gateway) exit 0 ;;
+  *) exit 0 ;;
+esac
+FAKEHIRES
+  chmod +x "$bin"
+}
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Hire test A: profile exists → delete + install ===\n'
+
+A_BIN_DIR="$TMP/hire-a-bin"
+A_HOME="$TMP/hire-a-home"
+A_LOG="$TMP/hire-a-hermes.log"
+mkdir -p "$A_BIN_DIR" "$A_HOME/profiles/junie-live"  # Pre-existing profile
+make_hire_fake_hermes "$A_BIN_DIR/hermes" "$A_LOG" 1
+
+A_EXIT=0
+PATH="$A_BIN_DIR:$PATH" \
+HERMES_HOME="$A_HOME" \
+"$HIRE_SCRIPT" \
+  --telegram-token "tok_test" \
+  --admin-telegram-id "12345" \
+  --seed-dir "$HIRE_SEED_DIR" \
+  --no-restart \
+  --no-backup \
+  --no-forward-keys \
+  >/dev/null 2>&1 || A_EXIT=$?
+
+if [[ "$A_EXIT" -eq 0 ]]; then
+  pass
+  printf '  OK: hire with existing profile succeeded\n'
+else
+  fail "hire with existing profile failed (rc=$A_EXIT)"
+fi
+
+# Check that profile delete was called
+if grep -q 'hermes profile delete' "$A_LOG" 2>/dev/null; then
+  pass
+  printf '  OK: hermes profile delete was called\n'
+else
+  fail "hermes profile delete was NOT called"
+fi
+
+# Check that profile install was called with --alias
+if grep -q 'hermes profile install.*--alias' "$A_LOG" 2>/dev/null; then
+  pass
+  printf '  OK: hermes profile install uses --alias\n'
+else
+  fail "hermes profile install does not use --alias"
+fi
+
+# Check that --force is NOT present in the install call
+if grep -q 'hermes profile install.*--force' "$A_LOG" 2>/dev/null; then
+  fail "hermes profile install uses --force (should not with native delete)"
+else
+  pass
+  printf '  OK: hermes profile install does not use --force\n'
+fi
+
+# Check that profile create was NOT called
+if grep -q 'hermes profile create' "$A_LOG" 2>/dev/null; then
+  fail "hermes profile create was called (should not be)"
+else
+  pass
+  printf '  OK: hermes profile create was NOT called\n'
+fi
+
+# Verify INITIALIZATION.md landed in profile dir after install
+if [[ -f "$A_HOME/profiles/junie-live/INITIALIZATION.md" ]]; then
+  pass
+  printf '  OK: INITIALIZATION.md installed into profile\n'
+else
+  fail "INITIALIZATION.md missing from installed profile"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Hire test B: profile does NOT exist → no delete, fresh install ===\n'
+
+B_BIN_DIR="$TMP/hire-b-bin"
+B_HOME="$TMP/hire-b-home"
+B_LOG="$TMP/hire-b-hermes.log"
+mkdir -p "$B_BIN_DIR" "$B_HOME"  # No profile dir
+make_hire_fake_hermes "$B_BIN_DIR/hermes" "$B_LOG" 0
+
+B_EXIT=0
+PATH="$B_BIN_DIR:$PATH" \
+HERMES_HOME="$B_HOME" \
+"$HIRE_SCRIPT" \
+  --telegram-token "tok_test" \
+  --admin-telegram-id "12345" \
+  --seed-dir "$HIRE_SEED_DIR" \
+  --no-restart \
+  --no-backup \
+  --no-forward-keys \
+  >/dev/null 2>&1 || B_EXIT=$?
+
+if [[ "$B_EXIT" -eq 0 ]]; then
+  pass
+  printf '  OK: hire without existing profile succeeded\n'
+else
+  fail "hire without existing profile failed (rc=$B_EXIT)"
+fi
+
+# Check that profile delete was NOT called
+if grep -q 'hermes profile delete' "$B_LOG" 2>/dev/null; then
+  fail "hermes profile delete was called but profile did not exist"
+else
+  pass
+  printf '  OK: hermes profile delete was NOT called (profile did not exist)\n'
+fi
+
+# Check that profile install was called
+if grep -q 'hermes profile install' "$B_LOG" 2>/dev/null; then
+  pass
+  printf '  OK: hermes profile install was called\n'
+else
+  fail "hermes profile install was NOT called"
+fi
+
+# Check that INSTALL uses --alias
+if grep -q 'hermes profile install.*--alias' "$B_LOG" 2>/dev/null; then
+  pass
+  printf '  OK: install uses --alias\n'
+else
+  fail "install does not use --alias"
+fi
+
+# Check that INSTALL does NOT use --force
+if grep -q 'hermes profile install.*--force' "$B_LOG" 2>/dev/null; then
+  fail "install uses --force (should not)"
+else
+  pass
+  printf '  OK: install does not use --force\n'
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Hire test C: no manual rm -rf profile cleanup in hire-junie.sh ===\n'
+
+# Check for any rm -rf -- "$PROFILE_DIR" patterns (the old manual cleanup)
+if grep -qnE 'rm\s+-rf\s+--\s+"\$PROFILE_DIR' "$HIRE_SCRIPT" 2>/dev/null; then
+  fail "hire-junie.sh still contains rm -rf on PROFILE_DIR paths"
+else
+  pass
+  printf '  OK: no rm -rf PROFILE_DIR cleanup in hire-junie.sh\n'
+fi
+
+# Also confirm SEED_OWNED_PATHS is gone
+if grep -q 'SEED_OWNED_PATHS' "$HIRE_SCRIPT" 2>/dev/null; then
+  fail "hire-junie.sh still defines SEED_OWNED_PATHS"
+else
+  pass
+  printf '  OK: SEED_OWNED_PATHS removed\n'
+fi
+
+# Confirm runtime_cleared logic is gone
+if grep -q 'runtime_cleared' "$HIRE_SCRIPT" 2>/dev/null; then
+  fail "hire-junie.sh still has runtime_cleared logic"
+else
+  pass
+  printf '  OK: runtime state cleanup removed\n'
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '\n=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"
 

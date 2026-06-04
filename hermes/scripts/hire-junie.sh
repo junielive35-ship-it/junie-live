@@ -3,13 +3,12 @@ set -euo pipefail
 
 # hire-junie.sh — Set up a Junie Live instance on Hermes Agent
 #
-# One command does everything: creates a Hermes profile, backs up any existing
-# profile, installs SOUL.md / skills / docs / HERMES.seed.md / memory-seed.md /
-# INITIALIZATION.md via Hermes profile distribution (cleanly replacing any prior
-# distribution files of the same name while preserving runtime state like memory,
-# sessions, and config), configures Telegram with DM restriction, creates state
-# directories, installs and starts the gateway. Mirrors the OpenClaw
-# hire-junie.sh experience.
+# One command does everything: backs up any existing profile, deletes it via
+# Hermes-native profile delete, then installs a fresh profile from the
+# distribution (SOUL.md / skills / docs / HERMES.seed.md / memory-seed.md /
+# INITIALIZATION.md), configures Telegram with DM restriction, creates state
+# directories, installs the shared runtime package, enables plugins, configures
+# model/provider/reasoning, installs and starts the gateway.
 
 usage() {
   cat <<'EOF'
@@ -129,58 +128,28 @@ if [[ "$BACKUP" -eq 1 ]]; then
   fi
 fi
 
-# ── Step 2: Create profile (or note it exists) ──
+# ── Step 2: Delete existing profile if present ──
 # Use `hermes profile show` to test existence (rc=0 if exists, rc=1 if not).
-# Parsing `profile list` is fragile — the active profile gets a "◆" marker
-# but inactive ones have no marker at all, so regex matching breaks for
-# profiles created but never set as default.
-log "Creating Hermes profile: $PROFILE"
+# If the profile exists, delete it via Hermes-native profile delete, which
+# removes config, API keys, memories, sessions, skills, cron jobs, state,
+# and alias/service references in one step. Backup was done in Step 1.
 if hermes profile show "$PROFILE" >/dev/null 2>&1; then
-  log "Profile $PROFILE already exists — config and .env will be preserved; seed files, memory, sessions, and state will be reset for fresh initialization"
+  log "Profile $PROFILE exists — deleting for fresh reinstall"
+  hermes profile delete "$PROFILE" -y || { err "Failed to delete profile $PROFILE"; exit 1; }
+  log "  Profile $PROFILE deleted"
 else
-  hermes profile create "$PROFILE" --no-alias || { err "Failed to create profile $PROFILE"; exit 1; }
+  log "Profile $PROFILE does not exist — will install fresh"
 fi
 
-# ── Step 3: Remove stale seed-owned paths, then install via Hermes-native distribution ──
-# We surgically remove only the top-level paths that have ever belonged to the
-# Junie seed. This guarantees stale seed files from earlier versions (e.g. an
-# old persona.md that has since been renamed/removed) don't survive a re-hire.
-# Runtime state (memories, sessions, state.db, cron, operational state) is
-# cleared separately in Step 3b after the fresh seed is installed.
-#
-# After cleanup, profile assets are installed via Hermes-native profile
-# distribution (hermes profile install) instead of manual cp -a.
-#
-# KEEP THIS LIST IN SYNC with the actual seed layout. Add historical names too
-# so that re-hiring an old install reliably cleans them out.
-SEED_OWNED_PATHS=(
-  # Current distribution layout
-  SOUL.md
-  INITIALIZATION.md
-  memory-seed.md
-  HERMES.seed.md
-  docs
-  skills
-  plugins
-  scripts
-  # Historical names — kept here so a re-hire over an older install cleans them
-  persona.md
-)
-log "Removing prior seed entries (if any)..."
-mkdir -p "$PROFILE_DIR"
-seed_removed=0
-for rel in "${SEED_OWNED_PATHS[@]}"; do
-  target="$PROFILE_DIR/$rel"
-  if [[ -e "$target" || -L "$target" ]]; then
-    rm -rf -- "$target"
-    seed_removed=$((seed_removed + 1))
-  fi
-done
-log "  Removed $seed_removed prior seed entries"
-
+# ── Step 3: Install via Hermes-native profile distribution ──
+# Hermes-native profile install creates the profile and installs all
+# distribution assets (SOUL.md, INITIALIZATION.md, skills, docs, plugins,
+# scripts, etc.) in one step. No manual cleanup is needed because either
+# the profile was just deleted (native delete handles it) or it didn't
+# exist.
 log "Installing profile distribution..."
 if [[ -d "$SEED_DIR" ]]; then
-  hermes profile install "$SEED_DIR" --name "$PROFILE" --alias --force -y || {
+  hermes profile install "$SEED_DIR" --name "$PROFILE" --alias -y || {
     err "Failed to install profile from distribution: $SEED_DIR"
     exit 1
   }
@@ -190,68 +159,10 @@ else
   exit 1
 fi
 
-# ── Step 3b: Clear runtime state that would contradict fresh initialization ──
-# On re-hire the agent needs to re-initialize from scratch. Memory stores
-# from a previous initialization carry "INITIALIZED" and project-specific
-# context that would cause the agent to skip the initialization gate even
-# though INITIALIZATION.md was just reinstalled. Sessions carry conversation
-# history that reinforces the stale initialized state.
-#
-# The backup in Step 1 already preserved the old profile, so this is safe.
-log "Clearing runtime state for fresh initialization..."
-runtime_cleared=0
-
-# Memory stores — the agent's persistent memory (MEMORY.md, USER.md).
-# These are auto-injected into every turn. Stale "INITIALIZED" entries
-# here directly conflict with the fresh INITIALIZATION.md.
-if [[ -d "$PROFILE_DIR/memories" ]]; then
-  rm -rf -- "$PROFILE_DIR/memories"
-  runtime_cleared=$((runtime_cleared + 1))
-  log "  Cleared: memories/"
-fi
-
-# Sessions and session database — past conversation context could make
-# the agent believe it's already initialized. The backup preserves them.
-if [[ -f "$PROFILE_DIR/state.db" ]]; then
-  rm -f -- "$PROFILE_DIR/state.db" "$PROFILE_DIR/state.db-shm" "$PROFILE_DIR/state.db-wal"
-  runtime_cleared=$((runtime_cleared + 1))
-  log "  Cleared: state.db"
-fi
-if [[ -d "$PROFILE_DIR/sessions" ]]; then
-  rm -rf -- "$PROFILE_DIR/sessions"
-  runtime_cleared=$((runtime_cleared + 1))
-  log "  Cleared: sessions/"
-fi
-
-# Junie-live operational state (backlog, mutex, reflections, overnight,
-# logs) — stale state from a previous initialization.
-# Clear both old and new state locations for compatibility.
-OLD_STATE="$HERMES_HOME/junie-live/state"
-if [[ -d "$OLD_STATE" ]]; then
-  rm -rf -- "$OLD_STATE"
-  runtime_cleared=$((runtime_cleared + 1))
-  log "  Cleared: $OLD_STATE (legacy)"
-fi
-if [[ -d "$STATE_DIR" ]]; then
-  rm -rf -- "$STATE_DIR"
-  runtime_cleared=$((runtime_cleared + 1))
-  log "  Cleared: $STATE_DIR"
-fi
-
-# Cron jobs — stale cron definitions from a previous initialization
-# would fire against the old context.
-if [[ -d "$PROFILE_DIR/cron" ]]; then
-  rm -rf -- "$PROFILE_DIR/cron"
-  runtime_cleared=$((runtime_cleared + 1))
-  log "  Cleared: cron/"
-fi
-
-log "  Cleared $runtime_cleared runtime state entries"
-
-# Post-copy sanity check (mirrors OpenClaw)
-[[ -f "$PROFILE_DIR/INITIALIZATION.md" ]] || { err "copied profile missing INITIALIZATION.md: $PROFILE_DIR"; exit 1; }
+# Post-install sanity checks
+[[ -f "$PROFILE_DIR/INITIALIZATION.md" ]] || { err "installed profile missing INITIALIZATION.md: $PROFILE_DIR"; exit 1; }
 if [[ -e "$PROFILE_DIR/BOOTSTRAP.md" ]]; then
-  err "copied profile unexpectedly contains BOOTSTRAP.md: $PROFILE_DIR/BOOTSTRAP.md"
+  err "installed profile unexpectedly contains BOOTSTRAP.md: $PROFILE_DIR/BOOTSTRAP.md"
   exit 1
 fi
 
@@ -259,13 +170,13 @@ fi
 if [[ -f "$PROFILE_DIR/INITIALIZATION.md" ]]; then
   log "  INITIALIZATION.md sentinel present."
 else
-  err "INITIALIZATION.md missing after seed copy."
+  err "INITIALIZATION.md missing after install."
   exit 1
 fi
 if [[ -f "$PROFILE_DIR/docs/tools.md" ]]; then
   log "  docs/tools.md present (seed TODOs intact for agent to resolve)."
 else
-  err "docs/tools.md missing after seed copy."
+  err "docs/tools.md missing after install."
   exit 1
 fi
 
