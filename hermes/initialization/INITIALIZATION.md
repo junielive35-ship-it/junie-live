@@ -12,7 +12,7 @@ Important: saying "initialization done" is a completion guarantee, not a progres
 
 While this file exists, initialization is not complete.
 
-Every user-facing response while this file exists MUST start by making that clear in plain language (for example: "Initialization is still in progress; I am not fully ready for normal work yet."). Do not let the owner forget the gate is still open. If the owner asks for unrelated work, acknowledge the request, repeat that initialization is still pending, and keep driving initialization unless the owner explicitly overrides the gate.
+Every user-facing response (except the very first message) while this file exists MUST start by making that clear in plain language (for example: "Initialization is still in progress; I am not fully ready for normal work yet."). Do not let the owner forget the gate is still open. If the owner asks for unrelated work, acknowledge the request, repeat that initialization is still pending, and keep driving initialization unless the owner explicitly overrides the gate.
 
 Before normal work:
 
@@ -58,6 +58,7 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
    1. Which project am I working on? (target repository path or project identity)
    2. What is my area of responsibility?
    - Tell the owner they can answer with an audio message.
+   - Don't include "Initialization is still in progress" to the first greeting message
 3. Inspect the target project:
    - repository layout;
    - existing README/docs;
