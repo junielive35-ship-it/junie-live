@@ -131,6 +131,31 @@ else
   exit 1
 fi
 
+# ── Ensure junie_runtime package is available ──
+# The code-mutex.sh wrapper requires the shared runtime package.
+if ! python3 -c "import junie_runtime" 2>/dev/null; then
+  runtime_src="$(dirname "${BASH_SOURCE[0]}")/../junie_runtime"
+  if [[ -d "$runtime_src" ]]; then
+    RUNTIME_DIR="$(cd "$runtime_src" && pwd)" || RUNTIME_DIR=""
+    if [[ -n "$RUNTIME_DIR" && -d "$RUNTIME_DIR" ]]; then
+      log "Installing junie_runtime package..."
+      python3 -m pip install -e "$RUNTIME_DIR" -q || {
+        err "Failed to install junie_runtime from $RUNTIME_DIR"
+        exit 1
+      }
+      log "  junie_runtime installed"
+    else
+      log "  WARNING: cannot resolve runtime dir: $runtime_src"
+      log "  Run: python3 -m pip install -e <repo>/hermes/junie_runtime"
+    fi
+  else
+    log "  WARNING: junie_runtime source dir not found at $runtime_src"
+    log "  Run: python3 -m pip install -e <repo>/hermes/junie_runtime"
+  fi
+else
+  log "  junie_runtime package OK"
+fi
+
 # ── Start/restart gateway ──
 if [[ "$NO_GATEWAY_START" -eq 0 ]]; then
   log "starting gateway..."

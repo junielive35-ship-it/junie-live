@@ -251,7 +251,25 @@ else
   exit 1
 fi
 
-# ── Step 4: Create state directories ──
+# ── Step 4: Install shared junie_runtime package ──
+# junie_runtime is a shared Python package installed into the Hermes Python
+# environment, not copied into the profile payload. The code-mutex.sh wrapper
+# requires it.
+RUNTIME_DIR="$HERMES_VERSION_ROOT/junie_runtime"
+if [[ -d "$RUNTIME_DIR" ]]; then
+  log "Installing junie_runtime package..."
+  if python3 -m pip install -e "$RUNTIME_DIR" -q 2>/dev/null; then
+    log "  junie_runtime installed from $RUNTIME_DIR"
+  else
+    err "Failed to install junie_runtime from $RUNTIME_DIR"
+    exit 1
+  fi
+else
+  err "junie_runtime directory not found: $RUNTIME_DIR"
+  exit 1
+fi
+
+# ── Step 4b: Create state directories ──
 log "Creating state directories..."
 mkdir -p "$STATE_DIR"/{backlog/items,backlog/archive,reflections,overnight,logs}
 mkdir -p "$STATE_DIR"/marinator/runs

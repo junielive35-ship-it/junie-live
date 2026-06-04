@@ -213,4 +213,12 @@ log "marinator delegation regression tests"
 log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
 
+log "junie_runtime package import and tests"
+if python3 -c "import junie_runtime; print(junie_runtime.__version__)" 2>/dev/null; then
+  log "  junie_runtime import OK"
+else
+  fail "junie_runtime package is not importable; run 'python3 -m pip install -e hermes/junie_runtime'"
+fi
+python3 -m pytest "$ROOT/junie_runtime/tests" -q 2>/dev/null || python3 -m pytest "$ROOT/junie_runtime/tests" -q || fail "junie_runtime tests failed"
+
 log "all checks passed"

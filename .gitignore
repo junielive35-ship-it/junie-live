@@ -1,3 +1,6 @@
 HERMES.md
 .junie
 .idea
+__pycache__/
+*.egg-info/
+.pytest_cache/
