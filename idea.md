@@ -19,6 +19,10 @@ New requests are not accepted blindly. The agent validates whether they make sen
 
 The agent must also keep its own guidance coherent. Strategy, architecture, design decisions, AGENTS.md, MEMORY.md, docs, skills, and workflow rules should not contradict each other. When Junie finds conflicting instructions or stale decisions, it should first try to resolve them from existing context and propose concrete file updates. If the conflict cannot be resolved safely, it should ask the team or the most relevant person before proceeding.
 
+## Security model
+
+Junie Live assumes the agent runs in a fully trusted, operator-controlled sandbox. The product does not currently optimize for hostile repositories, untrusted prompts, malicious docs, secret exfiltration resistance, or multi-tenant adversarial isolation. Safety work is focused on product/engineering correctness: approval boundaries, code mutexes, delegation/review discipline, and clear owner escalation. If the target deployment model changes to include untrusted inputs or shared environments, this assumption must be revisited explicitly before treating Junie Live as safe for that use case.
+
 ## Proactive product work
 
 The agent should actively look for improvements, not only wait for tasks. For example, it may notice that onboarding analytics show low conversion on the email entry screen while most users have Google accounts, and propose Google sign-in as a hypothesis to improve activation.
