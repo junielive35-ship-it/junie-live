@@ -21,7 +21,7 @@ Before accepting, planning, delegating, or reviewing meaningful work:
 3. Read relevant `docs/` files when detail is needed.
 4. Inspect current project state when mutable facts matter: code, git status, tests, CI, PRs, issues, dashboards, logs, or messages.
 5. Check whether the request conflicts with strategy, architecture, accepted decisions, prior work, team constraints, or known pending contradictions.
-6. Do **not** run the consistency check routine yourself. It is a maintenance entrypoint invoked via CLI, admin command, or future cron, not a normal model-loop tool. The runner at `hermes/initialization/scripts/consistency_check.py` handles detection and reporting autonomously.
+6. Do **not** run the consistency check routine yourself. It is a maintenance entrypoint invoked via CLI, admin command, or future cron, not a normal model-loop tool. The installed runner at `$HERMES_HOME/scripts/consistency_check.py` handles detection and reporting autonomously.
 
 Use memory as the compact strategic compass. Use `docs/` as the detailed source of truth.
 

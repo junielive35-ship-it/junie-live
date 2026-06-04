@@ -6,9 +6,9 @@ This document defines the agreed semantics for the Junie Live consistency check 
 
 The consistency check is a **maintenance entrypoint**, not a normal LLM tool exposed to the main orchestrator:
 
-- **Shared Python runner:** `hermes/initialization/scripts/consistency_check.py`
+- **Shared Python runner:** installed at `$HERMES_HOME/scripts/consistency_check.py` (seed source: `hermes/initialization/scripts/consistency_check.py`)
 - **Subcommands:** `init` (initialize state), `run` (full check), `render-prompt` (dry-run)
-- **Manual debug entrypoint:** `/check_consistency` is intentionally deferred — no safe profile-local slash/admin hook exists without exposing a model-loop tool. Invoke the runner directly: `python3 hermes/initialization/scripts/consistency_check.py run --repo <path>`
+- **Manual debug entrypoint:** `/check_consistency` is intentionally deferred — no safe profile-local slash/admin hook exists without exposing a model-loop tool. Invoke the runner directly: `python3 "$HERMES_HOME/scripts/consistency_check.py" run --repo <path>`
 - **Cron path:** The same runner is ready for future cron invocation. Recurring cron requires explicit owner approval.
 - **No model-loop tool:** The runner is not registered as a callable tool in the orchestrator's schema.
 
@@ -81,7 +81,7 @@ During profile initialization, consistency baseline must be set up:
 2. Write initial `consistency-state.json` with `main_branch`, `last_checkpoint_commit`, `last_scan_at`.
 3. Create empty `PENDING_CONTRADICTIONS.md` if missing.
 4. Optionally seed `relevant_artifacts` with clearly relevant root architecture diagrams/images discovered during initialization.
-5. Command: `python3 hermes/initialization/scripts/consistency_check.py init --repo <target-repo>`
+5. During initialization, run in foreground via the terminal tool and inspect exit code/output before continuing: `python3 "$HERMES_HOME/scripts/consistency_check.py" init --repo <target-repo>`
 
 ## Preflight (fail-fast order)
 
@@ -167,7 +167,7 @@ Prompt-injection hardening is out of scope under the trusted sandbox assumption.
 ## Verification
 
 - `python3 -m py_compile hermes/initialization/scripts/consistency_check.py`
-- Full consistency check tests via `./hermes/scripts/test-consistency-check.sh`
+- Full consistency check tests via `python3 hermes/scripts/test_consistency_check.py`
 - Tests use temp dirs/repos and must not touch the live profile.
 
 ## Future improvements

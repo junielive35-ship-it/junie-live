@@ -90,7 +90,7 @@ Detects contradictions between:
 - Repo docs and agent state
 
 The consistency check is a maintenance entrypoint, not a model-loop tool. Invoked via:
-- CLI: `python3 hermes/initialization/scripts/consistency_check.py run --repo <path>`
+- CLI: `python3 "$HERMES_HOME/scripts/consistency_check.py" run --repo <path>`
 - Future cron: recurring checks require owner approval
 - Future slash: `/check_consistency` deferred until Hermes supports safe profile-local hooks
 
