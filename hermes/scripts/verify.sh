@@ -69,9 +69,7 @@ if [[ -f "$ROOT/distribution/scripts/dump-junie.sh" ]]; then
 else
   fail "distribution/scripts/dump-junie.sh is missing"
 fi
-# SEED_OWNED_PATHS must include 'scripts' so a re-hire cleans and reinstalls it
-grep -qE '^\s+scripts\s*$' "$ROOT/scripts/hire-junie.sh" || \
-  fail "hire-junie.sh SEED_OWNED_PATHS must include 'scripts'"
+# hire-junie.sh now uses hermes profile delete + install for cleanup.
 
 log "variant-minimal regression guard"
 offenders=$(grep -rn --exclude-dir=.git -- '--variant minimal' . 2>/dev/null | \
