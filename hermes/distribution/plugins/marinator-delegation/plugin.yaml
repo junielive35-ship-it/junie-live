@@ -1,0 +1,7 @@
+name: marinator-delegation
+version: 0.1.0
+description: "Junie Live Marinator delegation tool: start supervised OpenCode worker runs and wake the owning Hermes session for review."
+author: Danila Savenkov / Junie Live
+kind: standalone
+provides_tools:
+  - marinator_delegate

@@ -36,14 +36,14 @@ For autonomous work window requests ("work autonomously for 9h"), the autonomous
 Triggered when an accepted code-changing task is ready and mutex is free. This routine is the current code-changing path through the Marinator loop.
 
 Flow:
-1. Acquire code mutex via `hermes/initialization/scripts/code-mutex.sh acquire`.
+1. Acquire code mutex via `hermes/distribution/scripts/code-mutex.sh acquire`.
 2. Decompose task (coding-task-decomposition skill).
 3. Delegate via `marinator_delegate` with scoped context; for non-code subtasks (research, analysis) use `delegate_task` instead.
 4. Run subagents sequentially under the mutex.
 5. Review results (implementation-review skill).
 6. Request fixes from subagents until correct.
 7. Commit verified work / open PR.
-8. Release mutex via `hermes/initialization/scripts/code-mutex.sh release`.
+8. Release mutex via `hermes/distribution/scripts/code-mutex.sh release`.
 
 ### 3. Task completion → reflection
 

@@ -82,29 +82,20 @@ hermes/
 │       ├── test_paths.py
 │       ├── test_state.py
 │       └── test_mutex.py
-├── initialization/                    # Reusable seed for new Junie instances
+├── distribution/                      # Canonical Hermes profile distribution (install via `hermes profile install`)
+│   ├── distribution.yaml              # Distribution manifest
 │   ├── SOUL.md                        # Personality + always-on operating rules (auto-loaded by Hermes from profile)
 │   ├── INITIALIZATION.md              # One-shot init workflow (deleted by Junie when init completes)
 │   ├── memory-seed.md                 # Initial memory entries to inject during init
-│   ├── docs/                          # Detailed knowledge base + protocol templates
-│   │   ├── seed-HERMES.md             # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
-│   │   ├── tools.md                   # Operational cheat-sheet (commands, git conventions, deploy, escalation) — filled during init
-│   │   ├── strategy.md
-│   │   ├── architecture.md
-│   │   ├── design-decisions.md
-│   │   ├── product-hypotheses.md
-│   │   ├── analytics-plan.md
-│   │   ├── delegation-protocol.md
-│   │   ├── review-protocol.md
-│   │   ├── reflection-protocol.md
-│   │   ├── consistency-protocol.md
-│   │   └── implementation-status.md
-│   └── skills/                        # Hermes skills (SKILL.md format)
-│       ├── junie-autonomous-work-window/
-│       ├── junie-coding-task-decomposition/
-│       ├── junie-implementation-review/
-│       ├── junie-task-intake-validation/
-│       └── junie-task-reflection/
+│   ├── HERMES.seed.md                 # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
+│   ├── config.yaml                    # Shipped defaults (preserved on update)
+│   ├── .env.EXAMPLE                   # Required env vars template
+│   ├── docs/                          # Profile-internal Junie docs (strategy, protocols, etc.)
+│   ├── skills/                        # Installed skills
+│   ├── plugins/                       # Marinator delegation + Autonomous work plugins
+│   ├── scripts/                       # Profile-local helper scripts (code-mutex, dump, etc.)
+│   └── cron/                          # Optional profile cron jobs
+├── initialization/                    # Superseded by distribution/; kept for migration compatibility
 ├── scripts/
 │   ├── hire-junie.sh                  # Creates profile, installs skills, sets up gateway
 │   ├── verify.sh                      # Repo verification (bash syntax, links, structure)
@@ -123,9 +114,9 @@ hermes/
 
 1. **Profile** — Junie runs as a Hermes profile (`junie-live`), with its own config, memory, skills, and sessions.
 
-2. **SOUL.md** — `initialization/SOUL.md` is installed into the profile root as `~/.hermes/profiles/junie-live/SOUL.md`. Hermes auto-loads it as the agent identity (slot #1 in the system prompt) on every turn, regardless of working directory. It carries Junie's personality plus the always-on operating safety net (initialization gate, no-direct-coding rule, challenge protocol). Replaces OpenClaw's `SOUL.md`.
+2. **SOUL.md** — `distribution/SOUL.md` is installed into the profile root as `~/.hermes/profiles/junie-live/SOUL.md` via Hermes profile distribution. Hermes auto-loads it as the agent identity (slot #1 in the system prompt) on every turn, regardless of working directory. It carries Junie's personality plus the always-on operating safety net (initialization gate, no-direct-coding rule, challenge protocol). Replaces OpenClaw's `SOUL.md`.
 
-3. **HERMES.md** — `initialization/docs/seed-HERMES.md` is copied into the target project repo root as `HERMES.md` during initialization. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root, so the full project-level protocol is active whenever Junie works in the target repo. We pick `HERMES.md` over `AGENTS.md` because coding executors (opencode, codex, claude-code) read `AGENTS.md` — keeping the orchestrator protocol in `HERMES.md` prevents executor sessions from being polluted by orchestrator-only rules.
+3. **HERMES.md** — `distribution/HERMES.seed.md` is installed into the profile as `HERMES.seed.md` via profile distribution. During initialization, the agent copies it to the target project repo root as `HERMES.md`. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root, so the full project-level protocol is active whenever Junie works in the target repo. We pick `HERMES.md` over `AGENTS.md` because coding executors (opencode, codex, claude-code) read `AGENTS.md` — keeping the orchestrator protocol in `HERMES.md` prevents executor sessions from being polluted by orchestrator-only rules.
 
 4. **Memory** — Hermes native memory stores durable strategic context (replaces `MEMORY.md`). Compact facts in user/memory stores; detailed knowledge in profile `docs/` read on demand.
 

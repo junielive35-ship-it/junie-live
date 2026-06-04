@@ -5,7 +5,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PLUGIN_DIR="$ROOT/initialization/plugins/marinator-delegation"
+PLUGIN_DIR="$ROOT/distribution/plugins/marinator-delegation"
 TOOLS_PY="$PLUGIN_DIR/tools.py"
 RUNNER_PY="$PLUGIN_DIR/runner.py"
 STATE_PY="$PLUGIN_DIR/state.py"

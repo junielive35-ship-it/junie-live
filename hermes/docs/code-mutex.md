@@ -73,7 +73,7 @@ The `code-mutex.sh` wrapper uses `python3` directly for the runtime CLI. The pro
 
 ## Installed command interface
 
-The reusable seed ships the wrapper as `hermes/initialization/scripts/code-mutex.sh`. During hire, the script is installed into the profile and should be invoked from there:
+The reusable seed ships the wrapper as `hermes/distribution/scripts/code-mutex.sh`. During profile distribution install, the script is installed into the profile and should be invoked from there:
 
 ```bash
 ~/.hermes/profiles/junie-live/scripts/code-mutex.sh status
@@ -174,7 +174,7 @@ Those can be added later if Junie Live needs more throughput or less human inter
 
 ## Related
 
-- `code-mutex-protocol.md` in `hermes/initialization/docs/` — seed/profile protocol version installed for hired agents.
+- `code-mutex-protocol.md` in `hermes/distribution/docs/` — seed/profile protocol version installed for hired agents.
 - `delegation-protocol.md` — Marinator delegation rules and worker contract.
 - `tools.md` — initialized profile operational quick reference for mutex commands and escalation contacts.
 - `~/.hermes/profiles/junie-live/scripts/code-mutex.sh` — installed implementation for the active profile.

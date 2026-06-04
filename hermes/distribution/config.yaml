@@ -1,0 +1,8 @@
+profile: junie-live
+model:
+  default: openai/gpt-5.5
+  provider: openrouter
+agent:
+  reasoning_effort: medium
+display:
+  busy_input_mode: steer

@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DUMP_SCRIPT="$ROOT/initialization/scripts/dump-junie.sh"
+DUMP_SCRIPT="$ROOT/distribution/scripts/dump-junie.sh"
 REHIRE_SCRIPT="$ROOT/scripts/rehire-junie.sh"
 
 fail_count=0
@@ -55,6 +55,64 @@ fi
 if [[ "${1:-}" == "gateway" && "${2:-}" == "install" ]]; then
   echo "ERROR: gateway install should not be called during rehire" >&2
   exit 1
+fi
+# Simulate profile export
+if [[ "${1:-}" == "profile" && "${2:-}" == "export" ]]; then
+  profile_name="${3:-}"
+  output_file=""
+  if [[ "${4:-}" == "-o" ]]; then
+    output_file="${5:-}"
+  fi
+  if [[ -z "$profile_name" || -z "$output_file" ]]; then
+    echo "ERROR: usage: hermes profile export PROFILE -o OUTPUT" >&2
+    exit 1
+  fi
+  profile_src="${HERMES_HOME}/profiles/${profile_name}"
+  if [[ ! -d "$profile_src" ]]; then
+    echo "ERROR: profile not found: $profile_src" >&2
+    exit 1
+  fi
+  tmpdir="$(mktemp -d)"
+  cp -a "$profile_src" "$tmpdir/${profile_name}"
+  (cd "$tmpdir" && tar -czf "$output_file" "$profile_name")
+  rm -rf "$tmpdir"
+  exit 0
+fi
+# Simulate profile import
+if [[ "${1:-}" == "profile" && "${2:-}" == "import" ]]; then
+  archive=""
+  profile_name=""
+  found_name=0
+  for arg in "$@"; do
+    if [[ "$found_name" -eq 1 ]]; then
+      profile_name="$arg"
+      found_name=0
+    elif [[ "$arg" == "--name" ]]; then
+      found_name=1
+    elif [[ -z "$archive" && "$arg" != "profile" && "$arg" != "import" ]]; then
+      archive="$arg"
+    fi
+  done
+  if [[ -z "$profile_name" ]]; then
+    echo "ERROR: --name required for profile import" >&2
+    exit 1
+  fi
+  if [[ ! -f "$archive" ]]; then
+    echo "ERROR: archive not found: $archive" >&2
+    exit 1
+  fi
+  hermes_root="${HERMES_HOME:-$HOME/.hermes}"
+  import_tmp="$(mktemp -d)"
+  tar -xzf "$archive" -C "$import_tmp"
+  topdirs=("$import_tmp"/*)
+  if [[ ${#topdirs[@]} -ne 1 || ! -d "${topdirs[0]}" ]]; then
+    echo "ERROR: expected single top-level directory in archive" >&2
+    exit 1
+  fi
+  mkdir -p "$hermes_root/profiles"
+  mv "${topdirs[0]}" "$hermes_root/profiles/$profile_name"
+  rm -rf "$import_tmp"
+  exit 0
 fi
 exit 0
 FAKEHERMES
@@ -114,7 +172,7 @@ echo "1234" > "$PROFILE_DIR/gateway.pid"
 # ── Runtime manifest setup for wheel artifact tests ──
 RUNTIME_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
 mkdir -p "$RUNTIME_MANIFEST_DIR"
-HELPER="$ROOT/initialization/scripts/junie-runtime-artifact.py"
+HELPER="$ROOT/distribution/scripts/junie-runtime-artifact.py"
 python3 "$HELPER" write-install-manifest \
   --runtime-dir "$ROOT/junie_runtime" \
   --repo-root "$ROOT" \
@@ -140,6 +198,17 @@ if [[ -f "$DUMP_OUTPUT" ]]; then
   printf '  OK: archive created at %s\n' "$DUMP_OUTPUT"
 else
   fail "dump did not create archive"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 1a: archive has single top-level profile dir (not profiles/) ===\n'
+
+TOP_LEVEL="$(archive_contents "$DUMP_OUTPUT" | cut -d/ -f1 | sort -u)"
+if [[ "$TOP_LEVEL" == "$PROFILE" ]]; then
+  pass
+  printf '  OK: top-level dir is %s\n' "$TOP_LEVEL"
+else
+  fail "top-level should be '$PROFILE', got: $TOP_LEVEL"
 fi
 
 # ════════════════════════════════════════════════════════════════
@@ -238,7 +307,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 11: archive excludes top-level logs/ ===\n'
 
-if archive_contents "$DUMP_OUTPUT" | grep -q "profiles/$PROFILE/logs/"; then
+if archive_contents "$DUMP_OUTPUT" | grep -q "$PROFILE/logs/"; then
   fail "archive should exclude profile-level logs/"
 else
   pass
@@ -247,7 +316,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 12: archive excludes top-level cache/ ===\n'
 
-if archive_contents "$DUMP_OUTPUT" | grep -q "profiles/$PROFILE/cache/"; then
+if archive_contents "$DUMP_OUTPUT" | grep -q "$PROFILE/cache/"; then
   fail "archive should exclude profile-level cache/"
 else
   pass
@@ -256,7 +325,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 12b: archive excludes top-level backups/ ===\n'
 
-if archive_contents "$DUMP_OUTPUT" | grep -q "profiles/$PROFILE/backups/"; then
+if archive_contents "$DUMP_OUTPUT" | grep -q "$PROFILE/backups/"; then
   fail "archive should exclude profile-level backups/"
 else
   pass
@@ -508,7 +577,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 26: dump from scoped HERMES_HOME includes expected files ===\n'
 
-if archive_contents "$SCOPED_DUMP_OUTPUT" | grep -q "profiles/$PROFILE/config.yaml"; then
+if archive_contents "$SCOPED_DUMP_OUTPUT" | grep -q "$PROFILE/config.yaml"; then
   pass
   printf '  OK: archive from scoped HERMES_HOME has correct paths\n'
 else
@@ -570,7 +639,7 @@ echo "config: override" > "$OVERRIDE_HOME/profiles/$PROFILE/config.yaml"
 # Create runtime manifest for override profile
 OVERRIDE_MANIFEST_DIR="$OVERRIDE_HOME/profiles/$PROFILE/junie-live/runtime"
 mkdir -p "$OVERRIDE_MANIFEST_DIR"
-python3 "$ROOT/initialization/scripts/junie-runtime-artifact.py" write-install-manifest \
+python3 "$ROOT/distribution/scripts/junie-runtime-artifact.py" write-install-manifest \
   --runtime-dir "$ROOT/junie_runtime" \
   --repo-root "$ROOT" \
   --manifest-dir "$OVERRIDE_MANIFEST_DIR" \
@@ -638,7 +707,7 @@ mkdir -p "$PROFILE_LOCAL_SCRIPTS_DIR"
 cp "$DUMP_SCRIPT" "$PROFILE_LOCAL_SCRIPTS_DIR/dump-junie.sh"
 chmod +x "$PROFILE_LOCAL_SCRIPTS_DIR/dump-junie.sh"
 # Also copy junie-runtime-artifact.py (called by dump-junie.sh)
-cp "$ROOT/initialization/scripts/junie-runtime-artifact.py" "$PROFILE_LOCAL_SCRIPTS_DIR/junie-runtime-artifact.py"
+cp "$ROOT/distribution/scripts/junie-runtime-artifact.py" "$PROFILE_LOCAL_SCRIPTS_DIR/junie-runtime-artifact.py"
 
 LOCAL_DUMP_OUTPUT="$TMP/local-dump.tgz"
 rc=0
@@ -668,22 +737,22 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 33: dump archive includes runtime/junie_runtime.json ===\n'
 
-if archive_contents "$DUMP_OUTPUT" | grep -q 'runtime/junie_runtime.json'; then
+if archive_contents "$DUMP_OUTPUT" | grep -q 'junie-live/runtime_artifact/junie_runtime.json'; then
   pass
-  printf '  OK: archive contains runtime/junie_runtime.json\n'
+  printf '  OK: archive contains junie-live/runtime_artifact/junie_runtime.json\n'
 else
-  fail "archive missing runtime/junie_runtime.json"
+  fail "archive missing junie-live/runtime_artifact/junie_runtime.json"
 fi
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 34: dump archive includes a wheel in runtime/ ===\n'
+printf '=== Test 34: dump archive includes a wheel in junie-live/runtime_artifact/ ===\n'
 
-WHEEL_IN_ARCHIVE="$(archive_contents "$DUMP_OUTPUT" | grep 'runtime/.*\.whl' | head -1 || true)"
+WHEEL_IN_ARCHIVE="$(archive_contents "$DUMP_OUTPUT" | grep 'junie-live/runtime_artifact/.*\.whl' | head -1 || true)"
 if [[ -n "$WHEEL_IN_ARCHIVE" ]]; then
   pass
   printf '  OK: archive contains wheel: %s\n' "$WHEEL_IN_ARCHIVE"
 else
-  fail "archive missing wheel file in runtime/"
+  fail "archive missing wheel file in junie-live/runtime_artifact/"
 fi
 
 # ════════════════════════════════════════════════════════════════
@@ -741,7 +810,7 @@ mkdir -p "$CORRUPT_DIR"
 tar -xzf "$DUMP_OUTPUT" -C "$CORRUPT_DIR" 2>/dev/null
 
 # Corrupt the manifest hash
-python3 "$HELPER" corrupt-manifest-hash "$CORRUPT_DIR/runtime/junie_runtime.json" 2>/dev/null || true
+python3 "$HELPER" corrupt-manifest-hash "$CORRUPT_DIR/$PROFILE/junie-live/runtime_artifact/junie_runtime.json" 2>/dev/null || true
 
 tar -czf "$CORRUPT_ARCHIVE" -C "$CORRUPT_DIR" . 2>/dev/null
 
@@ -773,7 +842,7 @@ NO_RT_DIR="$TMP/no-rt"
 NO_RT_ARCHIVE="$TMP/no-rt-dump.tgz"
 mkdir -p "$NO_RT_DIR"
 tar -xzf "$DUMP_OUTPUT" -C "$NO_RT_DIR" 2>/dev/null
-rm -rf "$NO_RT_DIR/runtime"
+rm -rf "$NO_RT_DIR/$PROFILE/junie-live/runtime_artifact"
 tar -czf "$NO_RT_ARCHIVE" -C "$NO_RT_DIR" . 2>/dev/null
 
 NO_RT_REHIRE_HOME="$TMP/no-rt-rehire-home"
