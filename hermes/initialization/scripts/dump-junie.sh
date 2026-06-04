@@ -91,7 +91,7 @@ log "output:        $OUTPUT"
 
 # ── Stage ──
 STAGING_DIR="$(mktemp -d)"
-trap 'rm -rf "$STAGING_DIR"' EXIT
+trap 'rm -rf "$STAGING_DIR" ${RUNTIME_BUILD_COPY:-}' EXIT
 
 # Create full path structure so archive can be extracted into any HERMES_HOME
 ARCHIVE_PROFILE_DIR="$STAGING_DIR/profiles/$PROFILE"
@@ -148,6 +148,78 @@ for dirpath, dirnames, filenames in os.walk(src_root):
         else:
             shutil.copy2(src, dst)
 PYEOF
+
+# ── Build runtime wheel artifact ──
+# Source shared helpers for Hermes Python resolution
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./runtime-paths.sh
+. "$SCRIPT_DIR/runtime-paths.sh"
+
+RUNTIME_MANIFEST_SRC="$PROFILE_DIR/junie-live/runtime/junie_runtime.json"
+ARCHIVE_RUNTIME_DIR="$STAGING_DIR/runtime"
+
+if [[ -f "$RUNTIME_MANIFEST_SRC" ]]; then
+  log "runtime manifest found: $RUNTIME_MANIFEST_SRC"
+
+  RUNTIME_SOURCE="$(python3 -c "
+import json
+try:
+    m = json.load(open('$RUNTIME_MANIFEST_SRC'))
+    print(m.get('source_path', ''))
+except Exception:
+    print('')
+")"
+  if [[ -z "$RUNTIME_SOURCE" || ! -d "$RUNTIME_SOURCE" ]]; then
+    err "runtime source path not found: ${RUNTIME_SOURCE:-'(empty)'}"
+    err "  (recorded in $RUNTIME_MANIFEST_SRC)"
+    exit 1
+  fi
+
+  log "building wheel from $RUNTIME_SOURCE..."
+
+  # Build from a temp copy to avoid leaving build artifacts in the source tree
+  RUNTIME_BUILD_COPY="$(mktemp -d)"
+  cp -a "$RUNTIME_SOURCE/." "$RUNTIME_BUILD_COPY/"
+
+  mkdir -p "$ARCHIVE_RUNTIME_DIR"
+
+  HERMES_PY="$(resolve_hermes_python)" || exit 1
+  ensure_hermes_pip "$HERMES_PY" || exit 1
+
+  "$HERMES_PY" -m pip wheel --no-deps "$RUNTIME_BUILD_COPY" -w "$ARCHIVE_RUNTIME_DIR" -q || {
+    err "pip wheel failed for $RUNTIME_SOURCE"
+    exit 1
+  }
+
+  rm -rf "$RUNTIME_BUILD_COPY"
+  unset RUNTIME_BUILD_COPY
+
+  WHEEL_COUNT="$(ls "$ARCHIVE_RUNTIME_DIR"/*.whl 2>/dev/null | wc -l)"
+  if [[ "$WHEEL_COUNT" -eq 0 ]]; then
+    err "wheel build produced no output"
+    exit 1
+  fi
+
+  WHEEL_FILE="$(ls "$ARCHIVE_RUNTIME_DIR"/*.whl | head -1)"
+  WHEEL_HASH="$(sha256sum "$WHEEL_FILE" | cut -d' ' -f1)"
+  WHEEL_BASENAME="$(basename "$WHEEL_FILE")"
+
+  # Copy manifest to archive with wheel info
+  python3 -c "
+import json, datetime
+m = json.load(open('$RUNTIME_MANIFEST_SRC'))
+m['wheel_filename'] = '$WHEEL_BASENAME'
+m['wheel_sha256'] = '$WHEEL_HASH'
+m['wheel_built_at'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+json.dump(m, open('$ARCHIVE_RUNTIME_DIR/junie_runtime.json', 'w'), indent=2)
+"
+  log "  wheel: $WHEEL_BASENAME ($WHEEL_HASH)"
+else
+  err "runtime manifest not found: $RUNTIME_MANIFEST_SRC"
+  err "  This dump branch requires a runtime manifest for exact DR artifact."
+  err "  Re-hire with the current branch first."
+  exit 1
+fi
 
 log "creating archive..."
 tar -czf "$OUTPUT" -C "$STAGING_DIR" . || { err "failed to create archive"; exit 1; }

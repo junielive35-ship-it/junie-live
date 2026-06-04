@@ -131,29 +131,89 @@ else
   exit 1
 fi
 
-# ── Ensure junie_runtime package is available ──
-# The code-mutex.sh wrapper requires the shared runtime package.
-if ! python3 -c "import junie_runtime" 2>/dev/null; then
-  runtime_src="$(dirname "${BASH_SOURCE[0]}")/../junie_runtime"
-  if [[ -d "$runtime_src" ]]; then
-    RUNTIME_DIR="$(cd "$runtime_src" && pwd)" || RUNTIME_DIR=""
-    if [[ -n "$RUNTIME_DIR" && -d "$RUNTIME_DIR" ]]; then
-      log "Installing junie_runtime package..."
-      python3 -m pip install -e "$RUNTIME_DIR" -q || {
-        err "Failed to install junie_runtime from $RUNTIME_DIR"
-        exit 1
-      }
-      log "  junie_runtime installed"
-    else
-      log "  WARNING: cannot resolve runtime dir: $runtime_src"
-      log "  Run: python3 -m pip install -e <repo>/hermes/junie_runtime"
-    fi
-  else
-    log "  WARNING: junie_runtime source dir not found at $runtime_src"
-    log "  Run: python3 -m pip install -e <repo>/hermes/junie_runtime"
+# ── Restore junie_runtime from archive wheel artifact ──
+# Source shared helpers for Hermes Python resolution
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../initialization/scripts/runtime-paths.sh
+. "$SCRIPT_DIR/../initialization/scripts/runtime-paths.sh"
+
+ARCHIVE_RUNTIME_DIR="$HERMES_ROOT/runtime"
+ARCHIVE_MANIFEST="$ARCHIVE_RUNTIME_DIR/junie_runtime.json"
+
+if [[ -f "$ARCHIVE_MANIFEST" ]]; then
+  log "runtime manifest found in archive: $ARCHIVE_MANIFEST"
+
+  # Read manifest fields
+  WHEEL_FILENAME="$(python3 -c "import json; print(json.load(open('$ARCHIVE_MANIFEST')).get('wheel_filename',''))")"
+  EXPECTED_HASH="$(python3 -c "import json; print(json.load(open('$ARCHIVE_MANIFEST')).get('wheel_sha256',''))")"
+  EXPECTED_VERSION="$(python3 -c "import json; print(json.load(open('$ARCHIVE_MANIFEST')).get('version',''))")"
+
+  WHEEL_PATH="$ARCHIVE_RUNTIME_DIR/$WHEEL_FILENAME"
+  if [[ -z "$WHEEL_FILENAME" || ! -f "$WHEEL_PATH" ]]; then
+    err "wheel file not found: $WHEEL_PATH"
+    err "  Archive may be corrupt. Re-dump with the current branch."
+    exit 1
   fi
+
+  # Verify sha256
+  ACTUAL_HASH="$(sha256sum "$WHEEL_PATH" | cut -d' ' -f1)"
+  if [[ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]]; then
+    err "wheel hash mismatch for $WHEEL_FILENAME"
+    err "  expected: $EXPECTED_HASH"
+    err "  actual:   $ACTUAL_HASH"
+    err "  Archive may be corrupt or tampered. Re-dump with the current branch."
+    exit 1
+  fi
+
+  log "wheel hash verified: $WHEEL_FILENAME"
+
+  # Install using resolved Hermes Python
+  HERMES_PY="$(resolve_hermes_python)" || exit 1
+  ensure_hermes_pip "$HERMES_PY" || exit 1
+
+  log "installing junie_runtime from archive wheel..."
+  "$HERMES_PY" -m pip install --force-reinstall "$WHEEL_PATH" -q || {
+    err "Failed to install junie_runtime from $WHEEL_PATH"
+    exit 1
+  }
+  log "  junie_runtime installed from archive wheel"
+
+  # Verify installed version matches manifest
+  INSTALLED_VERSION="$("$HERMES_PY" -c "import junie_runtime; print(junie_runtime.__version__)" 2>/dev/null || true)"
+  if [[ -n "$EXPECTED_VERSION" && "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]]; then
+    err "installed junie_runtime version mismatch: expected $EXPECTED_VERSION, got $INSTALLED_VERSION"
+    exit 1
+  fi
+  log "  version verified: $INSTALLED_VERSION"
+
+  # Write restored manifest to profile runtime state
+  RESTORE_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
+  mkdir -p "$RESTORE_MANIFEST_DIR"
+  python3 -c "
+import json, datetime, os
+m = json.load(open('$ARCHIVE_MANIFEST'))
+m['restored_at'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+m['restored_from_archive'] = os.path.basename('$ARCHIVE')
+m['installed_python'] = '$HERMES_PY'
+json.dump(m, open('$RESTORE_MANIFEST_DIR/junie_runtime.json', 'w'), indent=2)
+" || {
+    err "failed to write restored manifest"
+    exit 1
+  }
+  log "  restore manifest written to $RESTORE_MANIFEST_DIR/junie_runtime.json"
+
+  # Clean up extracted runtime dir
+  rm -rf "$ARCHIVE_RUNTIME_DIR"
+elif [[ -d "$ARCHIVE_RUNTIME_DIR" ]]; then
+  err "runtime directory found in archive but no manifest: $ARCHIVE_RUNTIME_DIR"
+  err "  Archive may be from an incompatible version."
+  exit 1
 else
-  log "  junie_runtime package OK"
+  err "no runtime artifact found in archive at $ARCHIVE_RUNTIME_DIR"
+  err "  This dump does not contain a junie_runtime wheel artifact."
+  err "  Run a newer dump-junie.sh (feat/junie-runtime-mutex branch) to create one."
+  err "  Then re-run rehire-junie.sh with the fresh archive."
+  exit 1
 fi
 
 # ── Start/restart gateway ──

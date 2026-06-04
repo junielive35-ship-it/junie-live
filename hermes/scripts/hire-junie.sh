@@ -66,6 +66,10 @@ FORWARD_KEYS=1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HERMES_VERSION_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Source shared helpers for Hermes Python resolution
+# shellcheck source=../initialization/scripts/runtime-paths.sh
+. "$HERMES_VERSION_ROOT/initialization/scripts/runtime-paths.sh"
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --telegram-token) need_value "$1" "${2:-}"; TOKEN="$2"; shift 2 ;;
@@ -256,9 +260,12 @@ fi
 # environment, not copied into the profile payload. The code-mutex.sh wrapper
 # requires it.
 RUNTIME_DIR="$HERMES_VERSION_ROOT/junie_runtime"
+HERMES_PY="$(resolve_hermes_python)" || exit 1
+log "Using Hermes Python: $HERMES_PY"
+ensure_hermes_pip "$HERMES_PY" || exit 1
 if [[ -d "$RUNTIME_DIR" ]]; then
   log "Installing junie_runtime package..."
-  if python3 -m pip install -e "$RUNTIME_DIR" -q 2>/dev/null; then
+  if "$HERMES_PY" -m pip install -e "$RUNTIME_DIR" -q 2>/dev/null; then
     log "  junie_runtime installed from $RUNTIME_DIR"
   else
     err "Failed to install junie_runtime from $RUNTIME_DIR"
@@ -274,6 +281,57 @@ log "Creating state directories..."
 mkdir -p "$STATE_DIR"/{backlog/items,backlog/archive,reflections,overnight,logs}
 mkdir -p "$STATE_DIR"/marinator/runs
 mkdir -p "$STATE_DIR"/autonomous_work/windows
+
+# ── Step 4c: Write runtime manifest ──
+RUNTIME_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
+mkdir -p "$RUNTIME_MANIFEST_DIR"
+HERMES_PY="$HERMES_PY" \
+  RUNTIME_DIR="$RUNTIME_DIR" \
+  REPO_ROOT="$HERMES_VERSION_ROOT" \
+  RUNTIME_MANIFEST_DIR="$RUNTIME_MANIFEST_DIR" \
+  "$HERMES_PY" <<'PYMANIFEST'
+import datetime, json, os, subprocess, sys
+manifest = {}
+manifest["package"] = "junie-runtime"
+manifest["module"] = "junie_runtime"
+runtime_dir = os.environ.get("RUNTIME_DIR", "")
+manifest["source_path"] = os.path.abspath(runtime_dir) if runtime_dir else ""
+manifest["runtime_path"] = "hermes/junie_runtime"
+repo_root = os.environ.get("REPO_ROOT", "")
+if repo_root:
+    manifest["repo_root"] = os.path.abspath(repo_root)
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, cwd=repo_root, timeout=5
+        )
+        if commit.returncode == 0:
+            manifest["git_commit"] = commit.stdout.strip()
+        branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, cwd=repo_root, timeout=5
+        )
+        if branch.returncode == 0:
+            manifest["git_branch"] = branch.stdout.strip()
+        subprocess.run(["git", "diff", "--quiet"], capture_output=True, cwd=repo_root, timeout=5)
+        manifest["source_type"] = "git-working-tree"
+    except Exception:
+        manifest["source_type"] = "path"
+else:
+    manifest["source_type"] = "path"
+try:
+    import junie_runtime
+    manifest["version"] = junie_runtime.__version__
+except ImportError:
+    manifest["version"] = "unknown"
+manifest["installed_python"] = os.environ.get("HERMES_PY", sys.executable)
+manifest["installed_at"] = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+p = os.path.join(os.environ["RUNTIME_MANIFEST_DIR"], "junie_runtime.json")
+with open(p, "w") as f:
+    json.dump(manifest, f, indent=2)
+print(f"  Runtime manifest written: {p}")
+PYMANIFEST
+log "  Package: junie-runtime, version: $(python3 -c 'import junie_runtime; print(junie_runtime.__version__)' 2>/dev/null || echo 'unknown')"
 
 # ── Plugin enable helper (preserves existing plugins.enabled) ──
 

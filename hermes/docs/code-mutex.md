@@ -69,6 +69,8 @@ The runtime package must be installed into the Hermes Python environment:
 python3 -m pip install -e /path/to/junie-live/hermes/junie_runtime
 ```
 
+The `code-mutex.sh` wrapper resolves the Hermes Python interpreter automatically: it checks `JUNIE_HERMES_PYTHON` env var, then the `hermes` CLI shebang, then falls back to `python3`. The profile runtime manifest (`junie-live/runtime/junie_runtime.json`) records which interpreter was used at install time.
+
 ## Installed command interface
 
 The reusable seed ships the wrapper as `hermes/initialization/scripts/code-mutex.sh`. During hire, the script is installed into the profile and should be invoked from there:

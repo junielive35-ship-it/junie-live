@@ -111,6 +111,28 @@ touch "$PROFILE_DIR/state.db-shm"
 # Add a pid file
 echo "1234" > "$PROFILE_DIR/gateway.pid"
 
+# ── Runtime manifest setup for wheel artifact tests ──
+RUNTIME_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
+mkdir -p "$RUNTIME_MANIFEST_DIR"
+export ROOT RUNTIME_MANIFEST_DIR
+python3 <<'PYRT'
+import json, os
+manifest = {
+    "package": "junie-runtime",
+    "module": "junie_runtime",
+    "version": "0.1.0",
+    "source_type": "path",
+    "source_path": os.path.join(os.environ['ROOT'], 'junie_runtime'),
+    "runtime_path": "hermes/junie_runtime",
+    "installed_python": "python3",
+    "installed_at": "2026-01-01T00:00:00Z"
+}
+p = os.path.join(os.environ['RUNTIME_MANIFEST_DIR'], 'junie_runtime.json')
+with open(p, 'w') as f:
+    json.dump(manifest, f, indent=2)
+print('  Runtime manifest created for test')
+PYRT
+
 # ── Helper ──
 archive_contents() {
   tar -tzf "$1" 2>/dev/null
@@ -130,6 +152,18 @@ if [[ -f "$DUMP_OUTPUT" ]]; then
   printf '  OK: archive created at %s\n' "$DUMP_OUTPUT"
 else
   fail "dump did not create archive"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 1b: no build artifacts left in runtime source tree ===\n'
+
+if [[ -d "$ROOT/junie_runtime/build" ]]; then
+  fail "build artifacts remain under runtime source: $ROOT/junie_runtime/build"
+elif ls "$ROOT/junie_runtime/"*.egg-info 2>/dev/null | grep -q .; then
+  fail "build artifacts remain under runtime source: egg-info found"
+else
+  pass
+  printf '  OK: no build artifacts under %s\n' "$ROOT/junie_runtime"
 fi
 
 # ════════════════════════════════════════════════════════════════
@@ -545,6 +579,14 @@ OVERRIDE_HOME="$TMP/override-home"
 OVERRIDE_DUMP="$TMP/override-dump.tgz"
 mkdir -p "$OVERRIDE_HOME/profiles/$PROFILE"
 echo "config: override" > "$OVERRIDE_HOME/profiles/$PROFILE/config.yaml"
+# Create runtime manifest for override profile
+mkdir -p "$OVERRIDE_HOME/profiles/$PROFILE/junie-live/runtime"
+python3 -c "
+import json, os
+d = os.path.join('$OVERRIDE_HOME', 'profiles', '$PROFILE', 'junie-live', 'runtime')
+os.makedirs(d, exist_ok=True)
+json.dump({'source_path': '$ROOT/junie_runtime', 'version': '0.1.0', 'installed_python': 'python3'}, open(os.path.join(d, 'junie_runtime.json'), 'w'), indent=2)
+"
 
 rc=0
 JUNIE_HERMES_ROOT="$OVERRIDE_HOME" \
@@ -607,6 +649,8 @@ PROFILE_LOCAL_SCRIPTS_DIR="$FAKE_HERMES_HOME/profiles/$PROFILE/scripts"
 mkdir -p "$PROFILE_LOCAL_SCRIPTS_DIR"
 cp "$DUMP_SCRIPT" "$PROFILE_LOCAL_SCRIPTS_DIR/dump-junie.sh"
 chmod +x "$PROFILE_LOCAL_SCRIPTS_DIR/dump-junie.sh"
+# Also copy runtime-paths.sh (sourced by dump-junie.sh)
+cp "$ROOT/initialization/scripts/runtime-paths.sh" "$PROFILE_LOCAL_SCRIPTS_DIR/runtime-paths.sh"
 
 LOCAL_DUMP_OUTPUT="$TMP/local-dump.tgz"
 rc=0
@@ -631,6 +675,197 @@ if archive_contents "$LOCAL_DUMP_OUTPUT" | grep -q 'config.yaml' && \
   printf '  OK: archive from profile-local dump has expected content\n'
 else
   fail "archive from profile-local dump missing expected files"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 33: dump archive includes runtime/junie_runtime.json ===\n'
+
+if archive_contents "$DUMP_OUTPUT" | grep -q 'runtime/junie_runtime.json'; then
+  pass
+  printf '  OK: archive contains runtime/junie_runtime.json\n'
+else
+  fail "archive missing runtime/junie_runtime.json"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 34: dump archive includes a wheel in runtime/ ===\n'
+
+WHEEL_IN_ARCHIVE="$(archive_contents "$DUMP_OUTPUT" | grep 'runtime/.*\.whl' | head -1 || true)"
+if [[ -n "$WHEEL_IN_ARCHIVE" ]]; then
+  pass
+  printf '  OK: archive contains wheel: %s\n' "$WHEEL_IN_ARCHIVE"
+else
+  fail "archive missing wheel file in runtime/"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 35: runtime manifest includes sha256 and installed_python ===\n'
+
+# Extract manifest from archive and verify fields
+MANIFEST_CHECK="$(python3 -c "
+import json, sys, tarfile
+try:
+    tf = tarfile.open('$DUMP_OUTPUT', 'r:gz')
+    # Find manifest member regardless of ./ prefix
+    manifest_member = None
+    for m in tf.getmembers():
+        if 'junie_runtime.json' in m.name and 'runtime' in m.name:
+            manifest_member = m
+            break
+    if manifest_member is None:
+        print('ERROR: manifest member not found in archive')
+        sys.exit(1)
+    f = tf.extractfile(manifest_member)
+    m = json.load(f)
+    has_sha = bool(m.get('wheel_sha256'))
+    has_py = bool(m.get('installed_python'))
+    has_fn = bool(m.get('wheel_filename'))
+    print(f'sha256={\"yes\" if has_sha else \"no\"} installed_python={\"yes\" if has_py else \"no\"} wheel_filename={\"yes\" if has_fn else \"no\"}')
+except Exception as e:
+    print(f'ERROR: {e}')
+" 2>&1)"
+
+if echo "$MANIFEST_CHECK" | grep -q 'sha256=yes.*installed_python=yes.*wheel_filename=yes'; then
+  pass
+  printf '  OK: manifest has sha256, installed_python, wheel_filename\n'
+else
+  fail "manifest missing required fields: $MANIFEST_CHECK"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 36: rehire restores from artifact (verifies restored manifest metadata) ===\n'
+
+HASH_REHIRE_HOME="$TMP/hash-rehire-home"
+HASH_REHIRE_LOG="$TMP/hash-rehire-hermes.log"
+HASH_REHIRE_BIN="$TMP/hash-rehire-hermes"
+cp "$FAKE_HERMES_BIN" "$HASH_REHIRE_BIN"
+sed 's/FAKE_HERMES_LOG/HASH_REHIRE_LOG/' -i "$HASH_REHIRE_BIN"
+touch "$HASH_REHIRE_LOG"
+
+rc=0
+PATH="$TMP/bin:$PATH" \
+HERMES_HOME="$HASH_REHIRE_HOME" \
+FAKE_HERMES_LOG="$HASH_REHIRE_LOG" \
+HASH_REHIRE_LOG="$HASH_REHIRE_LOG" \
+  "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" --no-gateway-start >/dev/null 2>&1 || rc=$?
+
+if [[ "$rc" -eq 0 ]]; then
+  # Verify restore manifest was written
+  RESTORE_MANIFEST="$HASH_REHIRE_HOME/profiles/$PROFILE/junie-live/runtime/junie_runtime.json"
+  if [[ -f "$RESTORE_MANIFEST" ]]; then
+    HAS_RESTORE="$(python3 -c "
+import json
+m = json.load(open('$RESTORE_MANIFEST'))
+print('restored_at' in m and 'restored_from_archive' in m and 'installed_python' in m)
+")"
+    if [[ "$HAS_RESTORE" == "True" ]]; then
+      pass
+      printf '  OK: rehire succeeded and restore manifest has metadata\n'
+    else
+      fail "restore manifest missing restore metadata"
+    fi
+  else
+    fail "restore manifest not found at $RESTORE_MANIFEST"
+  fi
+else
+  fail "rehire with archive wheel failed (rc=$rc)"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 37: rehire fails on wheel hash mismatch ===\n'
+
+CORRUPT_DIR="$TMP/corrupt"
+CORRUPT_ARCHIVE="$TMP/corrupt-dump.tgz"
+mkdir -p "$CORRUPT_DIR"
+tar -xzf "$DUMP_OUTPUT" -C "$CORRUPT_DIR" 2>/dev/null
+
+# Corrupt the manifest hash
+python3 -c "
+import json
+m = json.load(open('$CORRUPT_DIR/runtime/junie_runtime.json'))
+m['wheel_sha256'] = '0000000000000000000000000000000000000000000000000000000000000000'
+json.dump(m, open('$CORRUPT_DIR/runtime/junie_runtime.json', 'w'), indent=2)
+" 2>/dev/null || true
+
+tar -czf "$CORRUPT_ARCHIVE" -C "$CORRUPT_DIR" . 2>/dev/null
+
+CORRUPT_REHIRE_HOME="$TMP/corrupt-rehire-home"
+CORRUPT_REHIRE_LOG="$TMP/corrupt-rehire-hermes.log"
+CORRUPT_REHIRE_BIN="$TMP/corrupt-rehire-hermes"
+cp "$FAKE_HERMES_BIN" "$CORRUPT_REHIRE_BIN"
+sed 's/FAKE_HERMES_LOG/CORRUPT_REHIRE_LOG/' -i "$CORRUPT_REHIRE_BIN"
+touch "$CORRUPT_REHIRE_LOG"
+
+rc=0
+PATH="$TMP/bin:$PATH" \
+HERMES_HOME="$CORRUPT_REHIRE_HOME" \
+FAKE_HERMES_LOG="$CORRUPT_REHIRE_LOG" \
+CORRUPT_REHIRE_LOG="$CORRUPT_REHIRE_LOG" \
+  "$REHIRE_SCRIPT" "$CORRUPT_ARCHIVE" --profile "$PROFILE" --no-gateway-start >/dev/null 2>&1 || rc=$?
+
+if [[ "$rc" -ne 0 ]]; then
+  pass
+  printf '  OK: rehire correctly rejected hash mismatch (rc=%d)\n' "$rc"
+else
+  fail "rehire should have failed on hash mismatch (rc=0)"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 38: rehire fails gracefully when no runtime artifact ===\n'
+
+NO_RT_DIR="$TMP/no-rt"
+NO_RT_ARCHIVE="$TMP/no-rt-dump.tgz"
+mkdir -p "$NO_RT_DIR"
+tar -xzf "$DUMP_OUTPUT" -C "$NO_RT_DIR" 2>/dev/null
+rm -rf "$NO_RT_DIR/runtime"
+tar -czf "$NO_RT_ARCHIVE" -C "$NO_RT_DIR" . 2>/dev/null
+
+NO_RT_REHIRE_HOME="$TMP/no-rt-rehire-home"
+NO_RT_REHIRE_LOG="$TMP/no-rt-rehire-hermes.log"
+NO_RT_REHIRE_BIN="$TMP/no-rt-rehire-hermes"
+cp "$FAKE_HERMES_BIN" "$NO_RT_REHIRE_BIN"
+sed 's/FAKE_HERMES_LOG/NO_RT_REHIRE_LOG/' -i "$NO_RT_REHIRE_BIN"
+touch "$NO_RT_REHIRE_LOG"
+
+rc=0
+PATH="$TMP/bin:$PATH" \
+HERMES_HOME="$NO_RT_REHIRE_HOME" \
+FAKE_HERMES_LOG="$NO_RT_REHIRE_LOG" \
+NO_RT_REHIRE_LOG="$NO_RT_REHIRE_LOG" \
+  "$REHIRE_SCRIPT" "$NO_RT_ARCHIVE" --profile "$PROFILE" --no-gateway-start >/dev/null 2>&1 || rc=$?
+
+if [[ "$rc" -ne 0 ]]; then
+  pass
+  printf '  OK: rehire correctly rejected archive without runtime artifact (rc=%d)\n' "$rc"
+else
+  fail "rehire should have failed when no runtime artifact (rc=0)"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 39: rehire does not silently install from sibling source ===\n'
+
+# Use a separate home dir to avoid test 38 collision
+MSG_REHIRE_HOME="$TMP/msg-rehire-home"
+MSG_REHIRE_LOG="$TMP/msg-rehire-hermes.log"
+MSG_REHIRE_BIN="$TMP/msg-rehire-hermes"
+cp "$FAKE_HERMES_BIN" "$MSG_REHIRE_BIN"
+sed 's/FAKE_HERMES_LOG/MSG_REHIRE_LOG/' -i "$MSG_REHIRE_BIN"
+touch "$MSG_REHIRE_LOG"
+
+# Verify that the no-artifact failure message mentions the branch/source
+NO_RT_OUTPUT="$TMP/no-rt-output.txt"
+rc=0
+PATH="$TMP/bin:$PATH" \
+HERMES_HOME="$MSG_REHIRE_HOME" \
+FAKE_HERMES_LOG="$MSG_REHIRE_LOG" \
+MSG_REHIRE_LOG="$MSG_REHIRE_LOG" \
+  "$REHIRE_SCRIPT" "$NO_RT_ARCHIVE" --profile "$PROFILE" --no-gateway-start >"$NO_RT_OUTPUT" 2>&1 || rc=$?
+
+if grep -qiE 'runtime artifact|junie_runtime.*wheel|newer dump' "$NO_RT_OUTPUT" 2>/dev/null; then
+  pass
+  printf '  OK: error message references runtime artifact requirement\n'
+else
+  fail "error message should mention runtime artifact requirement"
 fi
 
 # ════════════════════════════════════════════════════════════════
