@@ -70,23 +70,61 @@ _SAFE_JOB_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 
 def check_requirements() -> bool:
     """Return True if prerequisites are available, else False."""
-    # Check OPENCODE_BIN env var
+    return _resolve_opencode_bin() is not None
+
+
+def _resolve_opencode_bin() -> str | None:
+    """Resolve the OpenCode binary path (local helper, mirrors runner logic)."""
     opencode_bin = os.environ.get("OPENCODE_BIN", "")
     if opencode_bin and os.path.isfile(opencode_bin) and os.access(opencode_bin, os.X_OK):
-        return True
-    # Check PATH
+        return opencode_bin
     import shutil
-    if shutil.which("opencode"):
-        return True
-    # Check hardcoded absolute path
-    hardcoded = "/home/Danila.Savenkov/.opencode/bin/opencode"
-    if os.path.isfile(hardcoded) and os.access(hardcoded, os.X_OK):
-        return True
-    # Check expanded ~ fallback
-    fallback = os.path.expanduser("~/.opencode/bin/opencode")
-    if os.path.isfile(fallback) and os.access(fallback, os.X_OK):
-        return True
-    return False
+    path_bin = shutil.which("opencode")
+    if path_bin:
+        return path_bin
+    for fallback in [
+        "/home/Danila.Savenkov/.opencode/bin/opencode",
+        os.path.expanduser("~/.opencode/bin/opencode"),
+    ]:
+        if os.path.isfile(fallback) and os.access(fallback, os.X_OK):
+            return fallback
+    return None
+
+
+def smoke_test_opencode() -> dict:
+    """Run a real opencode smoke execution to verify readiness.
+
+    Uses the same binary resolution as the Marinator runner.
+    Returns a dict with 'success' (bool) and 'detail' (str).
+    This is the canonical readiness check — NOT ``opencode auth list``,
+    which can report 0 credentials on an otherwise operational install.
+    """
+    opencode_bin = _resolve_opencode_bin()
+    if opencode_bin is None:
+        return {"success": False, "detail": "opencode binary not found"}
+
+    import subprocess
+    try:
+        result = subprocess.run(
+            [opencode_bin, "run", 'Respond with exactly: OPENCODE_SMOKE_OK'],
+            capture_output=True, text=True, timeout=120,
+        )
+        output = (result.stdout or "") + (result.stderr or "")
+        ok = result.returncode == 0 and "OPENCODE_SMOKE_OK" in output
+        return {
+            "success": ok,
+            "detail": (
+                f"exit={result.returncode}, "
+                f"stdout_tail={result.stdout[-200:]!r}, "
+                f"stderr_tail={result.stderr[-200:]!r}"
+            ),
+        }
+    except FileNotFoundError:
+        return {"success": False, "detail": f"opencode binary not found at {opencode_bin}"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "detail": "opencode smoke timed out after 120s"}
+    except Exception as e:
+        return {"success": False, "detail": f"opencode smoke failed: {e}"}
 
 
 def _validate_inputs(params: dict) -> str | None:
