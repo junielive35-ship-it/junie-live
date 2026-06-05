@@ -55,3 +55,129 @@ Files to update:
 Risk if wrong:
 Approval needed from:
 ```
+
+---
+
+## Runner architecture
+
+The consistency check is a **maintenance entrypoint**, not a model-loop tool.
+
+- **Shared Python runner:** installed at `$PROFILE_DIR/scripts/consistency_check.py` (seed source: `hermes/distribution/scripts/consistency_check.py`)
+- **Subcommands:** `init` (initialize state), `run` (full check), `render-prompt` (dry-run)
+- **Slash command:** `/check_consistency` is available via the `consistency-check` plugin (registered via Hermes `ctx.register_command`). Gateway normalizes underscores to dashes, so `/check_consistency` resolves to the `check-consistency` command handler. The handler resolves the repo from `--repo` arg, `JUNIE_REPO` env, profile `docs/tools.md`, or current git root, then invokes the runner with a 300-second timeout and returns a compact summary.
+- **No model-loop tool:** The runner is not registered as a callable tool in the orchestrator's schema. Invoke via the slash command or directly:
+  ```bash
+  python3 "$PROFILE_DIR/scripts/consistency_check.py" run --repo <path>
+  ```
+
+### Runtime dependency
+
+The runner uses `junie_runtime` for path resolution, mutex operations, state I/O, and event logging rather than duplicating those primitives:
+
+| Concern | Source |
+|---|---|
+| Profile state root | `junie_runtime.paths.state_root()` |
+| Code mutex directory | `junie_runtime.paths.mutex_dir()` |
+| Mutex acquire / release | `junie_runtime.mutex.acquire()` / `.release()` |
+| JSON / text read/write | `junie_runtime.state.read_json()` / `.atomic_write_json()` etc. |
+| JSONL event append | `junie_runtime.events.append_event()` |
+
+### State-file edit contract (PENDING only)
+
+The consistency check uses a **state-file edit contract** instead of parsing free-form stdout:
+
+1. **Agent contract:** The headless audit agent may edit only `PENDING_CONTRADICTIONS.md`. All other files (repo files, profile docs, memory/skills, state files, run artifacts) are forbidden writes.
+2. **Stdout is informational:** Agent stdout is captured as a debug artifact (`agent-output.md`) but the runner does **not** parse it for contradiction data. The only persisted result is the agent's edit to `PENDING_CONTRADICTIONS.md`.
+3. **Backup:** The runner snapshots `PENDING_CONTRADICTIONS.md` before agent invocation.
+4. **Validation:** After the agent exits with code 0, the runner validates the pending file structure. Validation checks:
+   - File starts with `# Pending Contradictions`
+   - Every `### CC-<hex>:` block contains required fields: `Severity:`, `Bucket:`, `Claim:`, `Evidence:`, `Required resolution:`
+   - Severity is one of: Critical, High, Medium, Low
+   - Bucket is one of: repo-internal, repo-vs-agent-state, agent-state-internal
+5. **On invalid:** The runner restores the backup, writes a failed status/report explaining the validation error, and does **not** update the checkpoint.
+6. **On valid:** The runner computes a deterministic diff (added/removed/changed blocks) from the before/after pending file content, writes `report.md` from that diff, writes `status.json` with pending counts and severity breakdowns, and updates the checkpoint.
+
+## State
+
+State lives under the profile-local state tree (`<state_root>/consistency/`):
+
+```
+<state_root>/consistency/
+  consistency-state.json
+  PENDING_CONTRADICTIONS.md
+  runs/<run_id>/
+    input.json
+    prompt.md
+    agent-output.md       # debug artifact, not parsed
+    pending-invalid.md     # written only when validation fails
+    report.md
+    events.jsonl
+    status.json
+```
+
+### `consistency-state.json` schema
+
+```json
+{
+  "schema_version": 1,
+  "main_branch": "main",
+  "last_checkpoint_commit": "<sha>",
+  "last_scan_at": "<iso8601>",
+  "last_successful_run_id": "<run_id>",
+  "relevant_artifacts": [
+    {
+      "path": "junie-live-architecture.jpg",
+      "kind": "architecture_diagram",
+      "topics": ["orchestration", "maintenance routines"],
+      "source": "initialization|check|manual"
+    }
+  ]
+}
+```
+
+### `status.json` (completed run) schema
+
+```json
+{
+  "run_id": "cc-...",
+  "status": "completed",
+  "checked_range": "<from>..<to>",
+  "pending_count": 5,
+  "added_count": 2,
+  "removed_count": 1,
+  "changed_count": 0,
+  "severity_counts": {
+    "Critical": 1,
+    "High": 2,
+    "Medium": 1,
+    "Low": 1
+  },
+  "completed_at": "<iso8601>"
+}
+```
+
+Counts come from comparing the parsed item sets before and after the agent edit, not from parsing stdout sections.
+
+## Preflight (fail-fast order)
+
+1. Resolve repo and state paths.
+2. Check/acquire the code mutex via `junie_runtime.mutex.acquire()`. If `MutexHeldError` is raised, write blocked run artifacts and exit non-zero.
+3. Check target repo worktree cleanliness. If dirty, write blocked run artifact and exit non-zero.
+4. Run `git fetch --prune`. If fetch fails, block.
+5. Verify current branch equals configured `main_branch`. If not, block.
+6. Verify local main is not stale/diverged from upstream when upstream exists. If diverged, block.
+7. Read `last_checkpoint_commit` and compute diff range.
+8. Create run dir and `input.json`.
+
+Failed/blocked runs do **not** update the checkpoint.
+
+## Checkpoint updates
+
+- Checkpoint is updated after a successful completed consistency check, regardless of remaining pending contradictions.
+- Failed/blocked runs do not move the checkpoint.
+
+## Verification
+
+- `python3 -m py_compile hermes/distribution/scripts/consistency_check.py`
+- Full consistency check tests via `python3 hermes/scripts/test_consistency_check.py`
+- Tests use temp dirs/repos and must not touch the live profile.

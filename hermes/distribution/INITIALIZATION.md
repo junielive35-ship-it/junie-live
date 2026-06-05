@@ -123,8 +123,19 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
     - identify the owned repository or feature-area scope protected by the mutex;
     - the mutex state directory at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) was created by the hire script;
     - record the administrator/owner escalation path for held or stale mutex decisions in memory.
-13. Check memory size after editing. If it is too large or close to budget, move details into profile docs and keep only the strategic core in memory.
-14. Decide whether initialization is complete:
+13. Run consistency check initialization:
+    - Invoke the profile consistency runner in foreground:
+      ```bash
+      python3 "$HERMES_HOME/scripts/consistency_check.py" init --repo <target-repo>
+      ```
+    - Do not background this step. The command must complete before proceeding.
+    - Exit 0 creates `consistency-state.json` and `PENDING_CONTRADICTIONS.md` under the profile state tree.
+    - Ambiguous branch, empty repository, or other non-zero result blocks initialization. Fix the issue or escalate before continuing.
+    - Do not delete `INITIALIZATION.md` while consistency state is missing.
+    - Existing state is preserved on re-run unless `--force` is used. Only force re-init when starting fresh.
+
+14. Check memory size after editing. If it is too large or close to budget, move details into profile docs and keep only the strategic core in memory.
+15. Decide whether initialization is complete:
     - required inputs are captured or safely inferred;
     - no blocking contradiction remains;
     - every process-affecting contradiction (spec↔implementation, spec↔spec, or comments↔code) has an explicit owner-confirmed resolution: fixed with approval, or accepted as a known deviation. Listing unresolved process-affecting contradictions in the completion report is not sufficient to finish initialization, and contradictions must not be fixed silently before the owner confirms;
@@ -143,9 +154,10 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
     - the mutex scope and escalation path are configured;
     - target repo path is saved to memory;
     - `HERMES.md` is installed in the target repo, directly inspected, adapted to the project, and reconciled with memory/profile docs/current runtime decisions even if it is git-ignored;
-    - remaining unknowns are non-blocking and recorded.
-15. Run the initialization gate check from the profile scripts and inspect the result. If it fails, keep initialization mode active and fix or escalate the remaining issue.
-16. Send a short completion summary:
+    - remaining unknowns are non-blocking and recorded;
+    - consistency state is initialized.
+16. Run the initialization gate check from the profile scripts and inspect the result. If it fails, keep initialization mode active and fix or escalate the remaining issue.
+17. Send a short completion summary:
     - what project/area you own;
     - target repo path;
     - what mutex scope and escalation path you configured;
@@ -153,12 +165,12 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
     - architecture debt / custom machinery risks and the recommended keep/refactor/replace stance for each meaningful item;
     - unresolved non-blocking unknowns;
     - assumptions that may need future attention.
-17. Clean up permanent files before finalizing:
+18. Clean up permanent files before finalizing:
     - Check `HERMES.md` (installed in target repo), `AGENTS.md`, memory, and long-lived profile docs for any initialization-related guidance that was added during onboarding.
     - Remove or avoid leaving initialization workflow text in those permanent files. They may keep only minimal non-temporary guardrails that remain valid after initialization (e.g. code mutex, delegation rules, strategy).
     - Search profile docs for seed leftovers: `TODO`, `Example capability`, generic "Seed document" text, contradictory status rows, and placeholder commands/paths. Replace every recoverable placeholder with inspected facts or an explicit repo-doc pointer before deleting this file.
     - See "## What not to leave in permanent files" below.
-18. Finalize:
+19. Finalize:
     - Delete this file: `terminal(command="rm ~/.hermes/profiles/junie-live/INITIALIZATION.md")`
     - Update memory: `memory(action="replace", target="memory", old_text="NOT INITIALIZED", content="Initialization status: INITIALIZED. Target repo: <path>")`
 

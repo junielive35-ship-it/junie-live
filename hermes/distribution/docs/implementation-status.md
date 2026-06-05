@@ -21,6 +21,7 @@ Keep this file concise. Do not paste large repo documents here; link to repo doc
 | Area / capability | Source docs | Status | Evidence | Gaps / next action |
 | --- | --- | --- | --- | --- |
 | Marinator delegation plugin | `docs/delegation-protocol.md`, `plugins/marinator-delegation/` | implemented | Plugin installed by `hire-junie.sh`; provides `marinator_delegate` tool under `marinator` toolset | Approved code-changing delegation path; Kanban and cron continuation are separate capabilities and must have their own rows if relevant |
+| Consistency check runner | `docs/consistency-protocol.md`, `scripts/consistency_check.py`, `plugins/consistency-check/` | implemented | Runner at `distribution/scripts/consistency_check.py`; slash command `/check_consistency` via `consistency-check` plugin; init wired in `INITIALIZATION.md` step 13 | User-facing slash command exists and initialization is wired |
 | Target-project capabilities | Target repo code/docs; profile `strategy.md`, `architecture.md`, `design-decisions.md`, `tools.md` | unknown until inspected | Seed placeholder only | Replace this row during initialization with project-specific capability rows. Do not delete `INITIALIZATION.md` while this file still contains generic placeholders or unreconciled status gaps that can be answered from the repo/profile. |
 
 ## How to use this file

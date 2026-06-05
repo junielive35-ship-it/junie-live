@@ -80,13 +80,23 @@ Reports:
 - Pending decisions/approvals
 - Blocked work items
 
-### 7. MD consistency scan
+### 7. Consistency check scan
 
 Detects contradictions between:
 - Strategy and implementation
 - Docs and code
 - Memory and docs
 - Skills and current workflow
+- Repo docs and agent state
+
+The consistency check is a maintenance entrypoint, not a model-loop tool. Invoked via:
+- Slash command: `/check_consistency` (Telegram/CLI) — resolves repo from args, env, or profile docs, then runs the runner with a compact summary returned
+- CLI: `python3 "$HERMES_HOME/scripts/consistency_check.py" run --repo <path>`
+- Future cron: recurring checks require owner approval
+
+The runner uses `junie_runtime` for path resolution, mutex operations, and state I/O. Error artifacts live at `<state_root>/consistency/runs/<run_id>/`. Check the runner's `report.md` or the main `PENDING_CONTRADICTIONS.md` for current state.
+
+Preflight checks: mutex, worktree cleanliness, `git fetch`, correct branch, not diverged from upstream.
 
 ### 8. Backlog management
 
