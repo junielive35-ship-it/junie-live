@@ -19,11 +19,14 @@ SCRIPT = os.path.join(ROOT, "distribution", "scripts", "consistency_check.py")
 _spec = importlib.util.spec_from_file_location("consistency_check", SCRIPT)
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
-_parse_audit_output = _mod._parse_audit_output
-_update_pending_file = _mod._update_pending_file
+_validate_pending_file = _mod._validate_pending_file
+_backup_pending = _mod._backup_pending
+_restore_pending = _mod._restore_pending
+_compute_pending_diff = _mod._compute_pending_diff
 _parse_existing_items = _mod._parse_existing_items
 _extract_item_id = _mod._extract_item_id
 _write_run_artifacts = _mod._write_run_artifacts
+_atomic_write_text = _mod.atomic_write_text
 
 fail_count = 0
 pass_count = 0
@@ -310,185 +313,280 @@ def test_mutex_acquire_release() -> None:
             fail(f"second run blocked: {r2.stdout[:200]}")
 
 
-def test_parse_audit_output_sections() -> None:
-    sample = """## new
+# ── Validation tests ──
+
+def test_validate_empty_canonical() -> None:
+    text = "# Pending Contradictions\n\nNo items.\n"
+    errors = _validate_pending_file(text)
+    if len(errors) == 0:
+        pass_()
+        print("  OK: empty canonical file is valid")
+    else:
+        fail(f"expected 0 errors, got {len(errors)}: {errors}")
+
+
+def test_validate_valid_block() -> None:
+    text = """# Pending Contradictions
 
 ### CC-a1b2c3d4e5f6: Test contradiction
 
 - Severity: High
+- Bucket: repo-internal
+- Claim: Code contradicts docs
+- Evidence: src/main.py says X, docs say Y
+- Required resolution: commit/PR
+"""
+    errors = _validate_pending_file(text)
+    if len(errors) == 0:
+        pass_()
+        print("  OK: valid contradiction block passes")
+    else:
+        fail(f"expected 0 errors, got {len(errors)}: {errors}")
+
+
+def test_validate_missing_header() -> None:
+    text = "Some random text\n"
+    errors = _validate_pending_file(text)
+    if any("must start with" in e for e in errors):
+        pass_()
+        print("  OK: missing header rejected")
+    else:
+        fail(f"expected header error, got: {errors}")
+
+
+def test_validate_missing_required_field() -> None:
+    text = """# Pending Contradictions
+
+### CC-a1b2c3d4e5f6: Missing fields
+
+- Severity: High
+"""
+    errors = _validate_pending_file(text)
+    missing = [e for e in errors if "missing required field" in e]
+    if len(missing) >= 3:
+        pass_()
+        print(f"  OK: missing fields detected ({len(missing)} errors)")
+    else:
+        fail(f"expected >=3 missing field errors, got {len(errors)}: {errors}")
+
+
+def test_validate_bad_severity() -> None:
+    text = """# Pending Contradictions
+
+### CC-a1b2c3d4e5f6: Bad severity
+
+- Severity: CriticalPlus
+- Bucket: repo-internal
 - Claim: test
+- Evidence: test
+- Required resolution: test
+"""
+    errors = _validate_pending_file(text)
+    if any("invalid severity" in e for e in errors):
+        pass_()
+        print("  OK: bad severity rejected")
+    else:
+        fail(f"expected severity error, got: {errors}")
 
-## still_open
 
-### CC-f0e1d2c3b4a5: Old contradiction
+def test_validate_bad_bucket() -> None:
+    text = """# Pending Contradictions
+
+### CC-a1b2c3d4e5f6: Bad bucket
+
+- Severity: High
+- Bucket: invalid-bucket
+- Claim: test
+- Evidence: test
+- Required resolution: test
+"""
+    errors = _validate_pending_file(text)
+    if any("invalid bucket" in e for e in errors):
+        pass_()
+        print("  OK: bad bucket rejected")
+    else:
+        fail(f"expected bucket error, got: {errors}")
+
+
+# ── Backup/restore tests ──
+
+def test_backup_and_restore() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        pp = os.path.join(tmp, "PENDING_CONTRADICTIONS.md")
+        original = "# Pending Contradictions\n\nOriginal content.\n"
+        with open(pp, "w") as f:
+            f.write(original)
+        backup = _backup_pending(pp)
+        if backup and os.path.isfile(backup):
+            pass_()
+            print("  OK: backup file created")
+        else:
+            fail("backup file not created")
+            return
+        backup_content = open(backup).read()
+        if backup_content == original:
+            pass_()
+            print("  OK: backup content matches original")
+        else:
+            fail("backup content mismatch")
+
+        # Modify original
+        with open(pp, "w") as f:
+            f.write("MODIFIED\n")
+        _restore_pending(pp, backup)
+        restored = open(pp).read()
+        if restored == original:
+            pass_()
+            print("  OK: restore works correctly")
+        else:
+            fail(f"restore mismatch: expected {original!r}, got {restored!r}")
+
+
+# ── Diff computation tests ──
+
+def test_compute_diff_added() -> None:
+    before = "# Pending Contradictions\n\n"
+    after = """# Pending Contradictions
+
+### CC-aaa000aaa000: New item
+
+- Severity: High
+- Bucket: repo-internal
+- Claim: test
+- Evidence: test
+- Required resolution: test
+"""
+    diff = _compute_pending_diff(before, after)
+    if diff["added_ids"] == ["CC-aaa000aaa000"]:
+        pass_()
+        print("  OK: added item detected")
+    else:
+        fail(f"expected added [CC-aaa000aaa000], got {diff['added_ids']}")
+    if diff["removed_ids"] == []:
+        pass_()
+    else:
+        fail(f"expected no removed, got {diff['removed_ids']}")
+    if diff["total_after"] == 1:
+        pass_()
+    else:
+        fail(f"expected total_after=1, got {diff['total_after']}")
+
+
+def test_compute_diff_removed() -> None:
+    before = """# Pending Contradictions
+
+### CC-bbb000bbb000: Removed item
 
 - Severity: Low
-- Last seen: 2024-01-01
-
-## resolved
-
-### CC-9876543210ab: Gone
-
-No longer present.
-
-## silent_agent_doc_fixes
-
-- Fixed typo in README.md
-
-## blocked_or_questions
-
-Nothing.
-
-## state_update
-
-No changes.
+- Bucket: repo-internal
+- Claim: test
+- Evidence: test
+- Required resolution: test
 """
-    parsed = _parse_audit_output(sample)
-    checks = [
-        ("new", len(parsed.get("new", [])), 1, "new section"),
-        ("still_open", len(parsed["still_open"]), 1, "still_open section"),
-        ("resolved", len(parsed["resolved"]), 1, "resolved section"),
-        ("silent_agent_doc_fixes", len(parsed["silent_agent_doc_fixes"]), 1, "silent_agent_doc_fixes section"),
-        ("blocked_or_questions", len(parsed["blocked_or_questions"]), 1, "blocked_or_questions section"),
-        ("state_update", len(parsed["state_update"]), 1, "state_update section"),
-    ]
-    ok = True
-    for section_name, actual, expected, label in checks:
-        if actual == expected:
+    after = "# Pending Contradictions\n\n"
+    diff = _compute_pending_diff(before, after)
+    if diff["removed_ids"] == ["CC-bbb000bbb000"]:
+        pass_()
+        print("  OK: removed item detected")
+    else:
+        fail(f"expected removed [CC-bbb000bbb000], got {diff['removed_ids']}")
+
+
+def test_compute_diff_severity_counts() -> None:
+    text = """# Pending Contradictions
+
+### CC-111: Critical one
+
+- Severity: Critical
+- Bucket: repo-internal
+- Claim: c1
+- Evidence: e1
+- Required resolution: r1
+
+### CC-222: High one
+
+- Severity: High
+- Bucket: repo-vs-agent-state
+- Claim: c2
+- Evidence: e2
+- Required resolution: r2
+"""
+    diff = _compute_pending_diff("", text)
+    if diff["severity_counts"].get("Critical") == 1 and diff["severity_counts"].get("High") == 1:
+        pass_()
+        print("  OK: severity counts correct")
+    else:
+        fail(f"unexpected severity counts: {diff['severity_counts']}")
+    if diff["total_after"] == 2:
+        pass_()
+    else:
+        fail(f"expected total_after=2, got {diff['total_after']}")
+
+
+# ── Prompt content tests ──
+
+def test_prompt_says_stdout_informational() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = os.path.join(tmp, "repo")
+        make_repo(repo, "main")
+        commit(repo)
+        run_check(tmp, "init", "--repo", repo)
+        r = run_check(tmp, "render-prompt", "--repo", repo)
+        if "Stdout is informational" in r.stdout or "stdout is informational" in r.stdout.lower():
             pass_()
+            print("  OK: prompt says stdout is informational")
         else:
-            fail(f"{label}: expected {expected} items, got {actual}")
-            ok = False
-    if ok:
-        print("  OK: all sections parsed correctly")
+            fail("prompt missing 'stdout is informational'")
 
 
-def test_parse_audit_output_multi_items() -> None:
-    sample = """## new
+def test_prompt_says_allowed_writes() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = os.path.join(tmp, "repo")
+        make_repo(repo, "main")
+        commit(repo)
+        run_check(tmp, "init", "--repo", repo)
+        r = run_check(tmp, "render-prompt", "--repo", repo)
+        if "Allowed writes" in r.stdout or "allowed writes" in r.stdout.lower():
+            pass_()
+            print("  OK: prompt mentions allowed writes")
+        else:
+            fail("prompt missing 'Allowed writes'")
 
-### CC-a1a1a1a1a1a1: First item
+
+# ── Existing helpers ──
+
+def test_parse_existing_items() -> None:
+    text = """# Pending Contradictions
+
+### CC-abc123: First
 
 - Severity: High
 
-### CC-b2b2b2b2b2b2: Second item
+### CC-def456: Second
 
 - Severity: Low
-
-## still_open
-
-### CC-c3c3c3c3c3c3: Still open
-
-- Severity: Medium
 """
-    parsed = _parse_audit_output(sample)
-    if len(parsed["new"]) == 2:
+    items = _parse_existing_items(text)
+    if len(items) == 2 and "CC-abc123" in items and "CC-def456" in items:
         pass_()
-        print("  OK: multiple new items parsed")
+        print("  OK: existing items parsed")
     else:
-        fail(f"expected 2 new items, got {len(parsed['new'])}")
-    if len(parsed["still_open"]) == 1:
+        fail(f"expected 2 items, got {len(items)}: {list(items.keys())}")
+
+
+def test_extract_item_id() -> None:
+    bid = _extract_item_id("### CC-a1b2c3d4e5f6: Title here\n")
+    if bid == "CC-a1b2c3d4e5f6":
         pass_()
-        print("  OK: still_open items parsed")
+        print("  OK: item ID extracted")
     else:
-        fail(f"expected 1 still_open item, got {len(parsed['still_open'])}")
-
-    # Check CC-IDs present
-    new_text = "\n".join(parsed["new"])
-    if "CC-a1a1a1a1a1a1" in new_text and "CC-b2b2b2b2b2b2" in new_text:
+        fail(f"expected CC-a1b2c3d4e5f6, got {bid}")
+    none_bid = _extract_item_id("Some random text")
+    if none_bid is None:
         pass_()
-        print("  OK: CC-IDs present in new items")
+        print("  OK: no ID in non-matching text")
     else:
-        fail("CC-IDs missing from new items")
-
-
-def test_pending_merge_new_item() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        pp = os.path.join(tmp, "PENDING_CONTRADICTIONS.md")
-        with open(pp, "w") as f:
-            f.write("# Pending Contradictions\n\n")
-
-        parsed = {
-            "new": [
-                "### CC-abcd1234abcd: Test item\n\n- Severity: High\n- Claim: contradiction"
-            ],
-            "still_open": [],
-            "resolved": [],
-        }
-        resolved = _update_pending_file(pp, parsed, {})
-        text = open(pp).read()
-        if "CC-abcd1234abcd" in text and "High" in text:
-            pass_()
-            print("  OK: new item added to pending")
-        else:
-            fail(f"new item not found in pending: {text[:200]}")
-        if len(resolved) == 0:
-            pass_()
-        else:
-            fail(f"expected 0 resolved, got {len(resolved)}")
-
-
-def test_pending_merge_resolved_removed() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        pp = os.path.join(tmp, "PENDING_CONTRADICTIONS.md")
-        with open(pp, "w") as f:
-            f.write("# Pending Contradictions\n\n## High\n\n### CC-abcd0000abcd: Will be resolved\n\n- Severity: High\n\n## Low\n\n### CC-ffff0000ffff: Keep this\n\n- Severity: Low\n")
-
-        parsed = {
-            "new": [],
-            "still_open": [],
-            "resolved": ["### CC-abcd0000abcd: Resolved now\n"],
-        }
-        resolved = _update_pending_file(pp, parsed, {})
-        text = open(pp).read()
-        if "CC-abcd0000abcd" in text:
-            fail("resolved item still in pending")
-        else:
-            pass_()
-            print("  OK: resolved item removed")
-
-        if "CC-ffff0000ffff" in text:
-            pass_()
-            print("  OK: unresolved item preserved")
-        else:
-            fail("unresolved item removed incorrectly")
-
-        if "Low" in text:
-            pass_()
-            print("  OK: Low severity heading preserved")
-        else:
-            fail("Low heading removed after resolved removal")
-
-        if "CC-abcd0000abcd" in resolved:
-            pass_()
-            print("  OK: resolved ID returned")
-        else:
-            fail("resolved ID not in return list")
-
-
-def test_pending_merge_still_open_upserts() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        pp = os.path.join(tmp, "PENDING_CONTRADICTIONS.md")
-        with open(pp, "w") as f:
-            f.write("# Pending Contradictions\n\n### CC-abcd0000beef: Old version\n\n- Severity: Low\n- Last seen: 2024-01-01\n")
-        parsed = {
-            "new": [],
-            "still_open": [
-                "### CC-abcd0000beef: Updated version\n\n- Severity: Low\n- Last seen: 2024-06-01\n- Last checked commit: abcd1234\n"
-            ],
-            "resolved": [],
-        }
-        _update_pending_file(pp, parsed, {})
-        text = open(pp).read()
-        if "Updated version" in text and "2024-06-01" in text:
-            pass_()
-            print("  OK: still_open item updated")
-        else:
-            fail(f"still_open upsert failed: {text[:300]}")
-        if "Old version" not in text:
-            pass_()
-            print("  OK: old version replaced")
-        else:
-            fail("old version not replaced")
+        fail(f"expected None, got {none_bid}")
 
 
 def test_blocked_artifacts_written() -> None:
@@ -591,11 +689,20 @@ def main() -> int:
         ("mutex held blocks", test_mutex_held_blocks),
         ("dirty worktree blocks", test_dirty_worktree_blocks),
         ("mutex acquire/release", test_mutex_acquire_release),
-        ("parse audit output sections", test_parse_audit_output_sections),
-        ("parse audit output multi items", test_parse_audit_output_multi_items),
-        ("pending merge new item", test_pending_merge_new_item),
-        ("pending merge resolved removed", test_pending_merge_resolved_removed),
-        ("pending merge still_open upserts", test_pending_merge_still_open_upserts),
+        ("validate empty canonical", test_validate_empty_canonical),
+        ("validate valid block", test_validate_valid_block),
+        ("validate missing header", test_validate_missing_header),
+        ("validate missing required fields", test_validate_missing_required_field),
+        ("validate bad severity", test_validate_bad_severity),
+        ("validate bad bucket", test_validate_bad_bucket),
+        ("backup and restore", test_backup_and_restore),
+        ("diff added", test_compute_diff_added),
+        ("diff removed", test_compute_diff_removed),
+        ("diff severity counts", test_compute_diff_severity_counts),
+        ("prompt says stdout informational", test_prompt_says_stdout_informational),
+        ("prompt says allowed writes", test_prompt_says_allowed_writes),
+        ("parse existing items", test_parse_existing_items),
+        ("extract item id", test_extract_item_id),
         ("blocked artifacts written", test_blocked_artifacts_written),
         ("profile docs path correct (not junie-live/docs)", test_profile_docs_path),
     ]

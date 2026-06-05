@@ -213,7 +213,7 @@ def render_prompt(
 def _default_prompt_template() -> str:
     return """# Consistency Check — Audit Agent Prompt
 
-You are a consistency audit agent. Detect contradictions between repo artifacts and agent state.
+You are a consistency audit agent running under a headless Hermes session. Your job is to detect contradictions between repo artifacts and agent state, then record them in the pending file.
 
 Commit range: {commit_range}
 Repo: {repo_path}
@@ -227,7 +227,25 @@ Pending contradictions for revalidation:
 Relevant artifacts:
 {artifacts_text}
 
-Output sections (use ## headings): new, still_open, resolved, silent_agent_doc_fixes, blocked_or_questions, state_update.
+## Allowed writes
+
+You may edit exactly one state file: {pending_path} (PENDING_CONTRADICTIONS.md).
+
+## Forbidden writes
+
+Do NOT write to: repo files, profile docs, memory/skills, {state_path}, run status/checkpoint files, backlog items, mutex state, or any file under runs/<run_id>/.
+
+## Edit semantics
+
+- Preserve existing valid pending items unless clearly resolved.
+- Add new contradictions as ### CC-<id>: blocks.
+- Update still-open items' Last seen / Last checked commit.
+- Remove resolved items only when evidence clearly shows resolution.
+- Use targeted edits where possible.
+
+## Stdout is informational
+
+Stdout is captured as a debug artifact only. The persisted result is your edit to {pending_path}.
 """
 
 
@@ -350,42 +368,11 @@ def cmd_render_prompt(args: argparse.Namespace) -> int:
     return 0
 
 
-# ── Subcommand: run ──
+# ── Pending file helpers ──
 
-def _parse_audit_output(output: str) -> dict:
-    sections = {
-        "new": [],
-        "still_open": [],
-        "resolved": [],
-        "silent_agent_doc_fixes": [],
-        "blocked_or_questions": [],
-        "state_update": [],
-    }
-    current_section = None
-    current_items = []
-    for line in output.split("\n"):
-        if line.startswith("## "):
-            section_name = line.strip("# ").strip().lower().replace(" ", "_")
-            if current_section and current_items:
-                sections[current_section].append("\n".join(current_items))
-            current_items = []
-            if section_name in sections:
-                current_section = section_name
-            else:
-                current_section = None
-        elif current_section and line.startswith("### ") and current_section in sections:
-            if current_items:
-                joined = "\n".join(current_items).strip()
-                if joined:
-                    sections[current_section].append(joined)
-            current_items = [line]
-        elif current_section:
-            current_items.append(line)
-    if current_section and current_items:
-        joined = "\n".join(current_items).strip()
-        if joined:
-            sections[current_section].append(joined)
-    return sections
+VALID_SEVERITIES = {"Critical", "High", "Medium", "Low"}
+VALID_BUCKETS = {"repo-internal", "repo-vs-agent-state", "agent-state-internal"}
+SEVERITY_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3, "Unknown": 99}
 
 
 def _extract_item_id(block: str) -> str | None:
@@ -411,9 +398,6 @@ def _parse_existing_items(text: str) -> dict[str, str]:
     return items
 
 
-SEVERITY_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3, "Unknown": 99}
-
-
 def _severity_key(item: tuple[str, str]) -> tuple:
     _, block = item
     m = re.search(r"Severity:\s*(\S+)", block)
@@ -421,54 +405,73 @@ def _severity_key(item: tuple[str, str]) -> tuple:
     return (SEVERITY_ORDER.get(sev, 99), item[0])
 
 
-def _update_pending_file(pending_path: str, parsed: dict, state: dict) -> list[str]:
-    resolved_ids: list[str] = []
-    for block in parsed.get("resolved", []):
-        for m in re.finditer(r"CC-[a-f0-9]+", block):
-            resolved_ids.append(m.group(0))
+REQUIRED_BLOCK_FIELDS = ["Severity:", "Bucket:", "Claim:", "Evidence:", "Required resolution:"]
 
-    existing = read_text(pending_path) or ""
-    items = _parse_existing_items(existing)
 
-    for rid in resolved_ids:
-        items.pop(rid, None)
+def _validate_pending_file(text: str) -> list[str]:
+    errors: list[str] = []
+    if not text or not text.startswith("# Pending Contradictions"):
+        errors.append("File must start with '# Pending Contradictions'")
+        return errors
 
-    for block in parsed.get("new", []):
-        bid = _extract_item_id(block)
-        if bid:
-            items[bid] = block.strip()
+    items = _parse_existing_items(text)
+    for item_id, block in items.items():
+        for field in REQUIRED_BLOCK_FIELDS:
+            if field not in block:
+                errors.append(f"{item_id}: missing required field '{field}'")
+        sev_m = re.search(r"Severity:\s*(\S+)", block)
+        if sev_m and sev_m.group(1) not in VALID_SEVERITIES:
+            errors.append(f"{item_id}: invalid severity '{sev_m.group(1)}'")
+        bucket_m = re.search(r"Bucket:\s*(\S+)", block)
+        if bucket_m and bucket_m.group(1) not in VALID_BUCKETS:
+            errors.append(f"{item_id}: invalid bucket '{bucket_m.group(1)}'")
+    return errors
 
-    for block in parsed.get("still_open", []):
-        bid = _extract_item_id(block)
-        if bid:
-            items[bid] = block.strip()
 
-    sorted_items = sorted(items.items(), key=_severity_key)
+def _backup_pending(pending_path: str) -> str | None:
+    content = read_text(pending_path)
+    if content is None:
+        return None
+    backup_path = pending_path + ".backup"
+    with open(backup_path, "w") as f:
+        f.write(content)
+    return backup_path
 
-    header = """# Pending Contradictions
 
-Current unresolved contradictions known to Junie. The consistency runner revalidates this file on every successful check and removes items that are no longer present on main.
+def _restore_pending(pending_path: str, backup_path: str | None) -> None:
+    if backup_path is None or not os.path.isfile(backup_path):
+        return
+    content = read_text(backup_path)
+    if content is not None:
+        atomic_write_text(pending_path, content)
 
-"""
-    body_parts: list[str] = []
-    current_sev: str | None = None
-    for item_id, block in sorted_items:
+
+def _compute_pending_diff(before_text: str, after_text: str) -> dict:
+    before = _parse_existing_items(before_text)
+    after = _parse_existing_items(after_text)
+
+    before_ids = set(before.keys())
+    after_ids = set(after.keys())
+
+    added_ids = after_ids - before_ids
+    removed_ids = before_ids - after_ids
+    common_ids = after_ids & before_ids
+    changed_ids = {iid for iid in common_ids if before[iid].strip() != after[iid].strip()}
+
+    severity_counts: dict[str, int] = {}
+    for item_id, block in after.items():
         m = re.search(r"Severity:\s*(\S+)", block)
         sev = m.group(1) if m else "Unknown"
-        if sev != current_sev:
-            if current_sev is not None:
-                body_parts.append("")
-            body_parts.append(f"## {sev}")
-            body_parts.append("")
-            current_sev = sev
-        body_parts.append(block)
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
-    body = "\n".join(body_parts)
-    new_pending = header + body + "\n"
-
-    atomic_write_text(pending_path, new_pending)
-
-    return resolved_ids
+    return {
+        "severity_counts": severity_counts,
+        "added_ids": sorted(added_ids),
+        "removed_ids": sorted(removed_ids),
+        "changed_ids": sorted(changed_ids),
+        "total_after": len(after),
+        "total_before": len(before),
+    }
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -608,6 +611,11 @@ def cmd_run(args: argparse.Namespace) -> int:
             print("Skipping headless Hermes invocation.")
             return 0
 
+        # Snapshot pending file before agent invocation
+        pending_path = get_pending_path()
+        pre_pending = read_text(pending_path) or ""
+        backup_path = _backup_pending(pending_path)
+
         # Launch headless Hermes
         profile = os.environ.get(HERMES_PROFILE_ENV, "junie-live")
         hermes_bin = shutil.which("hermes")
@@ -635,7 +643,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"ERROR: hermes binary not found at {hermes_bin}", file=sys.stderr)
             return 1
 
-        # Write agent output
+        # Write agent output as debug artifact
         atomic_write_text(os.path.join(run_dir, "agent-output.md"), agent_output)
         if agent_stderr:
             atomic_write_text(os.path.join(run_dir, "agent-stderr.log"), agent_stderr)
@@ -645,50 +653,79 @@ def cmd_run(args: argparse.Namespace) -> int:
             _write_failed_run(run_dir, "hermes_failed", f"hermes exited with code {exit_code}")
             return 2
 
-        # Parse output
-        parsed = _parse_audit_output(agent_output)
+        # Validate pending file after agent edit
+        post_pending = read_text(pending_path) or ""
+        validation_errors = _validate_pending_file(post_pending)
+        if validation_errors:
+            atomic_write_text(os.path.join(run_dir, "pending-invalid.md"), post_pending)
+            detail = "Pending file validation failed:\n" + "\n".join(f"  - {e}" for e in validation_errors)
+            print(f"ERROR: {detail}", file=sys.stderr)
+            _restore_pending(pending_path, backup_path)
+            _write_failed_run(run_dir, "invalid_pending", detail)
+            print(f"INFO: pending file restored from backup", file=sys.stderr)
+            return 2
 
-        # Update pending file
-        resolved_ids = _update_pending_file(get_pending_path(), parsed, state)
+        # Compute diff from pending file (before/after), not from stdout
+        diff = _compute_pending_diff(pre_pending, post_pending)
+        total_pending = diff["total_after"]
 
-        # Write report
+        # Write report from deterministic diff
         report_lines = [
             f"# Consistency Check Report — {run_id}",
             f"",
             f"- Checked: {commit_range}",
             f"- Changed files: {len(changed)}",
+            f"- Pending contradictions: {total_pending}",
+            f"- Added: {len(diff['added_ids'])}",
+            f"- Removed: {len(diff['removed_ids'])}",
+            f"- Changed: {len(diff['changed_ids'])}",
             f"",
         ]
-        for section_name in ("new", "still_open", "resolved", "silent_agent_doc_fixes", "blocked_or_questions", "state_update"):
-            items = parsed.get(section_name, [])
-            if items:
-                report_lines.append(f"## {section_name.replace('_', ' ').title()}")
-                report_lines.append("")
-                for item in items:
-                    report_lines.append(item if item.startswith("### ") else f"- {item}")
-                report_lines.append("")
-
-        if resolved_ids:
-            report_lines.append(f"Resolved IDs: {', '.join(resolved_ids)}")
+        if diff["added_ids"]:
+            report_lines.append("## Added")
+            for iid in diff["added_ids"]:
+                block = _parse_existing_items(post_pending).get(iid, "")
+                title_m = re.search(r"^### CC-[a-f0-9]+:\s*(.+)", block)
+                title = title_m.group(1) if title_m else iid
+                sev_m = re.search(r"Severity:\s*(\S+)", block)
+                sev = sev_m.group(1) if sev_m else "?"
+                report_lines.append(f"- {iid}: {title} (severity: {sev})")
+            report_lines.append("")
+        if diff["removed_ids"]:
+            report_lines.append("## Removed")
+            for iid in diff["removed_ids"]:
+                report_lines.append(f"- {iid}")
+            report_lines.append("")
+        if diff["changed_ids"]:
+            report_lines.append("## Changed")
+            for iid in diff["changed_ids"]:
+                report_lines.append(f"- {iid}")
+            report_lines.append("")
 
         report = "\n".join(report_lines)
         atomic_write_text(os.path.join(run_dir, "report.md"), report)
 
-        # Write event via junie_runtime.events
+        # Write event
         iso = datetime.now(timezone.utc).isoformat()
         event = {"ts": time.time(), "iso": iso, "type": "check_completed",
                  "data": {"run_id": run_id, "commit_range": commit_range,
-                          "new_count": len(parsed.get("new", [])),
-                          "resolved_count": len(resolved_ids)}}
+                          "pending_count": total_pending,
+                          "added_count": len(diff["added_ids"]),
+                          "removed_count": len(diff["removed_ids"]),
+                          "changed_count": len(diff["changed_ids"]),
+                          "severity_counts": diff["severity_counts"]}}
         append_event(os.path.join(run_dir, "events.jsonl"), event)
 
-        # Write status
+        # Write status from pending file counts
         status = {
             "run_id": run_id,
             "status": "completed",
             "checked_range": commit_range,
-            "new_count": len(parsed.get("new", [])),
-            "resolved_count": len(resolved_ids),
+            "pending_count": total_pending,
+            "added_count": len(diff["added_ids"]),
+            "removed_count": len(diff["removed_ids"]),
+            "changed_count": len(diff["changed_ids"]),
+            "severity_counts": diff["severity_counts"],
             "completed_at": iso,
         }
         atomic_write_json(os.path.join(run_dir, "status.json"), status)

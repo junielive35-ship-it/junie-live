@@ -82,6 +82,21 @@ The runner uses `junie_runtime` for path resolution, mutex operations, state I/O
 | JSON / text read/write | `junie_runtime.state.read_json()` / `.atomic_write_json()` etc. |
 | JSONL event append | `junie_runtime.events.append_event()` |
 
+### State-file edit contract (PENDING only)
+
+The consistency check uses a **state-file edit contract** instead of parsing free-form stdout:
+
+1. **Agent contract:** The headless audit agent may edit only `PENDING_CONTRADICTIONS.md`. All other files (repo files, profile docs, memory/skills, state files, run artifacts) are forbidden writes.
+2. **Stdout is informational:** Agent stdout is captured as a debug artifact (`agent-output.md`) but the runner does **not** parse it for contradiction data. The only persisted result is the agent's edit to `PENDING_CONTRADICTIONS.md`.
+3. **Backup:** The runner snapshots `PENDING_CONTRADICTIONS.md` before agent invocation.
+4. **Validation:** After the agent exits with code 0, the runner validates the pending file structure. Validation checks:
+   - File starts with `# Pending Contradictions`
+   - Every `### CC-<hex>:` block contains required fields: `Severity:`, `Bucket:`, `Claim:`, `Evidence:`, `Required resolution:`
+   - Severity is one of: Critical, High, Medium, Low
+   - Bucket is one of: repo-internal, repo-vs-agent-state, agent-state-internal
+5. **On invalid:** The runner restores the backup, writes a failed status/report explaining the validation error, and does **not** update the checkpoint.
+6. **On valid:** The runner computes a deterministic diff (added/removed/changed blocks) from the before/after pending file content, writes `report.md` from that diff, writes `status.json` with pending counts and severity breakdowns, and updates the checkpoint.
+
 ## State
 
 State lives under the profile-local state tree (`<state_root>/consistency/`):
@@ -93,7 +108,8 @@ State lives under the profile-local state tree (`<state_root>/consistency/`):
   runs/<run_id>/
     input.json
     prompt.md
-    agent-output.md
+    agent-output.md       # debug artifact, not parsed
+    pending-invalid.md     # written only when validation fails
     report.md
     events.jsonl
     status.json
@@ -118,6 +134,29 @@ State lives under the profile-local state tree (`<state_root>/consistency/`):
   ]
 }
 ```
+
+### `status.json` (completed run) schema
+
+```json
+{
+  "run_id": "cc-...",
+  "status": "completed",
+  "checked_range": "<from>..<to>",
+  "pending_count": 5,
+  "added_count": 2,
+  "removed_count": 1,
+  "changed_count": 0,
+  "severity_counts": {
+    "Critical": 1,
+    "High": 2,
+    "Medium": 1,
+    "Low": 1
+  },
+  "completed_at": "<iso8601>"
+}
+```
+
+Counts come from comparing the parsed item sets before and after the agent edit, not from parsing stdout sections.
 
 ## Preflight (fail-fast order)
 
