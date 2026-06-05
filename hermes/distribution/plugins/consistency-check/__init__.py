@@ -7,19 +7,32 @@ from the profile scripts directory, and returns a compact summary.
 """
 
 import os
+import shlex
 import subprocess
 import sys
 
 
+def _normalize_repo_path(raw: str) -> str:
+    val = raw.strip()
+    while val.startswith("`") and val.endswith("`"):
+        val = val[1:-1].strip()
+    while (val.startswith("'") and val.endswith("'")) or (val.startswith('"') and val.endswith('"')):
+        val = val[1:-1].strip()
+    return os.path.expanduser(val)
+
+
 def _resolve_repo(raw_args: str) -> str | None:
-    parts = raw_args.split()
+    try:
+        parts = shlex.split(raw_args)
+    except ValueError:
+        parts = raw_args.split()
     for i, part in enumerate(parts):
         if part == "--repo" and i + 1 < len(parts):
-            return parts[i + 1]
+            return _normalize_repo_path(parts[i + 1])
 
     repo = os.environ.get("JUNIE_REPO")
     if repo:
-        return repo
+        return _normalize_repo_path(repo)
 
     try:
         from junie_runtime.paths import profile_dir
@@ -31,7 +44,7 @@ def _resolve_repo(raw_args: str) -> str | None:
                     if line_stripped.startswith("- Repository:"):
                         val = line_stripped.split(":", 1)[1].strip()
                         if val and val.lower() != "todo":
-                            return val
+                            return _normalize_repo_path(val)
     except Exception:
         pass
 

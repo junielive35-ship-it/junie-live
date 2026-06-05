@@ -149,6 +149,90 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+printf '=== Test 10: _normalize_repo_path strips backticks and quotes ===\n'
+if py_eval '
+import sys; sys.path.insert(0, "'"$PLUGIN_DIR"'")
+from importlib import util
+spec = util.spec_from_file_location("plugin", "'"$PLUGIN_DIR/__init__.py"'")
+mod = util.module_from_spec(spec)
+loader = spec.loader
+loader.exec_module(mod)
+assert mod._normalize_repo_path("`/home/user/repo`") == "/home/user/repo"
+assert mod._normalize_repo_path("\"/home/user/repo\"") == "/home/user/repo"
+assert mod._normalize_repo_path("'"'"'/home/user/repo'"'"'") == "/home/user/repo"
+assert mod._normalize_repo_path("/home/user/repo") == "/home/user/repo"
+assert mod._normalize_repo_path("  /home/user/repo  ") == "/home/user/repo"
+print("OK")
+' 2>&1 | grep -q '^OK$'; then
+  pass
+  printf '  OK: _normalize_repo_path strips backticks and common quotes\n'
+else
+  fail "_normalize_repo_path test(s) failed"
+  py_eval '
+import sys; sys.path.insert(0, "'"$PLUGIN_DIR"'")
+from importlib import util
+spec = util.spec_from_file_location("plugin", "'"$PLUGIN_DIR/__init__.py"'")
+mod = util.module_from_spec(spec)
+loader = spec.loader
+loader.exec_module(mod)
+for raw in [
+    "`/home/user/repo`",
+    "\"/home/user/repo\"",
+    "'"'"'/home/user/repo'"'"'",
+    "/home/user/repo",
+    "  /home/user/repo  ",
+]:
+    result = mod._normalize_repo_path(raw)
+    print(f"  _normalize_repo_path({raw!r}) => {result!r}")
+'
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 11: _resolve_repo handles backtick-wrapped --repo value ===\n'
+# Simulate raw_args as Hermes would pass them: --repo `path`
+# Using shlex.split ensures backticks are literal characters, then _normalize strips them
+if py_eval '
+import sys; sys.path.insert(0, "'"$PLUGIN_DIR"'")
+from importlib import util
+spec = util.spec_from_file_location("plugin", "'"$PLUGIN_DIR/__init__.py"'")
+mod = util.module_from_spec(spec)
+loader = spec.loader
+loader.exec_module(mod)
+result = mod._resolve_repo("--repo `/home/user/repo`")
+assert result == "/home/user/repo", f"expected /home/user/repo, got {result!r}"
+# Also test shlex handles quoted paths
+result2 = mod._resolve_repo("--repo \"/home/user/repo with spaces\"")
+assert result2 == "/home/user/repo with spaces", f"expected quoted path, got {result2!r}"
+print("OK")
+' 2>&1 | grep -q '^OK$'; then
+  pass
+  printf '  OK: _resolve_repo with --repo strips backticks/quotes\n'
+else
+  fail "_resolve_repo --repo test(s) failed"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 12: _resolve_repo with JUNIE_REPO env var strips backticks ===\n'
+if JUNIE_REPO='`/env/var/repo`' py_eval '
+import os; import sys
+sys.path.insert(0, "'"$PLUGIN_DIR"'")
+from importlib import util
+spec = util.spec_from_file_location("plugin", "'"$PLUGIN_DIR/__init__.py"'")
+mod = util.module_from_spec(spec)
+loader = spec.loader
+loader.exec_module(mod)
+# Force JUNIE_REPO by passing empty args so --repo and tools.md aren''t used
+result = mod._resolve_repo("")
+assert result == "/env/var/repo", f"expected /env/var/repo, got {result!r}"
+print("OK")
+' 2>&1 | grep -q '^OK$'; then
+  pass
+  printf '  OK: JUNIE_REPO backticks stripped\n'
+else
+  fail "JUNIE_REPO normalization test(s) failed"
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '\n'
 printf '=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"
