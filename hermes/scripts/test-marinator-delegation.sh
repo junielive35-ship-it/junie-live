@@ -371,6 +371,64 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+printf '=== Test 15: smoke_test_opencode function exists in tools.py ===\n'
+py_eval "
+import sys; sys.path.insert(0, '$PLUGIN_DIR')
+from tools import smoke_test_opencode
+import inspect
+assert callable(smoke_test_opencode), 'smoke_test_opencode should be callable'
+sig = inspect.signature(smoke_test_opencode)
+assert len(sig.parameters) == 0, 'smoke_test_opencode should take no arguments'
+print('OK: smoke_test_opencode is a callable function with no required args')
+" && pass || fail "smoke_test_opencode existence test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 16: smoke_test_opencode returns expected dict shape ===\n'
+py_eval "
+import sys; sys.path.insert(0, '$PLUGIN_DIR')
+from tools import smoke_test_opencode
+result = smoke_test_opencode()
+assert isinstance(result, dict), 'result must be dict'
+assert 'success' in result, 'result must have success key'
+assert 'detail' in result, 'result must have detail key'
+assert isinstance(result['success'], bool), 'success must be bool'
+assert isinstance(result['detail'], str), 'detail must be str'
+# Function must not raise regardless of opencode availability
+print(f'OK: smoke_test_opencode returned success={result[\"success\"]}, detail={result[\"detail\"][:80]}...')
+" && pass || fail "smoke_test_opencode shape test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 17: No "auth list" treated as hard blocker in docs ===\n'
+# Static grep regression: ensure auth list is not described as the sole
+# source of readiness (the old hard-blocker language). Allow diagnostic
+# contextual mentions that explicitly say auth list is NOT authoritative.
+# The old blocker pattern was: "If both are empty, opencode delegations
+# will fail... cannot do any code-changing work."
+if grep -rn 'auth list' "$ROOT/docs/setup.md" "$ROOT/openclaw-hermes-comparison.md" 2>/dev/null | \
+   grep -qi 'if both are empty\|cannot do any\|delegations will fail\|delegations will.*fail'; then
+  fail "'auth list' still described as hard blocker (old 'cannot do any code-changing work' pattern)"
+else
+  pass
+  printf '  OK: no "auth list" treated as hard blocker in docs\n'
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 18: No "auth list" treated as hard blocker in distribution docs ===\n'
+DIST_DOCS="$ROOT/distribution/docs"
+if [[ -d "$DIST_DOCS" ]]; then
+  if grep -rn 'auth list' "$DIST_DOCS" 2>/dev/null | \
+     grep -qi 'if both are empty\|cannot do any\|delegations will fail'; then
+    fail "'auth list' still described as hard blocker in distribution docs"
+  else
+    pass
+    printf '  OK: no "auth list" treated as hard blocker in distribution docs\n'
+  fi
+else
+  pass
+  printf '  OK: distribution/docs/ directory not found, skipping\n'
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '\n'
 printf '=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"

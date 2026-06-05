@@ -68,13 +68,14 @@ echo "your-openrouter-key" > ~/openrouter.key
 chmod 600 ~/openrouter.key
 ```
 
-Then verify opencode can authenticate:
+Then verify opencode readiness with a live smoke execution:
 
 ```bash
-/home/$USER/.opencode/bin/opencode auth list
+/home/$USER/.opencode/bin/opencode run 'Respond with exactly: OPENCODE_SMOKE_OK'
+# Expected: output contains OPENCODE_SMOKE_OK, exit 0
 ```
 
-You should see either `OpenRouter ~/.local/share/opencode/auth.json` under `Credentials`, or `OpenRouter OPENROUTER_API_KEY` under `Environment`. If both are empty, opencode delegations will fail with `UnknownError`/`err_*` references and Junie cannot do any code-changing work.
+`opencode auth list` is useful diagnostic context but is **not** authoritative readiness. An operational OpenCode install may report `0 credentials` yet still execute code-changing work successfully. The canonical readiness check is the smoke above — a real execution that tests the full runtime path OpenCode uses for Marinator delegations.
 
 **Important for cron / autonomous-window sessions:** when Hermes invokes a skill, cron job, or subagent, `$HOME` is rewritten to the profile-scoped home (`~/.hermes/profiles/junie-live/home/`), where `openrouter.key` does NOT exist. The fallback `$HOME/openrouter.key` lookup that works from an interactive shell silently breaks under cron. The `marinator-worker.sh` script handles this by resolving the system home explicitly.
 

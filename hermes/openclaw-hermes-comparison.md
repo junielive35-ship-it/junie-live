@@ -55,7 +55,7 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 
 5. **Comprehensive workspace model** — `AGENTS.md`, `SOUL.md`, `MEMORY.md`, `TOOLS.md`, `HEARTBEAT.md`, `docs/`, `skills/` form a well-defined layered context that can be inspected and modified by any tool.
 
-6. **Hardened opencode integration** — Model discovery, API key loading (`~/openrouter.key`), auth diagnostics, provider error detection — all handled at the shell level with specific error messages and blocked states.
+6. **Hardened opencode integration** — Model discovery, API key loading (`~/openrouter.key`), shell-level error handling, and blocked states. Note: `opencode auth list` was historically treated as an authoritative readiness check, but a running OpenCode can report `0 credentials` and still execute code changes successfully. The canonical readiness signal is a real smoke execution (`opencode run`), not auth-only diagnostics.
 
 ### OpenClaw Weaknesses
 
