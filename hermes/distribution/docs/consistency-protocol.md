@@ -64,7 +64,8 @@ The consistency check is a **maintenance entrypoint**, not a model-loop tool.
 
 - **Shared Python runner:** installed at `$PROFILE_DIR/scripts/consistency_check.py` (seed source: `hermes/distribution/scripts/consistency_check.py`)
 - **Subcommands:** `init` (initialize state), `run` (full check), `render-prompt` (dry-run)
-- **No model-loop tool:** The runner is not registered as a callable tool in the orchestrator's schema. Invoke directly:
+- **Slash command:** `/check_consistency` is available via the `consistency-check` plugin (registered via Hermes `ctx.register_command`). Gateway normalizes underscores to dashes, so `/check_consistency` resolves to the `check-consistency` command handler. The handler resolves the repo from `--repo` arg, `JUNIE_REPO` env, profile `docs/tools.md`, or current git root, then invokes the runner with a 300-second timeout and returns a compact summary.
+- **No model-loop tool:** The runner is not registered as a callable tool in the orchestrator's schema. Invoke via the slash command or directly:
   ```bash
   python3 "$PROFILE_DIR/scripts/consistency_check.py" run --repo <path>
   ```

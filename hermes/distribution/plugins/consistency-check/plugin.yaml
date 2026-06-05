@@ -1,0 +1,5 @@
+name: consistency-check
+version: 0.1.0
+description: "Junie Live consistency check slash command: detect contradictions between strategy, docs, memory, and code."
+author: Danila Savenkov / Junie Live
+kind: standalone

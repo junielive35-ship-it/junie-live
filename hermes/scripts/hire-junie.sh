@@ -283,6 +283,16 @@ else
   log "  WARNING: plugins/autonomous-work not found in seed; skipping plugin setup"
 fi
 
+# ── Step 4d: Enable Consistency Check plugin ──
+if [[ -d "$PROFILE_DIR/plugins/consistency-check" ]]; then
+  log "Enabling Consistency Check plugin..."
+  _ensure_plugin "$PROFILE_DIR" "$PROFILE" "consistency-check"
+
+  log "  Plugin 'consistency-check' enabled."
+else
+  log "  WARNING: plugins/consistency-check not found in seed; skipping plugin setup"
+fi
+
 # ═══════════════════════════════════════════════════════════════════
 #  Step 5: Secrets / env — Telegram, provider keys, Slack tokens
 # ═══════════════════════════════════════════════════════════════════

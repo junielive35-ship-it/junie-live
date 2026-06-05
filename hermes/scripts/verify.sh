@@ -91,6 +91,7 @@ for required_dir in \
     distribution/plugins/marinator-delegation/scripts \
     distribution/plugins/autonomous-work \
     distribution/plugins/autonomous-work/scripts \
+    distribution/plugins/consistency-check \
     distribution/scripts; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
 done
@@ -120,6 +121,8 @@ for required_file in \
     distribution/plugins/autonomous-work/prompts.py \
     distribution/plugins/autonomous-work/backlog.py \
     distribution/plugins/autonomous-work/scripts/aw-runner.sh \
+    distribution/plugins/consistency-check/plugin.yaml \
+    distribution/plugins/consistency-check/__init__.py \
     distribution/docs/backlog-protocol.md \
     distribution/docs/consistency-check-prompt.md \
     distribution/scripts/consistency_check.py; do
@@ -215,6 +218,9 @@ log "marinator delegation regression tests"
 
 log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
+
+log "consistency check plugin tests"
+"$ROOT/scripts/test-consistency-check-plugin.sh" || fail "consistency check plugin tests failed"
 
 log "consistency check runner python syntax"
 python3 -m py_compile "$ROOT/distribution/scripts/consistency_check.py" || \
