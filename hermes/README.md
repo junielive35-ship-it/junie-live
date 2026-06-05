@@ -89,7 +89,7 @@ hermes/
 │   ├── memory-seed.md                 # Initial memory entries to inject during init
 │   ├── HERMES.seed.md                 # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
 │   ├── config.yaml                    # Shipped defaults (preserved on update)
-│   ├── .env.EXAMPLE                   # Required env vars template
+│   ├── .env                           # Created by hire-junie.sh with Telegram creds
 │   ├── docs/                          # Profile-internal Junie docs (strategy, protocols, etc.)
 │   ├── skills/                        # Installed skills
 │   ├── plugins/                       # Marinator delegation + Autonomous work plugins
