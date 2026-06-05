@@ -40,8 +40,14 @@ def fail(msg: str) -> None:
     print(f"  FAIL: {msg}", file=sys.stderr)
 
 
-def run_check(hermes_home: str, *args: str, expect_zero: bool = True) -> subprocess.CompletedProcess:
-    env = {**os.environ, "HERMES_HOME": hermes_home, "HERMES_PROFILE": "test-profile"}
+def run_check(hermes_home: str, *args: str, expect_zero: bool = True,
+              hermes_home_override: str | None = None,
+              env_override: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    env = env_override if env_override is not None else {
+        **os.environ,
+        "HERMES_HOME": hermes_home_override or hermes_home,
+        "HERMES_PROFILE": "test-profile",
+    }
     r = subprocess.run(
         [sys.executable, SCRIPT] + list(args),
         capture_output=True, text=True, timeout=30, env=env,
@@ -509,6 +515,66 @@ def test_blocked_artifacts_written() -> None:
             fail("event not written")
 
 
+def test_profile_docs_path() -> None:
+    """Prove profile_docs resolves to <profile_dir>/docs not <profile_dir>/junie-live/docs."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = os.path.join(tmp, "repo")
+        make_repo(repo, "main")
+        commit(repo)
+
+        profile_home = os.path.join(tmp, "profiles", "test-profile")
+        profile_docs_dir = os.path.join(profile_home, "docs")
+        os.makedirs(profile_docs_dir, exist_ok=True)
+        with open(os.path.join(profile_docs_dir, "strategy.md"), "w") as f:
+            f.write("# Strategy\n")
+
+        hermes_home = os.path.join(tmp, "hermes")
+        os.makedirs(hermes_home, exist_ok=True)
+        env = {
+            **os.environ,
+            "HERMES_HOME": hermes_home,
+            "HERMES_PROFILE_DIR": profile_home,
+            "HERMES_PROFILE": "test-profile",
+        }
+        run_check(tmp, "init", "--repo", repo, hermes_home_override=hermes_home, env_override=env)
+
+        # render-prompt should reference the correct docs path
+        r = run_check(tmp, "render-prompt", "--repo", repo, hermes_home_override=hermes_home, env_override=env)
+        if profile_docs_dir in r.stdout:
+            pass_()
+            print(f"  OK: profile docs path correct in render-prompt: {profile_docs_dir}")
+        else:
+            fail(f"profile docs path {profile_docs_dir} not found in render-prompt output")
+
+        # dry-run should write prompt.md with the correct docs path
+        r2 = run_check(tmp, "run", "--repo", repo, "--dry-run", hermes_home_override=hermes_home, env_override=env)
+        if "DRY RUN" not in r2.stdout:
+            fail("dry-run output missing")
+            return
+        # Find the prompt file path from dry-run output
+        prompt_path = None
+        for line in r2.stdout.splitlines():
+            if "Prompt written to:" in line:
+                prompt_path = line.split("Prompt written to:", 1)[1].strip()
+                break
+        if not prompt_path or not os.path.isfile(prompt_path):
+            fail("prompt file not written in dry-run mode")
+            return
+        prompt_content = open(prompt_path).read()
+        if profile_docs_dir in prompt_content:
+            pass_()
+            print(f"  OK: profile docs path correct in dry-run prompt: {profile_docs_dir}")
+        else:
+            fail(f"profile docs path {profile_docs_dir} not found in dry-run prompt")
+        # Also check that the wrong path (junie-live/docs) is NOT present
+        wrong_path = os.path.join(profile_home, "junie-live", "docs")
+        if wrong_path not in prompt_content:
+            pass_()
+            print(f"  OK: wrong path {wrong_path} NOT present in prompt")
+        else:
+            fail(f"wrong path {wrong_path} IS present in prompt, but should not be")
+
+
 # ════════════════════════════════════════════════════════════════
 
 def main() -> int:
@@ -531,6 +597,7 @@ def main() -> int:
         ("pending merge resolved removed", test_pending_merge_resolved_removed),
         ("pending merge still_open upserts", test_pending_merge_still_open_upserts),
         ("blocked artifacts written", test_blocked_artifacts_written),
+        ("profile docs path correct (not junie-live/docs)", test_profile_docs_path),
     ]
 
     print("=== Consistency Check Tests ===\n")

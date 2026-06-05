@@ -26,7 +26,7 @@ from typing import Any
 
 from junie_runtime.events import append_event
 from junie_runtime.mutex import MutexHeldError, acquire as mutex_acquire, release as mutex_release
-from junie_runtime.paths import mutex_dir, state_root
+from junie_runtime.paths import mutex_dir, profile_dir, state_root
 from junie_runtime.state import atomic_write_json, atomic_write_text, read_json, read_text
 
 HERMES_PROFILE_ENV = "HERMES_PROFILE"
@@ -325,9 +325,7 @@ def cmd_render_prompt(args: argparse.Namespace) -> int:
     if not os.path.isfile(hermes_md):
         hermes_md = os.path.join(repo, ".hermes.md")
 
-    profile_docs = os.path.join(state_root(), "..", "docs")
-    if not os.path.isdir(profile_docs):
-        profile_docs = os.path.join(os.path.dirname(state_root()), "docs")
+    profile_docs = os.path.join(profile_dir(), "docs")
 
     pending_content = read_text(get_pending_path()) or "(no pending contradictions)"
 
@@ -582,9 +580,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         if not os.path.isfile(hermes_md):
             hermes_md = os.path.join(repo, ".hermes.md")
 
-        profile_docs = os.path.join(state_root(), "..", "docs")
-        if not os.path.isdir(profile_docs):
-            profile_docs = os.path.join(os.path.dirname(state_root()), "docs")
+        profile_docs = os.path.join(profile_dir(), "docs")
         pending_content = read_text(get_pending_path()) or "(no pending contradictions)"
         relevant = state.get("relevant_artifacts", [])
 
