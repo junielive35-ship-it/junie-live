@@ -120,7 +120,9 @@ for required_file in \
     distribution/plugins/autonomous-work/prompts.py \
     distribution/plugins/autonomous-work/backlog.py \
     distribution/plugins/autonomous-work/scripts/aw-runner.sh \
-    distribution/docs/backlog-protocol.md; do
+    distribution/docs/backlog-protocol.md \
+    distribution/docs/consistency-check-prompt.md \
+    distribution/scripts/consistency_check.py; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 
@@ -213,6 +215,13 @@ log "marinator delegation regression tests"
 
 log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
+
+log "consistency check runner python syntax"
+python3 -m py_compile "$ROOT/distribution/scripts/consistency_check.py" || \
+  fail "python syntax error in consistency_check.py"
+
+log "consistency check tests"
+python3 "$ROOT/scripts/test_consistency_check.py" || fail "consistency check tests failed"
 
 log "junie_runtime package import and tests"
 if python3 -c "import junie_runtime; print(junie_runtime.__version__)" 2>/dev/null; then
