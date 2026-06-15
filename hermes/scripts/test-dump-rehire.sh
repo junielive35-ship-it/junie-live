@@ -1116,6 +1116,24 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+printf '=== Hire test Cb: hire-junie.sh invokes install-senior-dev-profile.sh ===\n'
+if grep -qE 'install-senior-dev-profile\.sh' "$HIRE_SCRIPT" 2>/dev/null; then
+  pass
+  printf '  OK: hire-junie.sh references install-senior-dev-profile.sh\n'
+else
+  fail "hire-junie.sh does not reference install-senior-dev-profile.sh"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Hire test Cc: install-senior-dev-profile.sh exists and is executable ===\n'
+if [[ -f "$ROOT/scripts/install-senior-dev-profile.sh" && -x "$ROOT/scripts/install-senior-dev-profile.sh" ]]; then
+  pass
+  printf '  OK: install-senior-dev-profile.sh exists and is executable\n'
+else
+  fail "install-senior-dev-profile.sh missing or not executable"
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '\n=== Hire-junie.sh: backup behavior tests ===\n'
 
 # Create a minimal temp hire tree so the hire script resolves its siblings

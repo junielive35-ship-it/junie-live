@@ -298,6 +298,20 @@ else
   log "  WARNING: plugins/senior-task not found in seed; skipping plugin setup"
 fi
 
+# ── Step 4e: Install senior-dev profile for Kanban-backed code execution ──
+if [[ -f "$SCRIPT_DIR/install-senior-dev-profile.sh" ]]; then
+  log "Installing senior-dev profile..."
+  if "$SCRIPT_DIR/install-senior-dev-profile.sh" --force; then
+    log "  senior-dev profile installed."
+  else
+    err "Failed to install senior-dev profile"
+    exit 1
+  fi
+else
+  log "  WARNING: install-senior-dev-profile.sh not found — senior-dev profile not installed"
+  log "  Senior Kanban pipeline will be incomplete without it."
+fi
+
 # ═══════════════════════════════════════════════════════════════════
 #  Step 5: Secrets / env — Telegram, provider keys, Slack tokens
 # ═══════════════════════════════════════════════════════════════════
