@@ -894,6 +894,113 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+printf '=== Test 40: rehire invokes install-senior-dev-profile.sh ===\n'
+
+T40_HOME="$TMP/t40-rehire-home"
+T40_LOG="$TMP/t40-rehire-hermes.log"
+T40_BIN="$TMP/t40-rehire-hermes"
+cp "$FAKE_HERMES_BIN" "$T40_BIN"
+sed 's/FAKE_HERMES_LOG/T40_LOG/' -i "$T40_BIN"
+touch "$T40_LOG"
+
+rc=0
+PATH="$TMP/bin:$PATH" \
+HERMES_HOME="$T40_HOME" \
+FAKE_HERMES_LOG="$T40_LOG" \
+T40_LOG="$T40_LOG" \
+  "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" >/dev/null 2>&1 || rc=$?
+
+if [[ "$rc" -eq 0 ]]; then
+  if grep -q 'senior-dev' "$T40_LOG" 2>/dev/null; then
+    pass
+    printf '  OK: senior-dev profile install invoked by rehire\n'
+  else
+    fail "senior-dev profile install NOT invoked by rehire"
+  fi
+else
+  fail "rehire for senior-dev test failed (rc=$rc)"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 41: rehire with --no-gateway-start still installs senior-dev ===\n'
+
+T41_HOME="$TMP/t41-rehire-home"
+T41_LOG="$TMP/t41-rehire-hermes.log"
+T41_BIN="$TMP/t41-rehire-hermes"
+cp "$FAKE_HERMES_BIN" "$T41_BIN"
+sed 's/FAKE_HERMES_LOG/T41_LOG/' -i "$T41_BIN"
+touch "$T41_LOG"
+
+rc=0
+PATH="$TMP/bin:$PATH" \
+HERMES_HOME="$T41_HOME" \
+FAKE_HERMES_LOG="$T41_LOG" \
+T41_LOG="$T41_LOG" \
+  "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" --no-gateway-start >/dev/null 2>&1 || rc=$?
+
+if [[ "$rc" -eq 0 ]]; then
+  if grep -q 'senior-dev' "$T41_LOG" 2>/dev/null; then
+    pass
+    printf '  OK: senior-dev install invoked with --no-gateway-start\n'
+  else
+    fail "senior-dev NOT installed when --no-gateway-start"
+  fi
+else
+  fail "rehire with --no-gateway-start failed (rc=$rc)"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 42: existing gateway start test remains valid ===\n'
+
+# Gateway was started in T40 (no --no-gateway-start)
+if grep -q 'hermes.*gateway' "$T40_LOG" 2>/dev/null; then
+  pass
+  printf '  OK: gateway started in default rehire\n'
+else
+  fail "gateway not started - existing gateway test broken"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 43: --no-gateway-start does not start gateway (senior-dev still installed) ===\n'
+
+if grep -q 'hermes.*gateway' "$T41_LOG" 2>/dev/null; then
+  fail "gateway was started despite --no-gateway-start"
+else
+  pass
+  printf '  OK: gateway NOT started with --no-gateway-start\n'
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 44: rehire with --force --no-gateway-start installs senior-dev ===\n'
+
+T44_HOME="$TMP/t44-rehire-home"
+T44_LOG="$TMP/t44-rehire-hermes.log"
+T44_BIN="$TMP/t44-rehire-hermes"
+cp "$FAKE_HERMES_BIN" "$T44_BIN"
+sed 's/FAKE_HERMES_LOG/T44_LOG/' -i "$T44_BIN"
+touch "$T44_LOG"
+mkdir -p "$T44_HOME/profiles/$PROFILE"
+touch "$T44_HOME/profiles/$PROFILE/config.yaml"
+
+rc=0
+PATH="$TMP/bin:$PATH" \
+HERMES_HOME="$T44_HOME" \
+FAKE_HERMES_LOG="$T44_LOG" \
+T44_LOG="$T44_LOG" \
+  "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" --force --no-gateway-start >/dev/null 2>&1 || rc=$?
+
+if [[ "$rc" -eq 0 ]]; then
+  if grep -q 'senior-dev' "$T44_LOG" 2>/dev/null; then
+    pass
+    printf '  OK: senior-dev install invoked with --force --no-gateway-start\n'
+  else
+    fail "senior-dev NOT installed with --force --no-gateway-start"
+  fi
+else
+  fail "rehire with --force --no-gateway-start failed (rc=$rc)"
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '\n=== Hire-junie.sh: native profile delete tests ===\n'
 
 HIRE_SCRIPT="$ROOT/scripts/hire-junie.sh"

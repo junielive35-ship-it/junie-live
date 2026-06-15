@@ -174,6 +174,30 @@ else
   exit 1
 fi
 
+# ── Install senior-dev profile for Kanban-backed code execution ──
+# Rehire must restore the complete pipeline, not just junie-live.
+# The senior-dev profile is the Kanban worker; without it the new
+# pipeline is half-working. Install even with --no-gateway-start
+# because restore completeness is independent of gateway start.
+if [[ -f "$SCRIPT_DIR/install-senior-dev-profile.sh" ]]; then
+  log "Installing senior-dev profile..."
+  if "$SCRIPT_DIR/install-senior-dev-profile.sh" --force; then
+    log "  senior-dev profile installed."
+  else
+    err "Failed to install senior-dev profile"
+    exit 1
+  fi
+else
+  if [[ "$PROFILE" == "junie-live" ]]; then
+    err "install-senior-dev-profile.sh not found at $SCRIPT_DIR/install-senior-dev-profile.sh"
+    err "Senior Kanban pipeline would be incomplete. Aborting."
+    exit 1
+  else
+    log "  WARNING: install-senior-dev-profile.sh not found - senior-dev profile not installed"
+    log "  Senior Kanban pipeline will be incomplete without it."
+  fi
+fi
+
 # ── Start/restart gateway ──
 if [[ "$NO_GATEWAY_START" -eq 0 ]]; then
   log "starting gateway..."
