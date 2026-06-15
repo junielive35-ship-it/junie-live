@@ -1,0 +1,14 @@
+name: senior-dev
+version: 1.0.0
+description: "Junie Live Senior Dev — coding executor profile for Kanban-delegated tasks"
+hermes_requires: ">=0.12.0"
+author: "Junie Live"
+license: "MIT"
+
+# Seed files for the senior-dev profile. config.yaml is deliberately omitted
+# so the user's model/provider/reasoning choices survive updates.
+distribution_owned:
+  - SOUL.md
+  - HERMES.seed.md
+  - docs
+  - distribution.yaml

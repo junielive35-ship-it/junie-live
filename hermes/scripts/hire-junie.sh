@@ -283,6 +283,21 @@ else
   log "  WARNING: plugins/autonomous-work not found in seed; skipping plugin setup"
 fi
 
+# ── Step 4d: Enable Senior Task plugin + toolsets ──
+if [[ -d "$PROFILE_DIR/plugins/senior-task" ]]; then
+  log "Enabling Senior Task plugin..."
+  _ensure_plugin "$PROFILE_DIR" "$PROFILE" "senior-task"
+
+  for platform in cli telegram; do
+    for toolset in senior terminal file; do
+      hermes -p "$PROFILE" tools enable --platform "$platform" "$toolset" >/dev/null 2>&1 || true
+    done
+  done
+  log "  Toolsets enabled: senior, terminal, file (cli + telegram)"
+else
+  log "  WARNING: plugins/senior-task not found in seed; skipping plugin setup"
+fi
+
 # ═══════════════════════════════════════════════════════════════════
 #  Step 5: Secrets / env — Telegram, provider keys, Slack tokens
 # ═══════════════════════════════════════════════════════════════════

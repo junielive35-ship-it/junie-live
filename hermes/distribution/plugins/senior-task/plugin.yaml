@@ -1,0 +1,8 @@
+name: senior-task
+version: 0.1.0
+description: "Junie Live Senior Dev Kanban task helper: create tasks, subscribe origin chats, manage duplicates, and report results back to Kanban."
+author: Danila Savenkov / Junie Live
+kind: standalone
+provides_tools:
+  - create_senior_task
+  - senior_dev_task_result
