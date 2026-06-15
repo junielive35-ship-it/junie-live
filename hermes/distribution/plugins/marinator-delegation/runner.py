@@ -191,6 +191,7 @@ def start_job(
     is_follow_up: bool = False,
     opencode_previous_session_id: str | None = None,
     enable_per_minute_reports: bool = True,
+    kanban_linkage: dict | None = None,
     ctx: Any = None,
 ) -> dict:
     """Create run directory, write spec/status/events, and spawn the wrapper.
@@ -271,6 +272,7 @@ def start_job(
         "owner_session_key": owner_session_key,
         "hermes_profile": hermes_profile,
         "progress_delivery": progress_delivery,
+        "kanban_linkage": kanban_linkage,
         "created_at": time.time(),
         "created_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }

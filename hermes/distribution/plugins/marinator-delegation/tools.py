@@ -58,6 +58,30 @@ MARINATOR_DELEGATE_SCHEMA = {
                 ),
                 "default": True,
             },
+            "kanban_linkage": {
+                "type": "object",
+                "description": (
+                    "Optional Kanban task linkage for Senior Dev mode. "
+                    "When set, Marinator persists the linkage in spec.json "
+                    "and the wake/resume prompt can access it."
+                ),
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "description": "Kanban task ID (t_<hex>).",
+                    },
+                    "board": {
+                        "type": "string",
+                        "description": "Kanban board slug (default or custom).",
+                    },
+                    "workspace_path": {
+                        "type": "string",
+                        "description": "Optional workspace path for the task.",
+                    },
+                },
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
         },
         "required": ["job_id", "repo", "prompt_file"],
         "additionalProperties": False,
@@ -197,6 +221,7 @@ def handle_marinator_delegate(params: dict, plugin_ctx: Any = None, **kwargs) ->
             is_follow_up=params.get("is_follow_up", False),
             opencode_previous_session_id=params.get("opencode_previous_session_id"),
             enable_per_minute_reports=params.get("enable_per_minute_reports", True),
+            kanban_linkage=params.get("kanban_linkage"),
             ctx=plugin_ctx,
         )
         return json.dumps(result)

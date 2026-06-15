@@ -91,6 +91,8 @@ for required_dir in \
     distribution/plugins/marinator-delegation/scripts \
     distribution/plugins/autonomous-work \
     distribution/plugins/autonomous-work/scripts \
+    distribution/plugins/senior-task \
+    distribution/profiles/senior-dev \
     distribution/scripts; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
 done
@@ -120,6 +122,15 @@ for required_file in \
     distribution/plugins/autonomous-work/prompts.py \
     distribution/plugins/autonomous-work/backlog.py \
     distribution/plugins/autonomous-work/scripts/aw-runner.sh \
+    distribution/plugins/senior-task/plugin.yaml \
+    distribution/plugins/senior-task/__init__.py \
+    distribution/plugins/senior-task/tools.py \
+    distribution/profiles/senior-dev/distribution.yaml \
+    distribution/profiles/senior-dev/config.yaml \
+    distribution/profiles/senior-dev/SOUL.md \
+    distribution/profiles/senior-dev/HERMES.seed.md \
+    scripts/install-senior-dev-profile.sh \
+    scripts/test-install-senior-dev.sh \
     distribution/docs/backlog-protocol.md; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
@@ -213,6 +224,15 @@ log "marinator delegation regression tests"
 
 log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
+
+log "senior-task plugin tests"
+"$ROOT/scripts/test-senior-task.sh" || fail "senior-task plugin tests failed"
+
+log "senior-dev-result plugin tests"
+"$ROOT/scripts/test-senior-dev-result.sh" || fail "senior-dev-result plugin tests failed"
+
+log "senior-dev install script tests"
+"$ROOT/scripts/test-install-senior-dev.sh" || fail "senior-dev install script tests failed"
 
 log "junie_runtime package import and tests"
 if python3 -c "import junie_runtime; print(junie_runtime.__version__)" 2>/dev/null; then
