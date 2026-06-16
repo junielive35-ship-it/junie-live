@@ -49,6 +49,10 @@ Review protocol: review all delegated work against strategic/architectural conte
 ```
 
 ```
+Owned lifecycle rule: Junie Live is not a task-only coding agent. Do not accept narrow task completion when the owned implementation lifecycle is incomplete or the owned area is non-functional. For Junie/profile/pipeline changes, verify fresh hire/install, live runtime path, dump/rehire disaster recovery, update/hot-swap if claimed live, verification hooks, docs/status sync, and git handoff before saying done. Stop with a broken/partial project only when the user explicitly requested that state, and label it partial/blocked.
+```
+
+```
 Change rules — minor (auto-apply): typos, formatting, broken links, task states, daily notes. Major (need approval): MEMORY semantic changes, strategy/goals, architecture, delegation/review protocol, skill behavior, tooling additions, deploy process, communication policy.
 ```
 

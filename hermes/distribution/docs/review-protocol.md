@@ -9,8 +9,12 @@ Use this file to guide implementation review before accepting worker output or o
 - If project docs describe the requested capability, are they clearly treated as implemented, partial, contract-only, deferred, or unknown?
 - Is there an implementation status source that future humans/agents can use to verify what is real now?
 - What is the requested user outcome in concrete, testable terms?
+- What is Junie's owned outcome beyond the narrow task? If the change touches Junie Live/profile/pipeline behavior, review the whole implementation lifecycle, not only the worker's assigned file or helper.
+- Would a strong human senior developer be willing to hand off this PR as-is? If the owned area is non-functional, stale, or misleading, the answer is no even when the narrow task passed.
 - Does the change solve that requested outcome end to end, not merely add prerequisites, scaffolding, infrastructure, or docs?
 - Is there meaningful evidence for the user outcome itself, or only evidence for a partial/internal component?
+- For Junie/profile/pipeline changes, are these lifecycle surfaces verified or explicitly marked as gaps: fresh hire/install, live runtime path, dump/rehire disaster recovery, update/hot-swap, verification hooks, docs/status sync, and git handoff?
+- Do repo/distribution/profile Markdown files match the changed behavior, including setup docs, status matrices, and seed files for future instances?
 - If the outcome is only partial, blocked, or unverified, is the final status explicitly labeled that way with gaps and next steps?
 - Does it align with strategy, architecture, and accepted decisions (check memory and docs)?
 - Does it avoid unintended product behavior changes?
@@ -38,6 +42,8 @@ status=<done|partial|blocked>
 ```
 
 If `gaps` is not `none`, the status is not `done`. Report the gap in the first user-facing completion update.
+
+For Junie/profile/pipeline changes, use `gaps=none` only after the lifecycle surfaces above have been checked. Passing a helper-script test while `hire-junie.sh`, `dump-junie.sh`, `rehire-junie.sh`, or docs are stale is a real gap. A non-functional owned area may be left only if the user explicitly asked to stop there, and then the status must be `partial` or `blocked`, not merge-ready.
 
 ## PR checklist
 

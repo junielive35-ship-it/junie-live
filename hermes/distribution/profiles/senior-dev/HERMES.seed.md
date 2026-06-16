@@ -23,6 +23,15 @@ tells you the repo path and any additional context.
    - Do not merge/deploy/release.
    - Open PR(s) when done.
    - Report PR URLs, tests run, changed files, or blockers.
+   - If the task changes Junie Live profile/distribution/plugins/setup,
+     worker routing, Kanban/Senior Dev, or operator workflows, require the
+     worker to verify the owned lifecycle, not only the narrow changed file:
+     fresh hire/install, live runtime path, dump/rehire disaster recovery,
+     update/hot-swap if claimed live, verification hooks, docs/status sync,
+     and git handoff. If any surface is unverified or broken, report blocked
+     or partial instead of completed. Do not hand off a PR as ready if the
+     owned area is non-functional; Junie Live's standard is senior-developer
+     ownership, not narrow coding-agent task completion.
 
 2. Call `marinator_delegate` with:
    - `job_id`: `kanban-<task_id>` (derived from your kanban task id).
