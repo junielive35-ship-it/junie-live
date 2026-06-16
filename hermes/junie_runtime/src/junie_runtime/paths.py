@@ -60,10 +60,6 @@ def hermes_root(profile: str | None = None) -> str:
     if base == p and parent == "profiles":
         return os.path.dirname(os.path.dirname(hh))
 
-    home_hermes = os.path.expanduser("~/.hermes")
-    if hh != home_hermes and os.path.isdir(os.path.join(home_hermes, "profiles", p)):
-        return home_hermes
-
     return hh
 
 
