@@ -1127,11 +1127,12 @@ mkdir -p "$T44_HOME/profiles/$PROFILE"
 touch "$T44_HOME/profiles/$PROFILE/config.yaml"
 
 rc=0
+T44_OUT="$TMP/t44-rehire-out.txt"
 PATH="$TMP/bin:$PATH" \
 HERMES_HOME="$T44_HOME" \
 FAKE_HERMES_LOG="$T44_LOG" \
 T44_LOG="$T44_LOG" \
-  "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" --force --no-gateway-start >/dev/null 2>&1 || rc=$?
+  "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" --force --no-gateway-start >"$T44_OUT" 2>&1 || rc=$?
 
 if [[ "$rc" -eq 0 ]]; then
   if grep -q 'senior-dev' "$T44_LOG" 2>/dev/null; then
@@ -1141,7 +1142,7 @@ if [[ "$rc" -eq 0 ]]; then
     fail "senior-dev NOT installed with --force --no-gateway-start"
   fi
 else
-  fail "rehire with --force --no-gateway-start failed (rc=$rc)"
+  fail "rehire with --force --no-gateway-start failed (rc=$rc); output: $(head -5 "$T44_OUT" | tr '\n' ';')"
 fi
 
 # ════════════════════════════════════════════════════════════════

@@ -147,10 +147,18 @@ fi
 
 # ── Step 1: Install profile seed ──
 log "Installing $PROFILE profile from $SEED_DIR..."
-hermes profile install "$SEED_DIR" --name "$PROFILE" --alias -y || {
-  err "Failed to install profile $PROFILE"
-  exit 1
-}
+if ! hermes profile install "$SEED_DIR" --name "$PROFILE" --alias -y; then
+  if [[ "$FORCE" == "true" ]]; then
+    log "Profile install reported existing target after delete; retrying with Hermes --force..."
+    hermes profile install "$SEED_DIR" --name "$PROFILE" --alias -y --force || {
+      err "Failed to install profile $PROFILE"
+      exit 1
+    }
+  else
+    err "Failed to install profile $PROFILE"
+    exit 1
+  fi
+fi
 
 log "Profile seed installed."
 
