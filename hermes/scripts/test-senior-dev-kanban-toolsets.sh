@@ -26,6 +26,27 @@ assert 'tools disable --platform "$platform" marinator' in text
 print('OK: main-profile toolset enable loops exclude marinator and include senior')
 PY
 
+printf '=== Test 1b: distribution config has no main-profile marinator defaults ===\n'
+python3 - "$ROOT/distribution/config.yaml" <<'PY' && pass || fail "distribution config exposes marinator by default"
+import sys
+
+try:
+    import yaml
+except ImportError:
+    print('PyYAML unavailable; config.yaml has no platform_toolsets/known_plugin_toolsets to inspect')
+    sys.exit(0)
+
+with open(sys.argv[1]) as f:
+    cfg = yaml.safe_load(f) or {}
+
+for section in ('platform_toolsets', 'known_plugin_toolsets'):
+    values = cfg.get(section) or {}
+    for platform, toolsets in values.items():
+        assert 'marinator' not in (toolsets or []), f'{section}.{platform} contains marinator'
+
+print('OK: distribution config does not default-enable marinator for junie-live')
+PY
+
 printf '=== Test 2: senior-dev installer keeps marinator and senior toolsets ===\n'
 if grep -Eq 'for toolset in marinator senior terminal file; do' "$ROOT/scripts/install-senior-dev-profile.sh"; then
   printf '  OK: senior-dev installer enables marinator senior terminal file\n'
@@ -67,6 +88,7 @@ bad_phrases = [
     'all coding delegated via marinator_delegate',
     'all code-changing work must go through `marinator_delegate`',
     'use `marinator_delegate` vs `delegate_task`',
+    'marinator_delegate supervised opencode worker for code-changing work',
 ]
 violations = []
 for path in paths:
