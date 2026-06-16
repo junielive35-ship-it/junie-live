@@ -169,6 +169,36 @@ touch "$PROFILE_DIR/state.db-shm"
 # Add a pid file
 echo "1234" > "$PROFILE_DIR/gateway.pid"
 
+# ── Kanban state setup for regression tests ──
+export FAKE_HERMES_HOME
+python3 <<'KANBANDB'
+import sqlite3, os
+root = os.environ['FAKE_HERMES_HOME']
+
+db = os.path.join(root, 'kanban.db')
+con = sqlite3.connect(db)
+con.execute('CREATE TABLE tasks (id TEXT, title TEXT, status TEXT)')
+con.execute("INSERT INTO tasks VALUES ('task_001', 'Root board task', 'active')")
+con.commit()
+con.close()
+
+board_dir = os.path.join(root, 'kanban', 'boards', 'test-board')
+os.makedirs(board_dir, exist_ok=True)
+bdb = os.path.join(board_dir, 'kanban.db')
+con = sqlite3.connect(bdb)
+con.execute('CREATE TABLE columns (id TEXT, name TEXT)')
+con.execute("INSERT INTO columns VALUES ('col_001', 'Backlog')")
+con.commit()
+con.close()
+
+for p in (db, bdb):
+    open(p + '-wal', 'w').close()
+    open(p + '-shm', 'w').close()
+KANBANDB
+
+mkdir -p "$FAKE_HERMES_HOME/kanban"
+echo "test-board" > "$FAKE_HERMES_HOME/kanban/current"
+
 # ── Runtime manifest setup for wheel artifact tests ──
 RUNTIME_MANIFEST_DIR="$PROFILE_DIR/junie-live/runtime"
 mkdir -p "$RUNTIME_MANIFEST_DIR"
@@ -341,6 +371,42 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+printf '=== Test 13b: archive contains __kanban/kanban.db ===\n'
+
+if archive_contents "$DUMP_OUTPUT" | grep -q '__kanban/kanban\.db'; then
+  pass
+else
+  fail "archive missing __kanban/kanban.db"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 13c: archive contains named board kanban.db ===\n'
+
+if archive_contents "$DUMP_OUTPUT" | grep -q '__kanban/boards/test-board/kanban\.db'; then
+  pass
+else
+  fail "archive missing named board kanban.db"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 13d: archive contains kanban/current ===\n'
+
+if archive_contents "$DUMP_OUTPUT" | grep -q '__kanban/current'; then
+  pass
+else
+  fail "archive missing kanban/current"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 13e: archive excludes kanban WAL/SHM sidecars ===\n'
+
+if archive_contents "$DUMP_OUTPUT" | grep -qE '__kanban/.*\.(db-wal|db-shm)'; then
+  fail "archive should exclude kanban WAL/SHM sidecars"
+else
+  pass
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '=== Test 14: rehire restores profile ===\n'
 
 mkdir -p "$FAKE_REHIRE_HOME"
@@ -372,6 +438,84 @@ if [[ -f "$FAKE_REHIRE_HOME/profiles/$PROFILE/junie-live/state/backlog/items/bac
   pass
 else
   fail "rehire did not restore junie-live/state/"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 16b: kanban.db restored to Hermes root (not profile dir) ===\n'
+
+if [[ -f "$FAKE_REHIRE_HOME/kanban.db" ]]; then
+  result=$(python3 -c "
+import sqlite3
+con = sqlite3.connect('$FAKE_REHIRE_HOME/kanban.db')
+cur = con.execute('SELECT title FROM tasks WHERE id = ?', ('task_001',))
+row = cur.fetchone()
+con.close()
+print(row[0] if row else 'MISSING')
+" 2>&1)
+  if [[ "$result" == "Root board task" ]]; then
+    pass
+    printf '  OK: kanban.db restored with content\n'
+  else
+    fail "kanban.db content mismatch: $result"
+  fi
+else
+  fail "kanban.db not found at $FAKE_REHIRE_HOME/kanban.db"
+fi
+
+# Not inside profile dir
+if [[ -f "$FAKE_REHIRE_HOME/profiles/$PROFILE/kanban.db" ]]; then
+  fail "kanban.db should NOT be inside profile dir"
+else
+  pass
+  printf '  OK: kanban.db not inside profile dir\n'
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 16c: __kanban cleaned up from profile dir after restore ===\n'
+
+if [[ -d "$FAKE_REHIRE_HOME/profiles/$PROFILE/__kanban" ]]; then
+  fail "__kanban dir still present in profile dir"
+else
+  pass
+  printf '  OK: __kanban dir cleaned up\n'
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 16d: named board kanban.db restored to kanban/boards/ ===\n'
+
+NAMED_BOARD_DB="$FAKE_REHIRE_HOME/kanban/boards/test-board/kanban.db"
+if [[ -f "$NAMED_BOARD_DB" ]]; then
+  result=$(python3 -c "
+import sqlite3
+con = sqlite3.connect('$NAMED_BOARD_DB')
+cur = con.execute('SELECT name FROM columns WHERE id = ?', ('col_001',))
+row = cur.fetchone()
+con.close()
+print(row[0] if row else 'MISSING')
+" 2>&1)
+  if [[ "$result" == "Backlog" ]]; then
+    pass
+    printf '  OK: named board restored with content\n'
+  else
+    fail "named board DB content mismatch: $result"
+  fi
+else
+  fail "named board DB not found at $NAMED_BOARD_DB"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 16e: kanban/current restored ===\n'
+
+if [[ -f "$FAKE_REHIRE_HOME/kanban/current" ]]; then
+  current_content="$(cat "$FAKE_REHIRE_HOME/kanban/current")"
+  if [[ "$current_content" == "test-board" ]]; then
+    pass
+    printf '  OK: kanban/current restored\n'
+  else
+    fail "kanban/current content: '$current_content'"
+  fi
+else
+  fail "kanban/current not found"
 fi
 
 # ════════════════════════════════════════════════════════════════

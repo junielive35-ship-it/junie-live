@@ -83,6 +83,25 @@ if [[ -e "$PROFILE_DIR" ]]; then
   fi
 fi
 
+# ── Check for Kanban state in archive ──
+ARCHIVE_HAS_KANBAN=false
+KANBAN_DB_TARGET="$HERMES_ROOT/kanban.db"
+KANBAN_DIR_TARGET="$HERMES_ROOT/kanban"
+if tar -tzf "$ARCHIVE" 2>/dev/null | grep -q '__kanban/'; then
+  ARCHIVE_HAS_KANBAN=true
+  if [[ -e "$KANBAN_DB_TARGET" || -d "$KANBAN_DIR_TARGET" ]]; then
+    if [[ "$FORCE" -eq 1 ]]; then
+      ts="$(date +%Y%m%d-%H%M%S)"
+      [[ -f "$KANBAN_DB_TARGET" ]] && mv "$KANBAN_DB_TARGET" "${KANBAN_DB_TARGET}.rehire-before-${ts}" && log "  existing kanban.db moved aside"
+      [[ -d "$KANBAN_DIR_TARGET" ]] && mv "$KANBAN_DIR_TARGET" "${KANBAN_DIR_TARGET}.rehire-before-${ts}" && log "  existing kanban/ moved aside"
+    else
+      err "Kanban state already exists at Hermes root: $HERMES_ROOT/kanban"
+      err "Use --force to overwrite (existing Kanban state will be moved aside)"
+      exit 1
+    fi
+  fi
+fi
+
 # ── Restore via Hermes-native import ──
 log "restoring archive via Hermes-native import..."
 export HERMES_HOME="$HERMES_ROOT"
@@ -97,6 +116,27 @@ if [[ -f "$PROFILE_DIR/config.yaml" ]]; then
 else
   err "restored profile missing config.yaml: $PROFILE_DIR/config.yaml"
   exit 1
+fi
+
+# ── Restore Kanban state from embedded __kanban ──
+if $ARCHIVE_HAS_KANBAN && [[ -d "$PROFILE_DIR/__kanban" ]]; then
+  log "restoring Kanban state from archive..."
+  if [[ -f "$PROFILE_DIR/__kanban/kanban.db" ]]; then
+    mkdir -p "$(dirname "$KANBAN_DB_TARGET")"
+    mv "$PROFILE_DIR/__kanban/kanban.db" "$KANBAN_DB_TARGET"
+    log "  restored kanban.db"
+  fi
+  for item in "$PROFILE_DIR/__kanban"/*; do
+    [[ -e "$item" ]] || continue
+    bname="$(basename "$item")"
+    [[ "$bname" == "kanban.db" ]] && continue
+    mkdir -p "$KANBAN_DIR_TARGET"
+    mv "$item" "$KANBAN_DIR_TARGET/"
+  done
+  if [[ -d "$KANBAN_DIR_TARGET" ]]; then
+    log "  restored kanban/ directory"
+  fi
+  rm -rf "$PROFILE_DIR/__kanban"
 fi
 
 # ── Restore junie_runtime from embedded runtime_artifact ──
