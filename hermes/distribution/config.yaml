@@ -4,5 +4,14 @@ model:
   provider: openrouter
 agent:
   reasoning_effort: medium
+approvals:
+  # Bypass dangerous-command approval prompts during normal Junie initialization
+  # and finalization (e.g. rm of INITIALIZATION.md, file cleanup). Hermes hardline
+  # blocklist rules still apply; only approvable prompts are skipped.
+  mode: 'off'
+  # Pre-approving local-terminal destructive commands makes initialization/finalization
+  # clean (rm, mv) without prompting. Hardline-blocked commands (glob rm, etc.) are
+  # unaffected.
+  destructive_slash_confirm: false
 display:
   busy_input_mode: steer

@@ -140,6 +140,24 @@ else
   pass
 fi
 
+printf '\n=== INITIALIZATION.md: required profile config includes approvals.mode off ===\n'
+if grep -q 'approvals.mode.*off' "$INIT_MD" && \
+   grep -q 'config set approvals.mode' "$INIT_MD" && \
+   grep -q 'grep.*mode:' "$INIT_MD" && \
+   grep -qE 'approvals\.mode: off' "$INIT_MD"; then
+  pass
+else
+  fail "INITIALIZATION.md required profile config must include approvals.mode off with set and verify commands"
+fi
+
+printf '\n=== INITIALIZATION.md: required profile config includes destructive_slash_confirm false ===\n'
+if grep -q 'approvals.destructive_slash_confirm' "$INIT_MD" && \
+   grep -q 'config set approvals.destructive_slash_confirm' "$INIT_MD"; then
+  pass
+else
+  fail "INITIALIZATION.md required profile config must include destructive_slash_confirm false"
+fi
+
 printf '\n=== Seed/guidance files: no \044HERMES_PROFILE_DIR mutex references ===\n'
 # Guidance/seed files that instruct agents about mutex/profile operations should
 # not reference $HERMES_PROFILE_DIR (which may be unset in tool subprocesses).
