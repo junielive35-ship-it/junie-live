@@ -74,7 +74,9 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 - **Runtime modes:** `live_gateway` (Telegram, uses `notify_on_complete`) or `headless` (uses `hermes chat --resume`)
 - **Stall policy:** suspected stalls are recorded but never auto-killed; the orchestrator decides via `control/kill`
 - **Progress reports:** enabled by default (debug visibility); `enable_per_minute_reports=false` only when user explicitly asks to disable
-- **Deferred:** Kanban-backed Marinator, cron-bound session continuation
+- **Senior Dev Kanban lane:** normal code tasks are created with `create_senior_task`, dispatched to the `senior-dev` profile, executed through `marinator_delegate`, and finalized with `senior_dev_task_result`
+- **Companion profile install:** `scripts/install-senior-dev-profile.sh --force`; `hire-junie.sh` and `rehire-junie.sh` run it for the `junie-live` pipeline
+- **Deferred:** cron-bound session continuation
 
 ## Deployment / release
 
