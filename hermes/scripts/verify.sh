@@ -234,6 +234,9 @@ log "senior-dev-result plugin tests"
 log "senior-dev install script tests"
 "$ROOT/scripts/test-install-senior-dev.sh" || fail "senior-dev install script tests failed"
 
+log "senior-dev Kanban toolset split tests"
+"$ROOT/scripts/test-senior-dev-kanban-toolsets.sh" || fail "senior-dev Kanban toolset split tests failed"
+
 log "junie_runtime package import and tests"
 if python3 -c "import junie_runtime; print(junie_runtime.__version__)" 2>/dev/null; then
   log "  junie_runtime import OK"

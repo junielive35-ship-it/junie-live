@@ -118,6 +118,19 @@ else
   exit 1
 fi
 
+# ── Enforce Senior Dev Kanban toolset split on restored main profile ──
+# Older dumps may contain marinator in junie-live platform_toolsets. Keep the
+# plugin source/enabled state for compatibility, but remove direct Chat Agent
+# access; normal code work enters through create_senior_task and senior-dev.
+if [[ "$PROFILE" == "junie-live" ]]; then
+  log "enforcing main-profile toolset split..."
+  for platform in cli telegram; do
+    hermes -p "$PROFILE" tools disable --platform "$platform" marinator >/dev/null 2>&1 || true
+    hermes -p "$PROFILE" tools enable --platform "$platform" senior >/dev/null 2>&1 || true
+  done
+  log "  marinator disabled and senior enabled for $PROFILE cli + telegram toolsets"
+fi
+
 # ── Restore Kanban state from embedded __kanban ──
 if $ARCHIVE_HAS_KANBAN && [[ -d "$PROFILE_DIR/__kanban" ]]; then
   log "restoring Kanban state from archive..."

@@ -60,7 +60,7 @@ hermes -p junie-live gateway setup
 
 ### 5. Configure opencode for code-changing delegations
 
-Junie delegates all code-changing work to [opencode](https://github.com/sst/opencode) via the `marinator_delegate` Hermes plugin. OpenCode authenticates *independently* of Hermes — it does not read the profile's `.env`. You must configure it once at the system level:
+Junie delegates normal code-changing work through `create_senior_task` to the `senior-dev` profile, which runs [opencode](https://github.com/sst/opencode) via the `marinator_delegate` Hermes plugin. OpenCode authenticates *independently* of Hermes — it does not read the profile's `.env`. You must configure it once at the system level:
 
 ```bash
 # One-time: install your OpenRouter key where opencode can find it from the system home
@@ -79,7 +79,7 @@ Then verify opencode readiness with a live smoke execution:
 
 **Important for cron / autonomous-window sessions:** when Hermes invokes a skill, cron job, or subagent, `$HOME` is rewritten to the profile-scoped home (`~/.hermes/profiles/junie-live/home/`), where `openrouter.key` does NOT exist. The fallback `$HOME/openrouter.key` lookup that works from an interactive shell silently breaks under cron. The `marinator-worker.sh` script handles this by resolving the system home explicitly.
 
-If you write your own cron prompts or skills that invoke opencode directly (rather than via `marinator_delegate`), export `OPENROUTER_API_KEY` explicitly. See `docs/tools.md` ("$HOME indirection trap") and `marinator-worker.sh` for the canonical invocation pattern.
+If you write your own cron prompts or skills that invoke opencode directly (rather than through the Senior Dev Kanban lane), export `OPENROUTER_API_KEY` explicitly. See `docs/tools.md` ("$HOME indirection trap") and `marinator-worker.sh` for the canonical invocation pattern.
 
 ### 5. Set up Telegram DM allowlist
 

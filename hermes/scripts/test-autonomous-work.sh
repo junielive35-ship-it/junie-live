@@ -341,7 +341,7 @@ print(f'OK: prompt built for finalizing')
 
 # ════════════════════════════════════════════════════════════════
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 13: executing_task prompt includes marinator debug flag ===\n'
+printf '=== Test 13: executing_task prompt includes Senior Dev debug flag ===\n'
 run_prompts_test "
 import os, tempfile
 
@@ -356,8 +356,10 @@ window_debug_true = {
 tmpdir = tempfile.mkdtemp(prefix='aw-test-')
 result = prompts_mod.build_step_prompt(window_debug_true, tmpdir, 'executing_task', selected_item='ITEM-001')
 content = open(result['prompt_path']).read()
+assert 'create_senior_task' in content, f'expected create_senior_task in prompt, got content:\\n{content}'
 assert 'enable_per_minute_reports=True' in content, f'expected True flag in prompt, got content:\\n{content}'
-print('OK: executing_task prompt has enable_per_minute_reports=True when debug enabled')
+assert 'marinator_delegate' not in content, f'unexpected direct marinator_delegate in prompt:\\n{content}'
+print('OK: executing_task prompt has create_senior_task and enable_per_minute_reports=True when debug enabled')
 
 # Test with debug disabled
 window_debug_false = {
@@ -370,8 +372,10 @@ window_debug_false = {
 tmpdir2 = tempfile.mkdtemp(prefix='aw-test-')
 result2 = prompts_mod.build_step_prompt(window_debug_false, tmpdir2, 'executing_task', selected_item='ITEM-002')
 content2 = open(result2['prompt_path']).read()
+assert 'create_senior_task' in content2, f'expected create_senior_task in prompt, got content:\\n{content2}'
 assert 'enable_per_minute_reports=False' in content2, f'expected False flag in prompt, got content:\\n{content2}'
-print('OK: executing_task prompt has enable_per_minute_reports=False when debug disabled')
+assert 'marinator_delegate' not in content2, f'unexpected direct marinator_delegate in prompt:\\n{content2}'
+print('OK: executing_task prompt has create_senior_task and enable_per_minute_reports=False when debug disabled')
 
 # Test backward compatibility: omitted defaults to True
 window_no_flag = {
@@ -383,9 +387,11 @@ window_no_flag = {
 tmpdir3 = tempfile.mkdtemp(prefix='aw-test-')
 result3 = prompts_mod.build_step_prompt(window_no_flag, tmpdir3, 'executing_task', selected_item='ITEM-003')
 content3 = open(result3['prompt_path']).read()
+assert 'create_senior_task' in content3, 'prompt should route through create_senior_task'
 assert 'enable_per_minute_reports=True' in content3, 'omitted flag should default to True'
+assert 'marinator_delegate' not in content3, 'prompt should not expose direct marinator_delegate'
 print('OK: omitted enable_debug_messages defaults to True')
-" && pass || fail "executing_task marinator debug flag test failed"
+" && pass || fail "executing_task Senior Dev debug flag test failed"
 
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 14: Transition detection helpers ===\n'

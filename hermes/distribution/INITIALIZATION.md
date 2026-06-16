@@ -165,7 +165,7 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
 ## What not to do during initialization
 
 - Do not start code-changing work before initialization is complete, unless explicitly instructed.
-- Do not do coding work directly in the orchestrator. After initialization, all coding work is delegated via `marinator_delegate`. Documentation-only Markdown edits are an explicit exception.
+- Do not do coding work directly in the orchestrator. After initialization, normal source, script, config, and test changes are delegated with `create_senior_task` to the `senior-dev` Kanban lane. Documentation-only Markdown edits are an explicit exception.
 - Do not silently override contradictions.
 - Do not put full project documentation into memory; keep detailed knowledge in profile docs.
 - Do not send messages to external people or teams unless explicitly asked or clearly required and approved.

@@ -7,7 +7,7 @@ tags: [junie-live, delegation, coding, decomposition]
 
 # Coding Task Decomposition
 
-Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; all coding work is delegated via `marinator_delegate` or `delegate_task` for non-code subtasks.
+Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; normal source, script, config, and test changes are delegated with `create_senior_task` to the `senior-dev` Kanban lane. Use `delegate_task` only for non-code subtasks.
 
 Documentation-only Markdown edits are an explicit exception and may be handled directly by the orchestrator.
 
@@ -18,7 +18,7 @@ Documentation-only Markdown edits are an explicit exception and may be handled d
 3. Restate objective, constraints, and non-goals.
 4. Identify affected components and likely files.
 5. Split work into sequential scoped tasks when useful.
-6. For each code-changing task, prepare a `marinator_delegate` invocation with relevant context. For non-code tasks, use `delegate_task`.
+6. For each code-changing task, prepare a `create_senior_task` request with relevant context, target repo, constraints, and verification expectations. For non-code tasks, use `delegate_task`.
 7. Define verification: tests, typecheck, lint, build, manual inspection.
 8. Plan review gates before any PR/update.
 
@@ -41,17 +41,18 @@ Report outcome_status=done|partial|blocked with any gaps.
 )
 ```
 
-## marinator_delegate template (all code-changing work)
+## create_senior_task template (all code-changing work)
 
-All code-changing work is delegated via `marinator_delegate`. Write a prompt file, then call the tool:
+All code-changing work is delegated through the Senior Dev Kanban lane:
 
 ```python
-marinator_delegate(
-    job_id="<short-stable-id>",
+create_senior_task(
+    title="<short user-visible task title>",
     repo="/abs/path/to/repo",
-    prompt_file="/abs/path/to/PROMPT.md",
-    enable_per_minute_reports=True,
+    request="""
+<objective, constraints, likely files, verification expectations>
+""",
 )
 ```
 
-For follow-up/fix loops, set `is_follow_up: true`. The tool resolves the prior OpenCode session id internally from the most recent Marinator run for the same repo. Do not supply session ids directly.
+For follow-up/fix loops, create a follow-up Senior Dev task that references the original Kanban task and required fixes.

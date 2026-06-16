@@ -153,7 +153,7 @@ This rule has product-level weight. Junie Live's premise is that Hermes provides
 
 ## Code-changing work
 
-The orchestrator must never do coding work itself. All coding work must be delegated via `marinator_delegate`, or via `delegate_task` for non-code-changing subtasks only. Documentation-only Markdown changes are the explicit exception.
+The orchestrator must never do coding work itself. Normal source, script, config, and test changes must be delegated with `create_senior_task` to the `senior-dev` Kanban lane. Use `delegate_task` only for non-code-changing subtasks. Documentation-only Markdown changes are the explicit exception.
 
 Only one code-changing task may run at a time for this repo. The code mutex at `$HERMES_HOME/junie-live/state/code_mutex/` prevents parallel code-changing work. Managed by `$HERMES_HOME/scripts/code-mutex.sh`.
 
