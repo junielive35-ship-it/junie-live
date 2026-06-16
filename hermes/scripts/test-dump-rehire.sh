@@ -211,7 +211,7 @@ python3 "$HELPER" write-install-manifest \
 
 # ── Helper ──
 archive_contents() {
-  tar -tzf "$1" 2>/dev/null
+  tar -tzf "$1" 2>/dev/null || true
 }
 
 # ════════════════════════════════════════════════════════════════
