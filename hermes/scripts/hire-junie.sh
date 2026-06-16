@@ -249,21 +249,25 @@ PYENSURE
   fi
 }
 
-# ── Step 4b: Enable Marinator delegation plugin + toolsets ──
+# ── Step 4b: Enable Marinator delegation plugin without Chat Agent toolset ──
 # The plugin source was installed from distribution/plugins/ into
-# $PROFILE_DIR/plugins/ during profile install. Now enable it and its
-# toolsets for CLI and Telegram so marinator_delegate is available.
+# $PROFILE_DIR/plugins/ during profile install. Keep the plugin source and
+# enabled plugin available for the companion senior-dev profile/install path,
+# but do not expose the marinator toolset to the main Chat Agent.
 if [[ -d "$PROFILE_DIR/plugins/marinator-delegation" ]]; then
   log "Enabling Marinator delegation plugin..."
   _ensure_plugin "$PROFILE_DIR" "$PROFILE" "marinator-delegation"
 
-  # Enable marinator toolset for CLI and Telegram
   for platform in cli telegram; do
-    for toolset in marinator terminal file; do
+    hermes -p "$PROFILE" tools disable --platform "$platform" marinator >/dev/null 2>&1 || true
+  done
+
+  for platform in cli telegram; do
+    for toolset in terminal file; do
       hermes -p "$PROFILE" tools enable --platform "$platform" "$toolset" >/dev/null 2>&1 || true
     done
   done
-  log "  Toolsets enabled: marinator, terminal, file (cli + telegram)"
+  log "  Toolsets enabled: terminal, file (cli + telegram); marinator remains senior-dev only"
 else
   log "  WARNING: plugins/marinator-delegation not found in seed; skipping plugin setup"
 fi
@@ -274,11 +278,11 @@ if [[ -d "$PROFILE_DIR/plugins/autonomous-work" ]]; then
   _ensure_plugin "$PROFILE_DIR" "$PROFILE" "autonomous-work"
 
   for platform in cli telegram; do
-    for toolset in autonomous marinator terminal file; do
+    for toolset in autonomous terminal file; do
       hermes -p "$PROFILE" tools enable --platform "$platform" "$toolset" >/dev/null 2>&1 || true
     done
   done
-  log "  Toolsets enabled: autonomous, marinator, terminal, file (cli + telegram)"
+  log "  Toolsets enabled: autonomous, terminal, file (cli + telegram)"
 else
   log "  WARNING: plugins/autonomous-work not found in seed; skipping plugin setup"
 fi

@@ -7,7 +7,7 @@ tags: [junie-live, review, quality]
 
 # Implementation Review
 
-Use before accepting delegated code work or opening/updating a PR. Coding work must be performed via `marinator_delegate`, not directly by the orchestrator. Documentation-only Markdown edits may be made directly by the orchestrator.
+Use before accepting delegated code work or opening/updating a PR. Coding work from the Chat Agent must be performed through `create_senior_task` and the `senior-dev` Kanban lane, not directly by the orchestrator. Documentation-only Markdown edits may be made directly by the orchestrator.
 
 ## Workflow
 
@@ -34,7 +34,7 @@ Use before accepting delegated code work or opening/updating a PR. Coding work m
    - git handoff: branch state, commits, untracked artifacts, PR/CI visibility, and mutex state are checked and reported.
    If any required lifecycle surface is broken or unverified, the status is not `done`.
    - Senior-developer handoff rule: do not hand off a PR or report merge-ready work if the owned area is non-functional, stale, or misleading in a way a senior developer should have caught. Junie Live is not a task-only coding agent. Stop with a broken/partial project only when the user explicitly requested that state, and label it `partial` or `blocked`.
-9. If the work needs fixes, delegate fixes back via `marinator_delegate`; do not rubber-stamp worker output.
+9. If the work needs fixes, create a follow-up Senior Dev Kanban task with the required fix context; do not rubber-stamp worker output.
 10. Record risks, follow-ups, and evidence.
 
 ## Outcome acceptance gate

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Only one code-changing task runs at a time for the owned repo or area. The mutex prevents branch, worktree, and review conflicts when delegating to OpenCode (via `marinator_delegate`). Hermes Junie Live's mutex is a file-based lock under a profile-local state directory, managed by `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`.
+Only one code-changing task runs at a time for the owned repo or area. The mutex prevents branch, worktree, and review conflicts when routing code work through the Senior Dev Kanban lane. Hermes Junie Live's mutex is a file-based lock under a profile-local state directory, managed by `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`.
 
 Canonical (default) mutex directory: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/`
 
@@ -31,9 +31,9 @@ The escalation contact and conventions for each context are recorded in `tools.m
 
 ### 4. Code-changing work is sequential under the mutex; no substitutes
 
-All code-changing work must go through `marinator_delegate`. The `delegate_task` mechanism (or any native Hermes subagent path) is for non-code subtasks only — research, analysis, reading, planning — and does not honor the code mutex by design.
+All main Chat Agent code-changing work must go through `create_senior_task` to the `senior-dev` Kanban lane. The `senior-dev` profile then uses `marinator_delegate` internally under the same sequentiality invariant. The `delegate_task` mechanism (or any native Hermes subagent path) is for non-code subtasks only — research, analysis, reading, planning — and does not honor the code mutex by design.
 
-Substituting `delegate_task` for `marinator_delegate` to bypass mutex acquisition or to "go faster" silently breaks the sequentiality invariant and can produce concurrent code-changing workers operating on the same repo. This is not allowed.
+Substituting `delegate_task` for `create_senior_task` to bypass mutex acquisition or to "go faster" silently breaks the sequentiality invariant and can produce concurrent code-changing workers operating on the same repo. This is not allowed.
 
 ## Mechanics (quick reference)
 
@@ -50,7 +50,7 @@ Substituting `delegate_task` for `marinator_delegate` to bypass mutex acquisitio
 ## When to consult this doc
 
 - Before acquiring or releasing the mutex.
-- When deciding whether to use `marinator_delegate` vs `delegate_task` for a task that involves any code change.
+- When deciding whether a task must use `create_senior_task` instead of `delegate_task` because it involves any code change.
 - When triaging a `BROKEN` or `STALE` mutex state.
 - When designing an autonomous-window or cron job that may run while another holder is active.
 

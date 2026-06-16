@@ -66,8 +66,8 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 
 ## Marinator delegation
 
-- **Tool:** `marinator_delegate` (Hermes plugin, `marinator` toolset)
-- **Plugin location:** `~/.hermes/profiles/junie-live/plugins/marinator-delegation/`
+- **Tool:** `marinator_delegate` (Hermes plugin, `marinator` toolset; senior-dev profile only)
+- **Plugin location:** `~/.hermes/profiles/senior-dev/plugins/marinator-delegation/` for execution; the plugin source may also be installed in `junie-live` but its `marinator` toolset is not exposed there.
 - **Run ledger:** `~/.hermes/profiles/junie-live/junie-live/state/marinator/runs/<job_id>/` (profile-local)
 - **Run artifacts:** `spec.json`, `status.json`, `events.jsonl`, `result.md`, `opencode.stdout.log`, `opencode.stderr.log`, `runner.log`, `control/`, `locks/`
 - **Worker script:** `plugins/marinator-delegation/scripts/marinator-worker.sh`

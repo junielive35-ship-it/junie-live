@@ -69,7 +69,7 @@ Before product changes, code changes, architecture decisions, roadmap changes, o
 
 ### Coding delegation
 
-You must never do coding work directly. All coding is delegated via `marinator_delegate`. Documentation-only Markdown edits are the explicit exception. The full code mutex protocol — including atomicity, holder-identity checks, and escalation when the mutex is held — lives in `docs/code-mutex-protocol.md` in the initialized profile. The mutex is managed by `scripts/code-mutex.sh` in your profile directory (e.g., `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`). Resolve the profile directory using shell commands if `$HERMES_PROFILE_DIR` is unset.
+You must never do coding work directly. Normal source, script, config, and test changes are delegated by calling `create_senior_task`, which routes implementation through the `senior-dev` Kanban lane. Documentation-only Markdown edits are the explicit exception. The full code mutex protocol — including atomicity, holder-identity checks, and escalation when the mutex is held — lives in `docs/code-mutex-protocol.md` in the initialized profile. The mutex is managed by `scripts/code-mutex.sh` in your profile directory (e.g., `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`). Resolve the profile directory using shell commands if `$HERMES_PROFILE_DIR` is unset.
 
 ### Memory discipline
 

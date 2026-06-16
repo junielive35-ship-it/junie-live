@@ -2,7 +2,7 @@
 
 The code mutex is the MVP coordination mechanism that prevents multiple Junie Live routines from changing the same repository or owned feature area at the same time.
 
-It protects the whole code-changing routine, not only a single coding-worker execution. A routine may include intake, planning, `marinator_delegate` delegation, worker-result review, fix requests, tests, PR updates, commits, and final handoff. The mutex stays held until that routine reaches a terminal state: done, blocked, failed, cancelled, or explicitly handed off.
+It protects the whole code-changing routine, not only a single coding-worker execution. A routine may include intake, planning, `create_senior_task` delegation, worker-result review, fix requests, tests, PR updates, commits, and final handoff. The mutex stays held until that routine reaches a terminal state: done, blocked, failed, cancelled, or explicitly handed off.
 
 ## Scope
 
@@ -11,7 +11,7 @@ The mutex applies to code-changing work for one owned repository or feature area
 Protected work includes:
 
 - editing source code, tests, build files, migrations, config, generated code, or scripts;
-- running `marinator_delegate` workers that may edit the repository;
+- running Senior Dev Kanban workers that may edit the repository;
 - review/fix loops where the orchestrator asks a coding worker for follow-up changes;
 - PR update work that changes repository files;
 - autonomous-window or scheduled work that may mutate the repository.
@@ -155,7 +155,7 @@ If the holder appears stale, do not silently steal the mutex. Ask the owner/admi
 
 ## Relationship to Marinator delegation
 
-All code-changing work must go through `marinator_delegate`. Native Hermes `delegate_task`, direct terminal coding, or ad hoc worker processes are for non-code subtasks only unless a future approved protocol explicitly changes the boundary.
+All Chat Agent code-changing work must go through `create_senior_task` and the Senior Dev Kanban lane. Native Hermes `delegate_task`, direct terminal coding, or ad hoc worker processes are for non-code subtasks only unless a future approved protocol explicitly changes the boundary.
 
 The mutex protects the orchestrator-owned routine, not the worker process alone. The orchestrator must keep holding the lock while it reviews worker output, requests fixes, runs verification, commits, or blocks the task.
 

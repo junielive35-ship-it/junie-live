@@ -9,7 +9,7 @@ Use this file to guide OpenCode worker delegation for the assigned project. Nati
 - Normal user-visible code work is routed through `create_senior_task`, which creates one Hermes Kanban task assigned to `senior-dev` and subscribes the originating chat/thread for terminal events.
 - The `senior-dev` Hermes profile owns implementation execution and engineering acceptance for its assigned task. It uses `marinator_delegate` to start a supervised OpenCode worker run, then calls `senior_dev_task_result` to mark the Kanban task completed or blocked.
 - Native Hermes subagents (`delegate_task`) are forbidden as code-changing implementation workers. They may be used only for non-code subtasks such as research, analysis, reading, or planning.
-- Direct Chat-Agent use of `marinator_delegate` is reserved for explicit maintenance/fix situations; for normal code tasks, route through the Senior Dev Kanban lane. Documentation-only Markdown edits remain a direct-edit exception.
+- The Chat Agent does not expose `marinator_delegate` in normal CLI/Telegram toolsets. For normal code tasks, route through the Senior Dev Kanban lane. Documentation-only Markdown edits remain a direct-edit exception.
 - Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Workers get scoped tasks, not the whole project history by default.
 - Code-changing OpenCode workers run sequentially under the code mutex unless an approved isolation strategy exists. The mutex state lives at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) with holder metadata in `holder.json`. See `docs/code-mutex-protocol.md` for the full mutex invariants: atomicity, holder identity, escalation when held, and no `delegate_task` substitution.
@@ -32,7 +32,7 @@ A hired Junie Live Hermes profile includes the standard Marinator delegation run
 - `plugins/marinator-delegation/scripts/marinator-worker.sh` — supervised OpenCode runner bundled inside the plugin.
 - `~/.hermes/profiles/junie-live/junie-live/state/marinator/runs/<job_id>/` — per-run state, logs, events, and result artifacts.
 
-`hire-junie.sh` is responsible for copying these assets from the seed into the Hermes profile, enabling the plugin, and enabling the `marinator`, `terminal`, and `file` toolsets for CLI and Telegram so `marinator_delegate` is usable from Junie's normal operating channels.
+`hire-junie.sh` is responsible for copying these assets from the seed into the Hermes profile and enabling the main Chat Agent toolsets (`senior`, `autonomous`, `terminal`, and `file`) for CLI and Telegram. It must not enable the main profile `marinator` toolset; `install-senior-dev-profile.sh` enables `marinator` for the companion `senior-dev` profile.
 
 The plugin creates a resolved `spec.json` from the current Hermes delivery context, starts the runner, and returns the run directory plus status path. The runner is responsible for bounded execution, progress summaries, terminal status, and waking the orchestrator on completion or failure. Progress summaries are observability only; they must not change Marinator task/subtask granularity, which remains based on review and acceptance boundaries.
 
@@ -135,12 +135,14 @@ Normal code-changing work is executed through the Senior Dev Kanban lane:
 
 ### Workflow
 
+This workflow is for the `senior-dev` profile, not the main Chat Agent:
+
 1. Write the delegation prompt to a file, usually under `/tmp` or the profile run state directory.
 2. Call `marinator_delegate` with the prompt file path and repo.
 3. The tool returns immediately with `job_id`, `run_dir`, `runtime_mode`, and `status_path`.
-4. In live Telegram sessions, `notify_on_complete` wakes the orchestrator when the worker finishes.
-5. In headless sessions, the wrapper calls `hermes chat --resume` to continue the orchestrator session.
-6. On wake, the orchestrator reads `status.json`, `result.md`, stdout/stderr logs, inspects the repo diff, and decides: accept, fix, wait, kill, or block.
+4. In live Telegram sessions, `notify_on_complete` wakes the worker profile when the OpenCode run finishes.
+5. In headless sessions, the wrapper calls `hermes chat --resume` to continue the worker profile session.
+6. On wake, `senior-dev` reads `status.json`, `result.md`, stdout/stderr logs, inspects the repo diff, and decides: accept, fix, wait, kill, or block before calling `senior_dev_task_result`.
 
 ### Follow-up / fix loops
 

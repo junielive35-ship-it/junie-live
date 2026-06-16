@@ -61,9 +61,9 @@ and starts the AW runner. The runner drives deterministic phase transitions via
 The AW state machine handles: snapshot_preflight, candidate_generation,
 score_and_select, executing_task, record_outcome, finalizing.
 
-During `executing_task`, code-changing work is delegated via `marinator_delegate`
-per the standard delegation protocol. Marinator completion/failure wakes resume
-the same AW session.
+During `executing_task`, code-changing work is delegated via `create_senior_task`
+to the `senior-dev` Kanban lane per the standard delegation protocol. Senior Dev
+completion/failure wakes or resumes the same AW session.
 
 Do not use cron as the primary control plane. Cron may be added later only as
 a recovery/watchdog, not as the core continuation path.
