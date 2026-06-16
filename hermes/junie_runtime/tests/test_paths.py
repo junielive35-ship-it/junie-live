@@ -199,6 +199,39 @@ def test_hermes_root_profile_scoped() -> None:
             os.environ.pop("HERMES_HOME", None)
 
 
+def test_hermes_root_no_fallback_when_hermes_home_explicit(tmp_path) -> None:
+    """Regression: explicit HERMES_HOME must not be overridden by ~/.hermes/profiles/<p>.
+
+    When HERMES_HOME is set to a non-profile directory (e.g. a temp rehire
+    target), hermes_root() must return that directory even if the operator's
+    real ~/.hermes/profiles/<profile> exists.
+    """
+    # Simulate ~/.hermes/profiles/junie-live existing in the "real" home
+    fake_home = tmp_path / "real-home"
+    (fake_home / ".hermes" / "profiles" / "junie-live").mkdir(parents=True)
+
+    explicit_hermes_home = str(tmp_path / "rehire-target")
+
+    saved_hh = os.environ.get("HERMES_HOME")
+    saved_home = os.environ.get("HOME")
+    os.environ["HOME"] = str(fake_home)
+    os.environ["HERMES_HOME"] = explicit_hermes_home
+    try:
+        result = paths.hermes_root(profile="junie-live")
+        assert result == explicit_hermes_home, (
+            f"hermes_root returned {result!r}, expected {explicit_hermes_home!r}"
+        )
+    finally:
+        if saved_hh is not None:
+            os.environ["HERMES_HOME"] = saved_hh
+        else:
+            os.environ.pop("HERMES_HOME", None)
+        if saved_home is not None:
+            os.environ["HOME"] = saved_home
+        else:
+            os.environ.pop("HOME", None)
+
+
 def test_hermes_root_fallback_to_home_hermes(tmp_path) -> None:
     root = tmp_path / ".hermes"
     (root / "profiles" / "test-p").mkdir(parents=True)
