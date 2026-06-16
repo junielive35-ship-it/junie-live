@@ -104,11 +104,11 @@ fi
 
 # ── Restore via Hermes-native import ──
 log "restoring archive via Hermes-native import..."
-export HERMES_HOME="$HERMES_ROOT"
-hermes profile import "$ARCHIVE" --name "$PROFILE" || {
+HERMES_HOME="$HERMES_ROOT" hermes profile import "$ARCHIVE" --name "$PROFILE" || {
   err "hermes profile import failed"
   exit 1
 }
+export HERMES_HOME="$HERMES_ROOT"
 
 # ── Verify key files ──
 if [[ -f "$PROFILE_DIR/config.yaml" ]]; then
@@ -125,8 +125,8 @@ fi
 if [[ "$PROFILE" == "junie-live" ]]; then
   log "enforcing main-profile toolset split..."
   for platform in cli telegram; do
-    hermes -p "$PROFILE" tools disable --platform "$platform" marinator >/dev/null 2>&1 || true
-    hermes -p "$PROFILE" tools enable --platform "$platform" senior >/dev/null 2>&1 || true
+    HERMES_HOME="$HERMES_ROOT" hermes -p "$PROFILE" tools disable --platform "$platform" marinator >/dev/null 2>&1 || true
+    HERMES_HOME="$HERMES_ROOT" hermes -p "$PROFILE" tools enable --platform "$platform" senior >/dev/null 2>&1 || true
   done
   log "  marinator disabled and senior enabled for $PROFILE cli + telegram toolsets"
 fi
@@ -234,7 +234,7 @@ fi
 # because restore completeness is independent of gateway start.
 if [[ -f "$SCRIPT_DIR/install-senior-dev-profile.sh" ]]; then
   log "Installing senior-dev profile..."
-  if "$SCRIPT_DIR/install-senior-dev-profile.sh" --force; then
+  if HERMES_HOME="$PROFILE_DIR" "$SCRIPT_DIR/install-senior-dev-profile.sh" --force; then
     log "  senior-dev profile installed."
   else
     err "Failed to install senior-dev profile"
