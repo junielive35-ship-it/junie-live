@@ -4,11 +4,12 @@ Use this file to guide OpenCode worker delegation for the assigned project. Nati
 
 ## Principles
 
-- The orchestrator (Hermes main session) owns strategy, context, planning, delegation, final review, and acceptance.
-- The orchestrator must never do coding work itself.
-- All coding work is delegated via `marinator_delegate` (the Marinator delegation tool), which starts a supervised OpenCode worker run and wakes the owning Hermes session for review. Direct `opencode run` invocation from the orchestrator is replaced by this tool.
+- The Chat Agent owns strategy, intake, routing, user communication, and product/backlog coherence.
+- The Chat Agent must never do coding work itself.
+- Normal user-visible code work is routed through `create_senior_task`, which creates one Hermes Kanban task assigned to `senior-dev` and subscribes the originating chat/thread for terminal events.
+- The `senior-dev` Hermes profile owns implementation execution and engineering acceptance for its assigned task. It uses `marinator_delegate` to start a supervised OpenCode worker run, then calls `senior_dev_task_result` to mark the Kanban task completed or blocked.
 - Native Hermes subagents (`delegate_task`) are forbidden as code-changing implementation workers. They may be used only for non-code subtasks such as research, analysis, reading, or planning.
-- If code-changing work needs a worker, use the `marinator_delegate` boundary; if the change is documentation-only Markdown, the orchestrator may edit it directly under the Markdown exception.
+- Direct Chat-Agent use of `marinator_delegate` is reserved for explicit maintenance/fix situations; for normal code tasks, route through the Senior Dev Kanban lane. Documentation-only Markdown edits remain a direct-edit exception.
 - Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
 - Workers get scoped tasks, not the whole project history by default.
 - Code-changing OpenCode workers run sequentially under the code mutex unless an approved isolation strategy exists. The mutex state lives at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) with holder metadata in `holder.json`. See `docs/code-mutex-protocol.md` for the full mutex invariants: atomicity, holder identity, escalation when held, and no `delegate_task` substitution.
@@ -99,11 +100,18 @@ Outcome status to report (`done`, `partial`, or `blocked`) and any gaps:
 Risks/questions to report:
 ```
 
-## Coding executor: marinator_delegate (Marinator plugin)
+## Coding executor: Senior Dev Kanban lane + marinator_delegate
 
-All code-changing work is executed via the `marinator_delegate` tool, which is installed as a Hermes user plugin by `hire-junie.sh`. This is the only approved code-changing delegation path.
+Normal code-changing work is executed through the Senior Dev Kanban lane:
 
-`marinator_delegate` starts a supervised OpenCode process in the background, captures logs, monitors progress, detects stalls (without killing), and wakes the orchestrator on completion or failure. The orchestrator reviews the result, decides accept/fix/wait/kill/block, and does not report success unless the requested user-visible outcome is verified.
+1. Chat Agent calls `create_senior_task` with the user-visible request and target repo.
+2. Hermes Kanban dispatches the task to the `senior-dev` profile.
+3. `senior-dev` builds a scoped Marinator prompt and calls `marinator_delegate` with Kanban linkage.
+4. `marinator_delegate` starts supervised OpenCode, captures logs, monitors progress, detects stalls (without killing), and wakes/resumes the worker profile on completion or failure.
+5. `senior-dev` reviews the Marinator artifacts and calls `senior_dev_task_result` with `completed` or `blocked`.
+6. Kanban terminal events notify the originating chat/thread.
+
+`marinator_delegate` remains the OpenCode supervision boundary, but the Chat Agent should not bypass the Senior Dev Kanban lane for ordinary user code tasks.
 
 ### Tool schema
 
@@ -158,8 +166,8 @@ Marinator run for the same repo. Do not supply session ids directly.
 
 ## Deferred
 
-- **Kanban-backed Marinator**: deferred for MVP. The delegation protocol remains a single linear orchestrator session.
 - **Cron-bound session continuation**: deferred. Live sessions use `notify_on_complete`; headless sessions use `hermes chat --resume`.
+- **PR/CI monitoring automation**: not configured by default; report PR/CI state only from verified local/remote evidence.
 
 ## Project-specific notes
 

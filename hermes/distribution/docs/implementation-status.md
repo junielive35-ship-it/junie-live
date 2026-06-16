@@ -20,7 +20,8 @@ Keep this file concise. Do not paste large repo documents here; link to repo doc
 
 | Area / capability | Source docs | Status | Evidence | Gaps / next action |
 | --- | --- | --- | --- | --- |
-| Marinator delegation plugin | `docs/delegation-protocol.md`, `plugins/marinator-delegation/` | implemented | Plugin installed by `hire-junie.sh`; provides `marinator_delegate` tool under `marinator` toolset | Approved code-changing delegation path; Kanban and cron continuation are separate capabilities and must have their own rows if relevant |
+| Marinator delegation plugin | `docs/delegation-protocol.md`, `plugins/marinator-delegation/` | implemented | Plugin installed by `hire-junie.sh`; provides `marinator_delegate` tool under `marinator` toolset; supports Kanban linkage for Senior Dev mode | Approved OpenCode supervision boundary; normal user code tasks should enter through the Senior Dev Kanban lane |
+| Senior Dev Kanban task helper | `plugins/senior-task/`, `profiles/senior-dev/`, `scripts/install-senior-dev-profile.sh` | implemented | `create_senior_task` creates/subscribes Kanban tasks; `senior_dev_task_result` marks completed/blocked; `hire-junie.sh` and `rehire-junie.sh` install/update the companion `senior-dev` profile | Live sustained usage should still be verified in the deployed environment; PR/CI monitoring remains separate |
 | Target-project capabilities | Target repo code/docs; profile `strategy.md`, `architecture.md`, `design-decisions.md`, `tools.md` | unknown until inspected | Seed placeholder only | Replace this row during initialization with project-specific capability rows. Do not delete `INITIALIZATION.md` while this file still contains generic placeholders or unreconciled status gaps that can be answered from the repo/profile. |
 
 ## How to use this file
