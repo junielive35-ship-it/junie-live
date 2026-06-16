@@ -50,6 +50,11 @@ paths = [
     root / 'distribution' / 'skills' / 'junie-implementation-review' / 'SKILL.md',
     root / 'distribution' / 'skills' / 'junie-autonomous-work-window' / 'SKILL.md',
     root / 'distribution' / 'plugins' / 'autonomous-work' / 'prompts.py',
+    root / 'README.md',
+    root / 'docs' / 'setup.md',
+    root / 'docs' / 'code-mutex.md',
+    root / 'docs' / 'day-to-day-routines.md',
+    root / 'docs' / 'overnight-routines.md',
 ]
 bad_phrases = [
     'delegated via `marinator_delegate`',
