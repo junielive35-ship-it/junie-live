@@ -47,7 +47,7 @@ Restore is an operator action from this repo:
 JUNIE_HERMES_ROOT=~/.hermes ./hermes/scripts/rehire-junie.sh /tmp/junie-live.tgz --profile junie-live
 ```
 
-The dump includes config, `.env`, `state.db`, sessions, skills, plugins, and Junie state. `rehire-junie.sh` restores the profile and restarts the gateway without running `gateway install`.
+The dump includes config, `.env`, `state.db`, sessions, skills, plugins, Junie state, and Hermes-root Kanban state (`kanban.db`, `kanban/`). `rehire-junie.sh` restores the profile and restarts the gateway without running `gateway install`.
 
 ## What is this?
 

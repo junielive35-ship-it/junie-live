@@ -100,6 +100,33 @@ while IFS= read -r -d '' db; do
   rm -f "$tmp"
 done < <(find "$ARCHIVE_PROFILE_DIR" -name '*.db' -type f -print0)
 
+# ── Include Hermes-root Kanban state ──
+if [[ -f "$HERMES_ROOT/kanban.db" || -d "$HERMES_ROOT/kanban" ]]; then
+  log "including Kanban state from Hermes root..."
+  KANBAN_STAGING="$ARCHIVE_PROFILE_DIR/__kanban"
+  mkdir -p "$KANBAN_STAGING"
+
+  if [[ -f "$HERMES_ROOT/kanban.db" ]]; then
+    cp "$HERMES_ROOT/kanban.db" "$KANBAN_STAGING/kanban.db"
+  fi
+
+  if [[ -d "$HERMES_ROOT/kanban" ]]; then
+    while IFS= read -r -d '' entry; do
+      cp -a "$entry" "$KANBAN_STAGING/"
+    done < <(find "$HERMES_ROOT/kanban" -mindepth 1 -maxdepth 1 -print0 2>/dev/null || true)
+  fi
+
+  while IFS= read -r -d '' db; do
+    tmp="${db}.tmpbak"
+    if command -v sqlite3 >/dev/null 2>&1 && sqlite3 "file:${db}?mode=ro" ".backup ${tmp}" 2>/dev/null && [[ -f "$tmp" ]]; then
+      mv -f "$tmp" "$db"
+    fi
+    rm -f "$tmp"
+  done < <(find "$KANBAN_STAGING" -name '*.db' -type f -print0 2>/dev/null || true)
+
+  find "$KANBAN_STAGING" \( -name '*.db-wal' -o -name '*.db-shm' -o -name '*.db-journal' -o -name '*.pid' -o -name '*.lock' \) -delete 2>/dev/null || true
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Read runtime manifest from source profile ──
