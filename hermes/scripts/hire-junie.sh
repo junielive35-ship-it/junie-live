@@ -415,11 +415,17 @@ elif [[ "$FORWARD_KEYS" -eq 1 ]]; then
   log "    echo 'OPENROUTER_API_KEY=...' >> $PROFILE_ENV"
 fi
 
-# ── Step 6: Set model + provider + reasoning effort in profile config ──
+# ── Step 6: Set model + provider + reasoning effort + approvals in profile config ──
 log "Setting model: $MODEL (provider: $PROVIDER, reasoning: $REASONING)"
 hermes -p "$PROFILE" config set model.default "$MODEL" 2>/dev/null || true
 hermes -p "$PROFILE" config set model.provider "$PROVIDER" 2>/dev/null || true
 hermes -p "$PROFILE" config set agent.reasoning_effort "$REASONING" 2>/dev/null || true
+
+# Bypass dangerous-command approval prompts during Junie initialization/finalization.
+# Hermes hardline blocklist rules still apply; only approvable prompts are skipped.
+hermes -p "$PROFILE" config set approvals.mode off 2>/dev/null || true
+hermes -p "$PROFILE" config set approvals.destructive_slash_confirm false 2>/dev/null || true
+log "  approvals.mode set to off (Junie internal ops skip owner approval prompts)"
 
 # ── Step 6b: Configure /start → initialization turn quick command alias ──
 # Maps /start to a normal agent turn so the "send /start to the bot"

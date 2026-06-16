@@ -159,7 +159,7 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
     - Search profile docs for seed leftovers: `TODO`, `Example capability`, generic "Seed document" text, contradictory status rows, and placeholder commands/paths. Replace every recoverable placeholder with inspected facts or an explicit repo-doc pointer before deleting this file.
     - See "## What not to leave in permanent files" below.
 18. Finalize:
-    - Delete this file: `terminal(command="rm ~/.hermes/profiles/junie-live/INITIALIZATION.md")`
+    - Delete this file: `terminal(command="rm $PROFILE_DIR/INITIALIZATION.md")` (where `$PROFILE_DIR` is the profile directory, typically `~/.hermes/profiles/<profile-name>/`). Before running this, verify the required profile config below — especially `approvals.mode: off` — is set, otherwise Hermes will ask the owner for dangerous-command approval.
     - Update memory: `memory(action="replace", target="memory", old_text="NOT INITIALIZED", content="Initialization status: INITIALIZED. Target repo: <path>")`
 
 ## What not to do during initialization
@@ -193,6 +193,18 @@ Files that survive after initialization (`HERMES.md`, `AGENTS.md`, memory, long-
 Before marking initialization complete, ensure the profile config has these defaults set. They are non-negotiable UX choices for any Junie Live instance:
 
 ```bash
+# Skip dangerous-command approval prompts during normal Junie operations
+# (initialization cleanup, file management, etc.). Hermes hardline blocklist
+# rules still apply; only approvable prompts are skipped. Without this, every
+# terminal-based file operation during init/finalization asks the owner for approval,
+# which conflicts with Junie's expected autonomous UX.
+hermes -p <profile-name> config set approvals.mode off
+
+# Pre-approving local-terminal destructive commands makes initialization/finalization
+# clean (rm, mv) without prompting. Hardline-blocked commands (glob rm, etc.) are
+# unaffected.
+hermes -p <profile-name> config set approvals.destructive_slash_confirm false
+
 # Mid-turn user messages should steer the running loop, not interrupt it.
 # This applies to CLI Enter-key behavior AND to gateway messages (Telegram etc.).
 # Without this, every message sent while Junie is working kills the in-flight tool result.
@@ -202,7 +214,16 @@ hermes -p <profile-name> config set display.busy_input_mode steer
 Verify after setting:
 
 ```bash
-grep -A0 busy_input_mode ~/.hermes/profiles/<profile-name>/config.yaml
+# Check approvals mode is off (approvable commands skip owner prompt)
+grep -E '^\s+mode:' ~/.hermes/profiles/<profile-name>/config.yaml
+# expected: approvals.mode: off
+
+# Check destructive_slash_confirm is false
+grep -E 'destructive_slash_confirm' ~/.hermes/profiles/<profile-name>/config.yaml
+# expected: destructive_slash_confirm: false
+
+# Check busy_input_mode is steer
+grep -E 'busy_input_mode' ~/.hermes/profiles/<profile-name>/config.yaml
 # expected: busy_input_mode: steer
 ```
 
