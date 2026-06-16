@@ -212,7 +212,7 @@ python3 -c "
 import os, tempfile
 
 # HERMES_HOME = /tmp/xxx/hermes-root (no /profiles/ in path)
-# Expected: senior-dev at $HERMES_HOME/profiles/senior-dev
+# Expected: senior-dev at HERMES_HOME/profiles/senior-dev
 fake_root = tempfile.mkdtemp(prefix='sd-resolver-')
 hermes_home = os.path.join(fake_root, 'hermes-root')
 
