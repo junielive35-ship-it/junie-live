@@ -1,8 +1,0 @@
-name: autonomous-work
-version: 0.1.0
-description: "Junie Live Autonomous Work Window tool: start bounded autonomous work windows with deterministic phase transitions."
-author: Danila Savenkov / Junie Live
-kind: standalone
-provides_tools:
-  - autonomous_work_start
-  - autonomous_work_step

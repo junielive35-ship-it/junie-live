@@ -118,17 +118,13 @@ else
   exit 1
 fi
 
-# ── Enforce Senior Dev Kanban toolset split on restored main profile ──
-# Older dumps may contain marinator in junie-live platform_toolsets. Keep the
-# plugin source/enabled state for compatibility, but remove direct Chat Agent
-# access; normal code work enters through create_senior_task and senior-dev.
+# ── Enforce Senior Dev Kanban toolset on restored main profile ──
 if [[ "$PROFILE" == "junie-live" ]]; then
-  log "enforcing main-profile toolset split..."
+  log "enforcing main-profile Senior Dev Kanban toolset..."
   for platform in cli telegram; do
-    HERMES_HOME="$HERMES_ROOT" hermes -p "$PROFILE" tools disable --platform "$platform" marinator >/dev/null 2>&1 || true
     HERMES_HOME="$HERMES_ROOT" hermes -p "$PROFILE" tools enable --platform "$platform" senior >/dev/null 2>&1 || true
   done
-  log "  marinator disabled and senior enabled for $PROFILE cli + telegram toolsets"
+  log "  senior enabled for $PROFILE cli + telegram toolsets"
 
   # Junie Live uses the shared/default Hermes dispatcher for Kanban work; do not
   # start a second embedded dispatcher/notifier from the Junie profile gateway.

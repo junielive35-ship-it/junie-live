@@ -5,13 +5,13 @@ This file is the Hermes-port equivalent of OpenClaw's workspace TOOLS.md.
 
 It lives at ~/.hermes/profiles/junie-live/docs/tools.md (deployed from the seed
 during hire) and serves as Junie's structured cheat-sheet for project paths,
-development commands, git/PR conventions, mutex configuration, deployment,
+development commands, git/PR conventions, deployment,
 analytics references, and local caveats.
 
 Hermes does not auto-load this file. Use `read_file` to consult it (or load
 specific sections into memory pointers) before relevant work. HERMES.md
 instructs the agent to consult tools.md whenever build / lint / test / run /
-deployment / branch / rollback / dashboard / mutex-escalation information is
+deployment / branch / rollback / dashboard information is
 needed.
 
 During initialization, fill in placeholders ("TODO") based on inspection of the
@@ -55,28 +55,17 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 - CI checks to watch (names of required workflows / status checks): TODO
 - Commit-message conventions, if the project enforces any: TODO
 
-## Code mutex
+## Senior Dev Kanban lane (p1 sync OpenCode path)
 
-- Protected repository / feature-area scope: TODO
-- Mutex directory: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local)
-- Holder metadata file: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/holder.json`
-- Mutex commands: `scripts/code-mutex.sh status` / `acquire` / `release [--holder ID] [--force]` / `check-stale` (in `~/.hermes/profiles/junie-live/scripts/code-mutex.sh`)
-- Administrator / owner contact for held or stale mutex decisions: TODO
-- Status-check convention (how often to poll, where to surface stuck holders): TODO
-
-## Marinator delegation
-
-- **Tool:** `marinator_delegate` (Hermes plugin, `marinator` toolset; senior-dev profile only)
-- **Plugin location:** `~/.hermes/profiles/senior-dev/plugins/marinator-delegation/` for execution; the plugin source may also be installed in `junie-live` but its `marinator` toolset is not exposed there.
-- **Run ledger:** `~/.hermes/profiles/junie-live/junie-live/state/marinator/runs/<job_id>/` (profile-local)
-- **Run artifacts:** `spec.json`, `status.json`, `events.jsonl`, `result.md`, `opencode.stdout.log`, `opencode.stderr.log`, `runner.log`, `control/`, `locks/`
-- **Worker script:** `plugins/marinator-delegation/scripts/marinator-worker.sh`
-- **Runtime modes:** `live_gateway` (Telegram, uses `notify_on_complete`) or `headless` (uses `hermes chat --resume`)
-- **Stall policy:** suspected stalls are recorded but never auto-killed; the orchestrator decides via `control/kill`
-- **Progress reports:** enabled by default (debug visibility); `enable_per_minute_reports=false` only when user explicitly asks to disable
-- **Senior Dev Kanban lane:** normal code tasks are created with `create_senior_task`, dispatched to the `senior-dev` profile, executed through `marinator_delegate`, and finalized with `senior_dev_task_result`
-- **Companion profile install:** `scripts/install-senior-dev-profile.sh --force`; `hire-junie.sh` and `rehire-junie.sh` run it for the `junie-live` pipeline
-- **Deferred:** cron-bound session continuation
+- **Chat Agent tools:** `senior_active_tasks` (inspect active Senior tasks before routing) and `create_senior_task` (create/subscribe one Senior Dev Kanban task). Both live in the `senior-task` plugin under the `senior` toolset.
+- **Senior worker tool:** `senior_run_coding_task` (Hermes plugin `senior-runner`, toolset `senior_runner`; enabled only for the `senior-dev` profile).
+- **Senior worker protocol:** `kanban_show` → `senior_run_coding_task` → read `result.md`/`status.json` → `kanban_comment` → exactly one `kanban_block`.
+- **Terminal blocked reasons:** `review-required:` for `VERDICT: pr-ready`, `needs-input:` for `VERDICT: needs-input`, `failed:` for `VERDICT: failed`. `done` / `kanban_complete` is intentionally unused in p1 until PR merge monitoring exists.
+- **Review handoff:** `blocked(review-required: ...)` means the worker is done and Junie/origin review is required; it is not a failure by default. Always read comments/artifacts before interpreting a blocked Senior task.
+- **Senior run ledger:** `~/.hermes/profiles/senior-dev/junie-live/state/senior/runs/<job_id>/` by default; tests may override with `SENIOR_RUNNER_BASE`.
+- **Run artifacts:** `prompt.md`, `spec.json`, `status.json`, `events.jsonl`, `result.md`, `opencode.stdout.log`, `opencode.stderr.log`, `runner.log`.
+- **Follow-up routing:** if a related task is `blocked`, add a comment with the user's follow-up and unblock/requeue only when the follow-up answers the `review-required` or `needs-input` ask.
+- **Companion profile install:** `scripts/install-senior-dev-profile.sh --force`; `hire-junie.sh` and `rehire-junie.sh` run it for the `junie-live` pipeline.
 
 ## Deployment / release
 
@@ -87,7 +76,7 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 
 ## Product and analytics references
 
-- Issue tracker / backlog (URL or tool name): TODO
+- Issue tracker / task board (URL or tool name): TODO
 - Analytics dashboard (URL): TODO
 - Error reporting / log aggregation (URL or tool name): TODO
 - Support / bug intake channel: TODO

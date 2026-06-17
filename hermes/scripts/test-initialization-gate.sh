@@ -4,7 +4,6 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNTIME_PATHS="$ROOT/distribution/scripts/runtime-paths.sh"
 CHECK_SCRIPT="$ROOT/distribution/scripts/initialization-check.sh"
 
 fail_count=0
@@ -13,81 +12,8 @@ pass_count=0
 pass() { pass_count=$((pass_count + 1)); }
 fail() { printf '  FAIL: %s\n' "$*" >&2; fail_count=$((fail_count + 1)); }
 
-if [[ ! -f "$RUNTIME_PATHS" ]]; then
-  printf 'ERROR: runtime-paths.sh not found at %s\n' "$RUNTIME_PATHS" >&2
-  exit 1
-fi
-
-# Run a function from runtime-paths.sh with given env vars.
-# Usage: run_with_env "HERMES_HOME=/x; HERMES_PROFILE=y" <func_name>
-run_with_env() {
-  local env_block="$1" func="$2"
-  bash -c "
-    unset HERMES_HOME HERMES_PROFILE HERMES_PROFILE_DIR
-    source '$RUNTIME_PATHS'
-    $env_block
-    $func
-  " 2>&1
-}
-
-# ---- hermes_profile_dir_default tests ----
-printf '=== runtime-paths.sh: hermes_profile_dir_default ===\n'
-
-# Test 1: Root-scoped HERMES_HOME with HERMES_PROFILE (standard layout)
-r1=$(run_with_env "HERMES_HOME=/home/user/.hermes; HERMES_PROFILE=junie-live" hermes_profile_dir_default)
-if [[ "$r1" == "/home/user/.hermes/profiles/junie-live" ]]; then
-  pass
-else
-  fail "root-scoped HERMES_HOME: got '$r1', expected '/home/user/.hermes/profiles/junie-live'"
-fi
-
-# Test 2: Profile-scoped HERMES_HOME (THE BUG — current code double-nests)
-r2=$(run_with_env "HERMES_HOME=/home/user/.hermes/profiles/junie-live; HERMES_PROFILE=junie-live" hermes_profile_dir_default)
-if [[ "$r2" == "/home/user/.hermes/profiles/junie-live" ]]; then
-  pass
-else
-  fail "profile-scoped HERMES_HOME: got '$r2', expected '/home/user/.hermes/profiles/junie-live'"
-fi
-
-# Test 3: Profile-scoped HERMES_HOME without HERMES_PROFILE
-r3=$(run_with_env "HERMES_HOME=/home/user/.hermes/profiles/junie-live" hermes_profile_dir_default)
-if [[ "$r3" == "/home/user/.hermes/profiles/junie-live" ]]; then
-  pass
-else
-  fail "profile-scoped HERMES_HOME, no HERMES_PROFILE: got '$r3', expected '/home/user/.hermes/profiles/junie-live'"
-fi
-
-# Test 4: No env vars at all (default to ~/.hermes) — HOME must be set
-r4=$(run_with_env "HOME=/home/user" hermes_profile_dir_default)
-if [[ "$r4" == "/home/user/.hermes/profiles/junie-live" ]]; then
-  pass
-else
-  fail "no env vars (defaults): got '$r4', expected '/home/user/.hermes/profiles/junie-live'"
-fi
-
-# Test 5: Root-scoped HERMES_HOME with custom profile
-r5=$(run_with_env "HERMES_HOME=/home/user/.hermes; HERMES_PROFILE=my-app" hermes_profile_dir_default)
-if [[ "$r5" == "/home/user/.hermes/profiles/my-app" ]]; then
-  pass
-else
-  fail "root-scoped HERMES_HOME, custom profile: got '$r5', expected '/home/user/.hermes/profiles/my-app'"
-fi
-
-# Test 6: Profile-scoped HERMES_HOME matching custom profile
-r6=$(run_with_env "HERMES_HOME=/home/user/.hermes/profiles/my-app; HERMES_PROFILE=my-app" hermes_profile_dir_default)
-if [[ "$r6" == "/home/user/.hermes/profiles/my-app" ]]; then
-  pass
-else
-  fail "profile-scoped HERMES_HOME, custom profile: got '$r6', expected '/home/user/.hermes/profiles/my-app'"
-fi
-
-# ---- initialization-check.sh delegates to runtime-paths.sh ----
-# The check script now sources runtime-paths.sh, so the same
-# hermes_profile_dir_default tests above cover its resolution logic.
-# Verify the delegation works end-to-end:
-printf '\n=== initialization-check.sh: sources runtime-paths.sh ===\n'
-
-grep -q 'source.*RUNTIME_PATHS' "$CHECK_SCRIPT" && pass || fail "initialization-check.sh does not source runtime-paths.sh"
+printf '=== initialization-check.sh: uses junie_runtime.paths ===\n'
+grep -q 'junie_runtime.paths profile-dir' "$CHECK_SCRIPT" && pass || fail "initialization-check.sh does not use junie_runtime.paths profile-dir"
 
 printf '\n=== SOUL.md: initialization gate does not depend on env vars ===\n'
 
@@ -158,14 +84,13 @@ else
   fail "INITIALIZATION.md required profile config must include destructive_slash_confirm false"
 fi
 
-printf '\n=== Seed/guidance files: no \044HERMES_PROFILE_DIR mutex references ===\n'
-# Guidance/seed files that instruct agents about mutex/profile operations should
+printf '\n=== Seed/guidance files: no removed runtime references ===\n'
+# Guidance/seed files should not mention removed runtime mechanisms.
 # not reference $HERMES_PROFILE_DIR (which may be unset in tool subprocesses).
 # Plugin code (e.g. state.py) where HERMES_PROFILE_DIR is an optional override
 # is exempt.
 for doc in \
   "$ROOT/distribution/memory-seed.md" \
-  "$ROOT/distribution/docs/code-mutex-protocol.md" \
   "$ROOT/distribution/docs/tools.md" \
   "$ROOT/distribution/HERMES.seed.md" \
   "$ROOT/distribution/skills/junie-coding-task-decomposition/SKILL.md"; do

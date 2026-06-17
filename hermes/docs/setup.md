@@ -38,13 +38,13 @@ hermes profile install hermes/distribution --name junie-live --alias
 
 ### 3. Install shared runtime package
 
-The `junie_runtime` package provides the code mutex and other shared primitives. Install it into the Python environment:
+The `junie_runtime` package provides shared runtime primitives. Install it into the Python environment:
 
 ```bash
 python3 -m pip install -e hermes/junie_runtime
 ```
 
-This is a shared package used by all Junie profiles in this Hermes install, not profile-local code. It must be importable for `code-mutex.sh` to work.
+This is a shared package used by all Junie profiles in this Hermes install, not profile-local code.
 
 ### 4. Configure Telegram
 
@@ -60,7 +60,7 @@ hermes -p junie-live gateway setup
 
 ### 5. Configure opencode for code-changing delegations
 
-Junie delegates normal code-changing work through `create_senior_task` to the `senior-dev` profile, which runs [opencode](https://github.com/sst/opencode) via the `marinator_delegate` Hermes plugin. OpenCode authenticates *independently* of Hermes — it does not read the profile's `.env`. You must configure it once at the system level:
+Junie delegates normal code-changing work through `create_senior_task` to the `senior-dev` profile. In the current p1 lane, `senior-dev` runs [opencode](https://github.com/sst/opencode) synchronously through the `senior_run_coding_task` tool (`senior-runner` plugin) and leaves the Kanban task blocked as `review-required`, `needs-input`, or `failed`. OpenCode authenticates *independently* of Hermes — it does not read the profile's `.env`. You must configure it once at the system level:
 
 ```bash
 # One-time: install your OpenRouter key where opencode can find it from the system home
@@ -75,11 +75,11 @@ Then verify opencode readiness with a live smoke execution:
 # Expected: output contains OPENCODE_SMOKE_OK, exit 0
 ```
 
-`opencode auth list` is useful diagnostic context but is **not** authoritative readiness. An operational OpenCode install may report `0 credentials` yet still execute code-changing work successfully. The canonical readiness check is the smoke above — a real execution that tests the full runtime path OpenCode uses for Marinator delegations.
+`opencode auth list` is useful diagnostic context but is **not** authoritative readiness. An operational OpenCode install may report `0 credentials` yet still execute code-changing work successfully. The canonical readiness check is the smoke above — a real execution that tests the full runtime path OpenCode uses for Senior Dev coding runs.
 
-**Important for cron / autonomous-window sessions:** when Hermes invokes a skill, cron job, or subagent, `$HOME` is rewritten to the profile-scoped home (`~/.hermes/profiles/junie-live/home/`), where `openrouter.key` does NOT exist. The fallback `$HOME/openrouter.key` lookup that works from an interactive shell silently breaks under cron. The `marinator-worker.sh` script handles this by resolving the system home explicitly.
+**Important for cron sessions:** when Hermes invokes a skill, cron job, or subagent, `$HOME` is rewritten to the profile-scoped home (`~/.hermes/profiles/junie-live/home/`), where `openrouter.key` does NOT exist. The fallback `$HOME/openrouter.key` lookup that works from an interactive shell silently breaks under cron. The Senior runner resolves the system-home OpenCode path explicitly; direct custom `opencode` calls still need care.
 
-If you write your own cron prompts or skills that invoke opencode directly (rather than through the Senior Dev Kanban lane), export `OPENROUTER_API_KEY` explicitly. See `docs/tools.md` ("$HOME indirection trap") and `marinator-worker.sh` for the canonical invocation pattern.
+If you write your own cron prompts or skills that invoke opencode directly (rather than through the Senior Dev Kanban lane), export `OPENROUTER_API_KEY` explicitly. See `docs/tools.md` ("$HOME indirection trap") and `senior-runner` for the canonical invocation patterns.
 
 ### 5. Set up Telegram DM allowlist
 
@@ -106,9 +106,9 @@ Junie will follow the initialization workflow, inspect the project, ask question
 
 ## Post-Setup: Optional Cron Jobs
 
-Setup and initialization do not install cron jobs by default. Autonomous-work
-windows are normally started by owner/admin request through Telegram or another
-Hermes session. Add recurring Hermes cron jobs only after explicit owner/admin
+Setup and initialization do not install cron jobs by default. Work windows are
+normally started by owner/admin request through Telegram or another Hermes
+session. Add recurring Hermes cron jobs only after explicit owner/admin
 decision, because watchdog, health-check, and scheduled overnight-start jobs
 change Junie's operational behavior.
 
@@ -117,7 +117,7 @@ change Junie's operational behavior.
 If enabled, create from a `hermes -p junie-live` session:
 ```
 Create a cron job named "junie-watchdog" that runs every 15 minutes.
-It should check: code mutex state (stale holders), stuck backlog items,
+It should check: stuck backlog items,
 recent progress. If something looks wrong, report via Telegram.
 ```
 
@@ -135,7 +135,7 @@ Report a brief summary via Telegram.
 Only enable after explicit admin decision:
 ```
 Create a cron job named "junie-overnight" at 1am, paused.
-It should run an autonomous work window selecting and completing
+It should run a bounded work window selecting and completing
 backlog items until 8am or blockers.
 ```
 
@@ -152,7 +152,6 @@ backlog items until 8am or blockers.
 │   ├── HERMES.seed.md    # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
 │   └── tools.md          # Operational cheat-sheet (commands, git conventions, deploy, escalation) — filled during init
 ├── skills/               # Installed skills
-│   ├── junie-autonomous-work-window/
 │   ├── junie-coding-task-decomposition/
 │   ├── junie-implementation-review/
 │   ├── junie-task-intake-validation/
@@ -162,14 +161,12 @@ backlog items until 8am or blockers.
 
 ~/.hermes/profiles/junie-live/junie-live/
 └── state/
-    ├── code_mutex/       # Mutex state files
     ├── backlog/          # Hermes-native backlog items (Markdown + YAML frontmatter)
     │   ├── items/        # Active items (*.md)
     │   ├── archive/      # Done/dropped items
     │   └── events.jsonl  # Backlog operation log
     ├── reflections/      # Post-task reflections
     ├── overnight/        # Overnight routine state
-    ├── autonomous_work/  # AW window directories and artifacts
     └── logs/             # Operational logs
 
 The duplicate-looking `junie-live/junie-live` is expected in the current implementation: the first segment is the Hermes profile name, and the second is Junie Live's app-state namespace inside that profile. Legacy `~/.hermes/junie-live/state/` is used only for backup/cleanup compatibility.

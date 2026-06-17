@@ -126,7 +126,7 @@ sed -i 's/FAKE_HERMES_LOG/FAKE_REHIRE_HERMES_LOG/' "$FAKE_REHIRE_HERMES_BIN"
 # ── Create sample profile ──
 mkdir -p "$PROFILE_DIR"/{sessions,skills,plugins,junie-live/state,__pycache__,cache,logs,backups}
 mkdir -p "$PROFILE_DIR"/docs
-mkdir -p "$PROFILE_DIR"/junie-live/state/backlog/items
+mkdir -p "$PROFILE_DIR"/junie-live/state/{reflections,logs}
 
 cat > "$PROFILE_DIR/config.yaml" <<'CFG'
 profile: junie-live
@@ -155,8 +155,9 @@ echo "session content" > "$PROFILE_DIR/sessions/ses_001.json"
 # Create plugins content
 echo "plugin data" > "$PROFILE_DIR/plugins/test-plugin.yaml"
 
-# Create junie-live/state content
-echo "backlog item" > "$PROFILE_DIR/junie-live/state/backlog/items/backlog-001.md"
+# Create current junie-live/state content
+echo "reflection entry" > "$PROFILE_DIR/junie-live/state/reflections/reflection-001.md"
+echo "runtime log" > "$PROFILE_DIR/junie-live/state/logs/runtime.log"
 
 # Create transient junk that should be excluded
 touch "$PROFILE_DIR/__pycache__/cache.pyc"
@@ -313,10 +314,11 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 7: archive contains junie-live/state/ ===\n'
 
-if archive_contents "$DUMP_OUTPUT" | grep -q 'junie-live/state/backlog/items/backlog-001\.md'; then
+if archive_contents "$DUMP_OUTPUT" | grep -q 'junie-live/state/reflections/reflection-001\.md' && \
+   archive_contents "$DUMP_OUTPUT" | grep -q 'junie-live/state/logs/runtime\.log'; then
   pass
 else
-  fail "archive missing junie-live/state/backlog content"
+  fail "archive missing current junie-live/state content"
 fi
 
 # ════════════════════════════════════════════════════════════════
@@ -446,7 +448,8 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 16: rehire restored state ===\n'
 
-if [[ -f "$FAKE_REHIRE_HOME/profiles/$PROFILE/junie-live/state/backlog/items/backlog-001.md" ]]; then
+if [[ -f "$FAKE_REHIRE_HOME/profiles/$PROFILE/junie-live/state/reflections/reflection-001.md" && \
+      -f "$FAKE_REHIRE_HOME/profiles/$PROFILE/junie-live/state/logs/runtime.log" ]]; then
   pass
 else
   fail "rehire did not restore junie-live/state/"

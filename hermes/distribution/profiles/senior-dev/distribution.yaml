@@ -9,6 +9,5 @@ license: "MIT"
 # so the user's model/provider/reasoning choices survive updates.
 distribution_owned:
   - SOUL.md
-  - HERMES.seed.md
   - docs
   - distribution.yaml

@@ -31,11 +31,26 @@ Use before accepting delegated code work or opening/updating a PR. Coding work f
    - update/hot-swap: deployed profile copies are refreshed if the task claims live behavior is fixed now;
    - verification hooks: focused tests or `verify.sh` cover the lifecycle surface;
    - docs/status sync: repo, distribution, and profile docs reflect the new behavior;
-   - git handoff: branch state, commits, untracked artifacts, PR/CI visibility, and mutex state are checked and reported.
+   - git handoff: branch state, commits, untracked artifacts, PR/CI visibility, and active Kanban task state are checked and reported.
    If any required lifecycle surface is broken or unverified, the status is not `done`.
    - Senior-developer handoff rule: do not hand off a PR or report merge-ready work if the owned area is non-functional, stale, or misleading in a way a senior developer should have caught. Junie Live is not a task-only coding agent. Stop with a broken/partial project only when the user explicitly requested that state, and label it `partial` or `blocked`.
 9. If the work needs fixes, create a follow-up Senior Dev Kanban task with the required fix context; do not rubber-stamp worker output.
 10. Record risks, follow-ups, and evidence.
+
+## Senior Dev Kanban review-handoff convention
+
+When reviewing Senior Dev work, do **not** treat Kanban `blocked` as failure by default. In the current p1 workflow, `blocked` is also the durable **awaiting Junie review / owner input** state. The worker leaves the task active/blocked and includes the real substatus in the block reason and comments/artifacts:
+
+- `review-required:` — OpenCode returned `VERDICT: pr-ready`; Junie must review evidence/diff/tests before acceptance or follow-up.
+- `needs-input:` — the worker needs user/owner information.
+- `failed:` — infrastructure or executor failure.
+
+Required sequence:
+
+1. Read the latest task comments and run artifacts before interpreting status.
+2. If task status is `blocked` with `review-required` / `pr-ready` evidence, review it as a completed worker handoff, not as an error.
+3. Keep the task visible until Junie accepts, comments with follow-up/fix context and unblocks/requeues, or explicitly closes/hands off the work.
+4. Only call it a process problem when the comments/artifacts are missing, contradictory, or do not explain why the task is blocked.
 
 ## Outcome acceptance gate
 

@@ -85,11 +85,6 @@ def test_state_root_with_profile_dir() -> None:
     assert result == "/home/user/.hermes/profiles/junie-live/junie-live/state"
 
 
-def test_mutex_dir() -> None:
-    result = paths.mutex_dir(home="/root/.hermes", profile="test-p")
-    assert result == "/root/.hermes/profiles/test-p/junie-live/state/code_mutex"
-
-
 def test_profile_dir_with_hermes_profile_dir() -> None:
     saved_hh = os.environ.pop("HERMES_HOME", None)
     saved_pd = os.environ.get("HERMES_PROFILE_DIR")

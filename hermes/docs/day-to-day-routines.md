@@ -7,8 +7,8 @@ Telegram is the primary incoming event source. Junie communicates with the team 
 - Junie acts like a senior developer/product owner, not a passive executor.
 - Meaningful work is validated against memory (strategic context) and relevant docs.
 - The **Marinator** is Junie Live's task-solving loop: validate/decompose a task, delegate to an executor, check the result, request fixes when needed, verify, accept/report, and reflect. In the current Hermes baseline this is a protocol across memory, skills, docs, and agent behavior, not a separate architectural module.
-- Only one code-changing task may run at a time (code mutex).
-- The orchestrator never writes code directly. Normal code-changing work is delegated via `create_senior_task` to the `senior-dev` Kanban lane; `delegate_task` is for non-code subtasks (research, analysis, reading).
+- Normal Chat Agent code-changing work uses the Senior Dev Kanban lane as the active p1 concurrency boundary. The legacy/profile-local code mutex still exists for protected routines outside that lane.
+- The orchestrator never writes code directly. Normal code-changing work is delegated via `senior_active_tasks` / `create_senior_task` to the `senior-dev` Kanban lane; `delegate_task` is for non-code subtasks (research, analysis, reading).
 - Markdown-only doc edits are the exception.
 - Memory stays compact — strategic compass only. Details in docs.
 - Schedules are project-dependent.
@@ -29,21 +29,23 @@ Flow:
 7. Confirm understanding for non-trivial tasks.
 8. Queue, execute, defer, or ask for approval.
 
-For autonomous work window requests ("work autonomously for 9h"), the autonomous-work-window skill activates automatically.
+For proactive work-window requests ("work autonomously for 9h"), use initialized context to select work and route code-changing implementation through the Senior Dev Kanban lane.
 
 ### 2. Code task execution
 
-Triggered when an accepted code-changing task is ready and mutex is free. This routine is the current code-changing path through the Marinator loop.
+Triggered when an accepted code-changing task is ready. This routine is the current code-changing path through the Marinator loop. In p1, Kanban is the active concurrency and handoff boundary; do not acquire the legacy code mutex for ordinary `create_senior_task` routing.
 
 Flow:
-1. Acquire code mutex via `hermes/distribution/scripts/code-mutex.sh acquire`.
+1. Inspect repo status and call `senior_active_tasks` for the target repo/origin (include comments when deciding follow-up routing).
 2. Decompose task (coding-task-decomposition skill).
-3. Delegate via `create_senior_task` with scoped context; for non-code subtasks (research, analysis) use `delegate_task` instead.
-4. Run subagents sequentially under the mutex.
-5. Review results (implementation-review skill).
-6. Request fixes from subagents until correct.
-7. Commit verified work / open PR.
-8. Release mutex via `hermes/distribution/scripts/code-mutex.sh release`.
+3. If no related active task exists, delegate via `create_senior_task` with scoped context; for non-code subtasks (research, analysis) use `delegate_task` instead.
+4. If a related task is `ready`/`running`, attach context as a comment and tell the user it was attached. Do not live-interrupt the running Senior in p1.
+5. If a related task is `blocked`, read the reason/comments. For `review-required`, Junie reviews artifacts/diff/tests; for answered follow-ups or fix requests, add a comment and unblock/requeue instead of creating a duplicate.
+6. Senior Dev runs `senior_run_coding_task` synchronously, comments artifacts/summary, and blocks as `review-required`, `needs-input`, or `failed`.
+7. Review results (implementation-review skill). Request fixes by commenting/requeueing the same active task when appropriate.
+8. Commit verified work / open PR only after Junie acceptance.
+
+Use the profile-local mutex only for exceptional legacy/manual protected routines outside this Senior Kanban path.
 
 ### 3. Task completion → reflection
 
@@ -67,7 +69,8 @@ owner/admin decision, using Hermes cron rather than shell crontab entries.
 ### 5. Watchdog (optional, every 15 minutes)
 
 Checks:
-- Code mutex state (stale holders)
+- Active Senior Dev Kanban tasks stuck in `ready`/`running`/`blocked` without clear comments or progress
+- Code mutex state for legacy/manual protected routines (stale holders)
 - Stuck backlog items
 - Missing progress from active work
 - Broken routine state
