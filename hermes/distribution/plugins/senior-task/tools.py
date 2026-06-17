@@ -164,6 +164,7 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
             task_id = existing["id"]
             status = existing["status"]
             sub_target = None
+            subscription_error = None
             if has_origin:
                 try:
                     kb.add_notify_sub(
@@ -175,16 +176,19 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
                         user_id=origin.get("user_id") or None,
                     )
                     sub_target = f"{origin['platform']}:{origin['chat_id']}"
-                except Exception:
-                    pass
-            return json.dumps({
+                except Exception as e:
+                    subscription_error = str(e)
+            response = {
                 "task_id": task_id,
                 "status": status,
                 "subscription": sub_target,
                 "duplicate": True,
                 "idempotency": "existing",
                 "message": f"Returning existing task {task_id} with status '{status}'",
-            })
+            }
+            if subscription_error:
+                response["subscription_error"] = subscription_error
+            return json.dumps(response)
 
     task_id = kb.create_task(
         conn,
@@ -199,6 +203,7 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
 
     subscribed = False
     subscription_info = {}
+    subscription_error = None
     if has_origin:
         try:
             kb.add_notify_sub(
@@ -216,16 +221,19 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
                 "thread_id": origin.get("thread_id") or None,
             }
         except Exception as e:
-            subscription_info = {"error": str(e)}
+            subscription_error = str(e)
 
-    return json.dumps({
+    response = {
         "task_id": task_id,
         "status": "ready",
         "subscription": subscription_info if subscribed else None,
         "duplicate": False,
         "idempotency": "created" if idempotency_key else "none",
         "message": f"Created Senior Dev task {task_id}",
-    })
+    }
+    if subscription_error:
+        response["subscription_error"] = subscription_error
+    return json.dumps(response)
 
 
 # ── senior_dev_task_result: update Kanban from Marinator artifacts ──

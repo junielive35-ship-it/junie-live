@@ -186,7 +186,42 @@ print("OK: task + subscription created correctly")
 ' && pass || fail "Full create + subscription test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 8: Idempotency returns existing task ===\n'
+printf '=== Test 8: Subscription failure is surfaced without failing task creation ===\n'
+TEST_REPO="$ROOT" run_with_hermes '
+import json, os, tempfile
+from pathlib import Path
+
+os.environ["HERMES_KANBAN_DB"] = str(Path(tempfile.mkdtemp(prefix="st-")) / "kanban.db")
+os.environ["HERMES_SESSION_PLATFORM"] = "telegram"
+os.environ["HERMES_SESSION_CHAT_ID"] = "400847234"
+os.environ["HERMES_SESSION_THREAD_ID"] = ""
+os.environ["HERMES_SESSION_USER_ID"] = "user_test"
+
+from hermes_cli import kanban_db as kb
+kb.init_db(Path(os.environ["HERMES_KANBAN_DB"]))
+
+def fail_add_notify_sub(*args, **kwargs):
+    raise RuntimeError("subscription table unavailable")
+
+kb.add_notify_sub = fail_add_notify_sub
+
+repo = os.environ.get("TEST_REPO", os.getcwd())
+result = json.loads(handle_create_senior_task({
+    "title": "Test senior task subscription failure",
+    "request": "Implement a test feature",
+    "repo": repo,
+}))
+
+assert result["task_id"].startswith("t_"), result
+assert result["status"] == "ready", result
+assert result["duplicate"] == False, result
+assert result["subscription"] is None, result
+assert result["subscription_error"] == "subscription table unavailable", result
+print("OK: subscription failure is visible and task is still created")
+' && pass || fail "Subscription failure surfacing test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 9: Idempotency returns existing task ===\n'
 TEST_REPO="$ROOT" run_with_hermes '
 import json, os, sqlite3, tempfile
 from pathlib import Path
@@ -233,7 +268,7 @@ print("OK: idempotency returns existing task")
 ' && pass || fail "Idempotency test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 9: check_requirements passes with Hermes CLI ===\n'
+printf '=== Test 10: check_requirements passes with Hermes CLI ===\n'
 load_plugin '
 import shutil
 expected = shutil.which("hermes") is not None
@@ -242,7 +277,7 @@ print("OK: check_requirements returned %s" % expected)
 ' && pass || fail "check_requirements test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 10: senior_active_tasks schema + metadata parsing ===\n'
+printf '=== Test 11: senior_active_tasks schema + metadata parsing ===\n'
 load_plugin '
 import json
 props = SENIOR_ACTIVE_TASKS_SCHEMA["parameters"]["properties"]
@@ -264,7 +299,7 @@ print("OK: senior_active_tasks schema + metadata parse")
 ' && pass || fail "senior_active_tasks schema/parse test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 11: senior_active_tasks finds active task, filters by repo/origin ===\n'
+printf '=== Test 12: senior_active_tasks finds active task, filters by repo/origin ===\n'
 TEST_REPO="$ROOT" run_with_hermes '
 import json, os, tempfile
 from pathlib import Path

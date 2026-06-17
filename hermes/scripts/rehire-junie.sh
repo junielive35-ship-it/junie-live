@@ -129,6 +129,11 @@ if [[ "$PROFILE" == "junie-live" ]]; then
     HERMES_HOME="$HERMES_ROOT" hermes -p "$PROFILE" tools enable --platform "$platform" senior >/dev/null 2>&1 || true
   done
   log "  marinator disabled and senior enabled for $PROFILE cli + telegram toolsets"
+
+  # Junie Live uses the shared/default Hermes dispatcher for Kanban work; do not
+  # start a second embedded dispatcher/notifier from the Junie profile gateway.
+  HERMES_HOME="$HERMES_ROOT" hermes -p "$PROFILE" config set kanban.dispatch_in_gateway false >/dev/null 2>&1 || true
+  log "  kanban.dispatch_in_gateway set to false (shared/default dispatcher owns Kanban dispatch)"
 fi
 
 # ── Restore Kanban state from embedded __kanban ──
