@@ -5,4 +5,5 @@ author: Danila Savenkov / Junie Live
 kind: standalone
 provides_tools:
   - create_senior_task
+  - senior_active_tasks
   - senior_dev_task_result

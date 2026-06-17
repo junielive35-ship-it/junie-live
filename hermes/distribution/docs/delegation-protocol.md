@@ -7,7 +7,8 @@ Use this file to guide OpenCode worker delegation for the assigned project. Nati
 - The Chat Agent owns strategy, intake, routing, user communication, and product/backlog coherence.
 - The Chat Agent must never do coding work itself.
 - Normal user-visible code work is routed through `create_senior_task`, which creates one Hermes Kanban task assigned to `senior-dev` and subscribes the originating chat/thread for terminal events.
-- The `senior-dev` Hermes profile owns implementation execution and engineering acceptance for its assigned task. It uses `marinator_delegate` to start a supervised OpenCode worker run, then calls `senior_dev_task_result` to mark the Kanban task completed or blocked.
+- Before creating a Senior task, the Chat Agent calls `senior_active_tasks` to check for an existing active Senior task for the same origin/repo, and uses judgment (not fuzzy matching) to attach a follow-up instead of duplicating. See "Active-task lookup and follow-up routing" below.
+- In the current p1 Senior path, the `senior-dev` profile is a thin synchronous adapter: it runs one coding task with the synchronous `senior_run_coding_task` tool and then performs exactly one terminal Kanban action (`kanban_block` with `review-required:`, `needs-input:`, or `failed:`). The asynchronous `marinator_delegate` + `senior_dev_task_result` shape is not the p1 path.
 - Native Hermes subagents (`delegate_task`) are forbidden as code-changing implementation workers. They may be used only for non-code subtasks such as research, analysis, reading, or planning.
 - The Chat Agent does not expose `marinator_delegate` in normal CLI/Telegram toolsets. For normal code tasks, route through the Senior Dev Kanban lane. Documentation-only Markdown edits remain a direct-edit exception.
 - Documentation-only Markdown edits are an explicit exception: the orchestrator may directly edit Markdown docs/guidance when no source code, scripts, tests, config, generated files, or external systems are changed.
@@ -100,18 +101,50 @@ Outcome status to report (`done`, `partial`, or `blocked`) and any gaps:
 Risks/questions to report:
 ```
 
-## Coding executor: Senior Dev Kanban lane + marinator_delegate
+## Active-task lookup and follow-up routing (p1)
 
-Normal code-changing work is executed through the Senior Dev Kanban lane:
+Before creating a Senior Dev task, the Chat Agent must inspect active Senior
+tasks for the current origin/repo so a repeat or follow-up code request does
+not create a duplicate task:
 
-1. Chat Agent calls `create_senior_task` with the user-visible request and target repo.
+1. Call `senior_active_tasks` (optionally with `repo` and
+   `only_current_origin=true`, and `include_comments=true` to read prior block
+   reasons). It returns active tasks (`ready`/`running`/`blocked`/`scheduled`)
+   with `task_id`, `status`, `repo`, `origin`, and PR URLs.
+2. Decide, using judgment (not fuzzy string matching), whether the new request
+   relates to an existing active task:
+   - **No related active task** → call `create_senior_task` to create a new task.
+   - **Related `ready` / `running`** → add a `kanban_comment` to that task and
+     tell the user the request was attached. Do not live-interrupt a running
+     Senior in p1.
+   - **Related `blocked`** → add a `kanban_comment`; if the user has answered
+     the block's `needs-input` / `review-required` ask, `kanban_unblock` the
+     task so it requeues for the Senior lane.
+   - **Related `done` / `archived`** → create a new task (or a child task) based
+     on judgment; these are not returned by `senior_active_tasks`.
+3. The duplicate decision is semantic agent judgment from Kanban state, not a
+   script-level fuzzy match.
+
+## Coding executor: Senior Dev Kanban lane
+
+Normal code-changing work is executed through the Senior Dev Kanban lane. The
+current p1 Senior path is synchronous:
+
+1. Chat Agent calls `create_senior_task` with the user-visible request and target repo (after the active-task lookup above).
 2. Hermes Kanban dispatches the task to the `senior-dev` profile.
-3. `senior-dev` builds a scoped Marinator prompt and calls `marinator_delegate` with Kanban linkage.
-4. `marinator_delegate` starts supervised OpenCode, captures logs, monitors progress, detects stalls (without killing), and wakes/resumes the worker profile on completion or failure.
-5. `senior-dev` reviews the Marinator artifacts and calls `senior_dev_task_result` with `completed` or `blocked`.
-6. Kanban terminal events notify the originating chat/thread.
+3. `senior-dev` calls `senior_run_coding_task`, which runs OpenCode synchronously in the foreground and returns Marinator-style artifact paths (`run_dir`, `status_path`, `result_path`), an `exit_code`, and a `verdict`.
+4. `senior-dev` reads `result.md` / `status.json`, adds one `kanban_comment` with the summary, artifact paths, and PR URL, then performs exactly one terminal Kanban action: `kanban_block` with `review-required:` (PR ready), `needs-input:` (needs user input), or `failed:` (infrastructure failure). `done` is not used until PR-merge monitoring exists.
+5. Kanban terminal/blocked events notify the originating chat/thread.
 
-`marinator_delegate` remains the OpenCode supervision boundary, but the Chat Agent should not bypass the Senior Dev Kanban lane for ordinary user code tasks.
+`senior_run_coding_task` is the synchronous OpenCode execution boundary for the
+p1 Senior lane; the Chat Agent should not bypass the Senior Dev Kanban lane for
+ordinary user code tasks.
+
+### Underlying supervised runtime (marinator_delegate)
+
+The asynchronous `marinator_delegate` supervised-OpenCode runtime documented
+below remains the project's general delegation runtime and the basis for future
+async Senior continuation. It is **not** the p1 Senior path described above.
 
 ### Tool schema
 
