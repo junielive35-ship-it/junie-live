@@ -166,6 +166,8 @@ touch "$PROFILE_DIR/cache/tmp.dat"
 touch "$PROFILE_DIR/backups/old-backup.tgz"
 touch "$PROFILE_DIR/state.db-wal"
 touch "$PROFILE_DIR/state.db-shm"
+mkdir -p "$PROFILE_DIR/home/.local/state/opencode/locks/session.lock"
+echo "nested lock content" > "$PROFILE_DIR/home/.local/state/opencode/locks/session.lock/held"
 
 # Add a pid file
 echo "1234" > "$PROFILE_DIR/gateway.pid"
@@ -344,6 +346,15 @@ printf '=== Test 10: archive excludes SQLite WAL/SHM sidecars ===\n'
 
 if archive_contents "$DUMP_OUTPUT" | grep -qE '\.db-wal$|\.db-shm$'; then
   fail "archive should exclude .db-wal/.db-shm"
+else
+  pass
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 10b: archive excludes non-empty .lock directories ===\n'
+
+if archive_contents "$DUMP_OUTPUT" | grep -q '\.lock/'; then
+  fail "archive should exclude non-empty .lock directories"
 else
   pass
 fi
