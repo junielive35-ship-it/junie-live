@@ -88,7 +88,8 @@ ARCHIVE_PROFILE_DIR="$NATIVE_EXTRACT/$PROFILE"
 # ── Post-export cleanup (exclude transient junk, safe SQLite backup) ──
 log "post-export cleanup..."
 rm -rf "$ARCHIVE_PROFILE_DIR"/{__pycache__,logs,cache,backups}
-find "$ARCHIVE_PROFILE_DIR" \( -name '*.pyc' -o -name '*.pyo' -o -name '*.pid' -o -name '*.lock' \) -delete
+find "$ARCHIVE_PROFILE_DIR" \( -name '*.pyc' -o -name '*.pyo' -o -name '*.pid' \) -delete
+find "$ARCHIVE_PROFILE_DIR" -name '*.lock' -exec rm -rf {} +
 find "$ARCHIVE_PROFILE_DIR" \( -name '*.db-wal' -o -name '*.db-shm' -o -name '*.db-journal' \) -delete
 
 # Safe SQLite backup
@@ -124,7 +125,8 @@ if [[ -f "$HERMES_ROOT/kanban.db" || -d "$HERMES_ROOT/kanban" ]]; then
     rm -f "$tmp"
   done < <(find "$KANBAN_STAGING" -name '*.db' -type f -print0 2>/dev/null || true)
 
-  find "$KANBAN_STAGING" \( -name '*.db-wal' -o -name '*.db-shm' -o -name '*.db-journal' -o -name '*.pid' -o -name '*.lock' \) -delete 2>/dev/null || true
+  find "$KANBAN_STAGING" \( -name '*.db-wal' -o -name '*.db-shm' -o -name '*.db-journal' -o -name '*.pid' \) -delete 2>/dev/null || true
+  find "$KANBAN_STAGING" -name '*.lock' -exec rm -rf {} + 2>/dev/null || true
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
