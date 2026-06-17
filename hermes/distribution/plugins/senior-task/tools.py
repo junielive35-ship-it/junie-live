@@ -8,6 +8,7 @@ timed_out), and handles idempotency.
 
 import json
 import os
+from pathlib import Path
 from typing import Any, Optional
 
 CREATE_SENIOR_TASK_SCHEMA = {
@@ -88,6 +89,36 @@ def _resolve_origin() -> dict:
     }
 
 
+def _resolve_notifier_profile(plugin_ctx: Any = None) -> Optional[str]:
+    """Resolve the active Hermes profile for Kanban notification ownership."""
+    for attr in ("_kanban_notifier_profile", "kanban_notifier_profile", "profile", "profile_name"):
+        value = getattr(plugin_ctx, attr, None) if plugin_ctx is not None else None
+        if value:
+            return str(value)
+
+    active_profile = getattr(plugin_ctx, "_active_profile_name", None) if plugin_ctx is not None else None
+    if callable(active_profile):
+        try:
+            value = active_profile()
+            if value:
+                return str(value)
+        except Exception:
+            pass
+
+    env_profile = os.environ.get("HERMES_PROFILE")
+    if env_profile:
+        return env_profile
+
+    hermes_home = os.environ.get("HERMES_HOME")
+    if hermes_home:
+        path = Path(hermes_home)
+        parts = path.parts
+        if len(parts) >= 3 and parts[-3] == ".hermes" and parts[-2] == "profiles" and parts[-1]:
+            return parts[-1]
+
+    return None
+
+
 def _build_task_body(request: str, repo: str, origin: dict, backlog_id: str = "") -> str:
     """Build Kanban task body with metadata embedded as trailing JSON section."""
     metadata = {
@@ -143,6 +174,7 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
 
     origin = _resolve_origin()
     has_origin = bool(origin.get("platform") and origin.get("chat_id"))
+    notifier_profile = _resolve_notifier_profile(plugin_ctx)
 
     body = _build_task_body(request, repo, origin, backlog_id)
 
@@ -174,6 +206,7 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
                         chat_id=origin["chat_id"],
                         thread_id=origin.get("thread_id") or None,
                         user_id=origin.get("user_id") or None,
+                        notifier_profile=notifier_profile,
                     )
                     sub_target = f"{origin['platform']}:{origin['chat_id']}"
                 except Exception as e:
@@ -213,6 +246,7 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
                 chat_id=origin["chat_id"],
                 thread_id=origin.get("thread_id") or None,
                 user_id=origin.get("user_id") or None,
+                notifier_profile=notifier_profile,
             )
             subscribed = True
             subscription_info = {
