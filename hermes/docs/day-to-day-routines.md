@@ -7,7 +7,7 @@ Telegram is the primary incoming event source. Junie communicates with the team 
 - Junie acts like a senior developer/product owner, not a passive executor.
 - Meaningful work is validated against memory (strategic context) and relevant docs.
 - The **Marinator** is Junie Live's task-solving loop: validate/decompose a task, delegate to an executor, check the result, request fixes when needed, verify, accept/report, and reflect. In the current Hermes baseline this is a protocol across memory, skills, docs, and agent behavior, not a separate architectural module.
-- Normal Chat Agent code-changing work uses the Senior Dev Kanban lane as the active p1 concurrency boundary. The legacy/profile-local code mutex still exists for protected routines outside that lane.
+- Normal Chat Agent code-changing work uses the Senior Dev Kanban lane as the active p1 concurrency boundary. No separate code-mutex path is active by default in the current Hermes implementation.
 - The orchestrator never writes code directly. Normal code-changing work is delegated via `senior_active_tasks` / `create_senior_task` to the `senior-dev` Kanban lane; `delegate_task` is for non-code subtasks (research, analysis, reading).
 - Markdown-only doc edits are the exception.
 - Memory stays compact — strategic compass only. Details in docs.
@@ -33,7 +33,7 @@ For proactive work-window requests ("work autonomously for 9h"), use initialized
 
 ### 2. Code task execution
 
-Triggered when an accepted code-changing task is ready. This routine is the current code-changing path through the Marinator loop. In p1, Kanban is the active concurrency and handoff boundary; do not acquire the legacy code mutex for ordinary `create_senior_task` routing.
+Triggered when an accepted code-changing task is ready. This routine is the current code-changing path through the Marinator loop. In p1, Kanban is the active concurrency and handoff boundary; ordinary `create_senior_task` routing must not acquire or depend on a separate mutex.
 
 Flow:
 1. Inspect repo status and call `senior_active_tasks` for the target repo/origin (include comments when deciding follow-up routing).
@@ -45,7 +45,7 @@ Flow:
 7. Review results (implementation-review skill). Request fixes by commenting/requeueing the same active task when appropriate.
 8. Commit verified work / open PR only after Junie acceptance.
 
-Use the profile-local mutex only for exceptional legacy/manual protected routines outside this Senior Kanban path.
+If a future exceptional/manual protected path outside Senior Kanban is introduced, it needs an explicit design decision, tests, and docs before use.
 
 ### 3. Task completion → reflection
 
