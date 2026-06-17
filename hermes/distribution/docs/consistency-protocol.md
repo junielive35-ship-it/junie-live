@@ -7,7 +7,7 @@ Use this file to keep project strategy, docs, memory, skills, and workflow rules
 - Recent team messages or decisions.
 - Recent commits and PRs.
 - Changed Markdown files.
-- Task/backlog/decision state.
+- Kanban task and decision state.
 - Current memory and relevant docs.
 
 ## Source boundaries
@@ -42,7 +42,7 @@ Before deleting `INITIALIZATION.md` or telling the owner initialization is compl
 1. Search long-lived profile docs for seed leftovers and placeholders: `TODO`, `Example capability`, generic "Seed document" text, placeholder commands/paths, and status rows not tied to the target project.
 2. For each hit, either replace it with inspected project facts, point to the authoritative repo doc/section, or label it as a genuinely external unknown with why it is non-blocking.
 3. Compare profile `strategy.md`, `architecture.md`, `design-decisions.md`, `implementation-status.md`, `tools.md`, memory, target repo `HERMES.md`, and target repo docs/code for process-affecting contradictions. Treat `HERMES.md` as mandatory even if git-ignored or absent from normal `git status` output.
-4. Do not create a backlog/autonomous-work item to reconcile these core docs after completion. If reconciliation is still needed, initialization is still in progress.
+4. Do not defer reconciliation of these core docs to a later task. If reconciliation is still needed, initialization is still in progress.
 5. Keep the owner aware in every response while the gate remains open.
 
 ## Change candidate template

@@ -4,7 +4,7 @@
 
 Junie Live on Hermes uses native Hermes features for orchestration, persistence, communication, and scheduling. The architecture eliminates the need for shell-script orchestration layers and OpenClaw workspace conventions.
 
-Junie Live's named task-solving loop is the **Marinator**: validate/decompose a task, delegate to the executor, check results, request fixes, verify, accept/report, and reflect. In the current Hermes baseline, user-visible code tasks are routed from the Chat Agent into Hermes Kanban as one Senior Dev task. The `senior-dev` profile is the coding executor: it uses Marinator/OpenCode for implementation, then translates the worker result back into Kanban completion or blocking.
+Junie Live's named task-solving loop is the **Marinator**: validate/decompose a task, delegate to the executor, check results, request fixes, verify, accept/report, and reflect. In the current Hermes p1 implementation, user-visible code tasks are routed from the Chat Agent into Hermes Kanban as one Senior Dev task. The `senior-dev` profile is a thin synchronous adapter: it runs OpenCode through `senior_run_coding_task`, writes Marinator-style artifacts, comments the result, then leaves the Kanban task `blocked` with a substatus (`review-required`, `needs-input`, or `failed`) for Junie/origin review. `done` is intentionally unused until PR merge monitoring exists.
 
 ## Component mapping
 
@@ -107,18 +107,18 @@ OpenClaw uses protocol docs (`delegation-protocol.md`, `review-protocol.md`) loa
 - Patchable in-session when issues are found
 - Managed by the curator for lifecycle
 
-### 5. Senior Dev Kanban lane backed by Marinator
+### 5. Senior Dev Kanban lane with synchronous OpenCode p1 runner
 
 Code-changing work now has a Hermes-native active-work lane instead of staying inside the Chat Agent session:
-- `senior-task` plugin exposes `create_senior_task` for the Chat Agent and `senior_dev_task_result` for the worker profile.
+- `senior-task` plugin exposes `create_senior_task` and `senior_active_tasks` for the Chat Agent. `senior_dev_task_result` remains as a legacy async/Marinator reporting helper, but it is not the p1 Senior worker path.
+- Before creating a task, the Chat Agent checks active Senior tasks for the same origin/repo and uses semantic judgment to attach follow-ups instead of duplicating.
 - `create_senior_task` creates one Hermes Kanban task per user-visible code item and subscribes the originating chat/thread for terminal updates.
 - `senior-dev` is a Hermes profile installed from `distribution/profiles/senior-dev/`; it is spawned by the Kanban dispatcher for tasks assigned to `senior-dev`.
-- The `senior-dev` profile reuses `marinator_delegate` to run supervised OpenCode, with durable run dirs, logs, status, stall detection, and wake/resume behavior.
-- `marinator_delegate` accepts optional Kanban linkage so the worker run can report evidence back to the originating Kanban task.
-- `senior_dev_task_result` marks the Kanban task `done` or `blocked`, records summary/PR URLs, and emits the terminal event used by Hermes gateway notifications.
-- `hire-junie.sh` and `rehire-junie.sh` install/update the companion `senior-dev` profile so fresh installs and disaster recovery do not leave the pipeline half-working.
-
-Cron-bound session continuation remains deferred; live and headless Marinator wake/resume paths are unchanged.
+- In p1, `senior-dev` calls `senior_run_coding_task` from the `senior-runner` plugin. That tool runs one foreground OpenCode execution and returns artifact paths (`run_dir`, `status_path`, `result_path`) plus a verdict.
+- The runner writes Marinator-style artifacts (`spec.json`, `status.json`, `events.jsonl`, `result.md`, stdout/stderr logs, `runner.log`) under the Senior run root. It does not mutate Kanban.
+- The `senior-dev` profile reads the artifacts, adds a concise `kanban_comment`, and performs exactly one terminal `kanban_block`: `review-required:` for `pr-ready`, `needs-input:` for user input, or `failed:` for infrastructure/executor failure.
+- `done` / `kanban_complete` is intentionally unused in p1 because PR merge monitoring is not implemented. A `blocked(review-required: ...)` task is an awaiting-review handoff, not a failure by default.
+- `hire-junie.sh` and `rehire-junie.sh` install/update the companion `senior-dev` profile and required plugins/toolsets so fresh installs and disaster recovery do not leave the pipeline half-working.
 
 ### 6. Native cron instead of system crontab
 
@@ -129,13 +129,14 @@ OpenClaw generates crontab entries and OpenClaw cron definitions. Hermes cron:
 - Script + agent hybrid mode
 - No system crontab dependency
 
-### 7. Simplified code mutex
+### 7. Kanban-first code-work concurrency; mutex retained for legacy/manual paths
 
-OpenClaw uses an atomic `mkdir` lock directory. The Hermes version uses the same approach:
+For the current p1 Senior Dev lane, Hermes Kanban is the active concurrency boundary for normal Chat Agent code work. The Chat Agent routes code requests to `create_senior_task`; the Senior lane serializes execution and keeps active work visible as `ready`/`running`/`blocked`.
+
+The lightweight code mutex still exists for legacy/manual protected routines and future scenarios where a process might mutate the repo outside the Senior Kanban lane. It keeps the same atomic `mkdir` primitive as OpenClaw:
 - Atomic `mkdir` as the lock operation (succeeds for exactly one caller)
 - `holder.json` inside the directory for human-readable metadata
-- Same conceptual model, same implementation primitive
-- Only the default path differs: `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` instead of `.openclaw/state/code_mutex/`
+Docs and skills should route ordinary p1 code work through `create_senior_task`; Kanban is the source of truth for active code-changing work.
 
 ### 8. Minimal target-repo footprint
 
@@ -148,8 +149,8 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 3. **Memory check** → strategic context available in prompt
 4. **Task validation** → intake skill validates against strategy
 5. **Senior Dev dispatch** → create a Kanban task for code work and subscribe the origin chat/thread
-6. **Marinator execution** → `senior-dev` runs supervised OpenCode via `marinator_delegate`
-7. **Kanban result** → `senior_dev_task_result` marks the task done or blocked with evidence
+6. **Senior execution** → `senior-dev` runs synchronous OpenCode via `senior_run_coding_task` and writes Marinator-style artifacts
+7. **Kanban result** → `senior-dev` comments with artifacts/summary, then blocks as `review-required`, `needs-input`, or `failed` for origin notification and Junie review
 8. **Reflection/report** → lessons saved to memory/skills/docs; terminal task events notify Telegram
 
 ## State management
@@ -159,8 +160,7 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 | Strategic context | Hermes memory stores | memory tool |
 | Session history | `~/.hermes/profiles/junie-live/state.db` | Hermes sessions |
 | Detailed docs | Target repo `docs/` or profile `docs/` | File read/write |
-| Code mutex | `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` | `code-mutex.sh` |
-| Marinator runs | `~/.hermes/profiles/junie-live/junie-live/state/marinator/runs/` | `marinator_delegate` plugin |
+| Senior p1 runs | `~/.hermes/profiles/senior-dev/junie-live/state/senior/runs/` by default, overridable for tests | `senior-runner` plugin |
 | Active Senior Dev tasks | Hermes Kanban DB/tasks assigned to `senior-dev` | `senior-task` plugin + Kanban dispatcher |
 | Backlog items | `~/.hermes/profiles/junie-live/junie-live/state/backlog/` | Scripts/cron |
 | Operational logs | `~/.hermes/profiles/junie-live/junie-live/state/logs/` | Scripts/cron |

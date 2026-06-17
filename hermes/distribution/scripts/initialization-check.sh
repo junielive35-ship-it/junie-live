@@ -5,17 +5,15 @@ set -euo pipefail
 #
 # Fails if:
 #   1. INITIALIZATION.md is missing (not in initialization mode)
-#   2. docs/tools.md has obvious required TODOs for project path, mutex
-#      scope/escalation, or core dev commands that are not marked N/A
-#      with a reason
+#   2. docs/tools.md has obvious required TODOs for project path or core dev
+#      commands that are not marked N/A with a reason
 #
 # Usage:
 #   initialization-check.sh [--profile-dir DIR]
 #
-# Default profile dir: resolved via runtime-paths.sh (or ~/.hermes/profiles/junie-live)
+# Default profile dir: resolved via junie_runtime.paths.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RUNTIME_PATHS="$SCRIPT_DIR/runtime-paths.sh"
 
 PROFILE_DIR=""
 
@@ -27,12 +25,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$PROFILE_DIR" ]]; then
-  if [[ -f "$RUNTIME_PATHS" ]]; then
-    source "$RUNTIME_PATHS"
-    PROFILE_DIR="$(hermes_profile_dir_default)"
-  else
-    PROFILE_DIR="${HERMES_HOME:-$HOME/.hermes}/profiles/${HERMES_PROFILE:-junie-live}"
-  fi
+  PROFILE_DIR="$(python3 -m junie_runtime.paths profile-dir)"
 fi
 
 errcode=0
@@ -80,8 +73,6 @@ if [[ -f "$TOOLS" ]]; then
   }
 
   check_todo 'project path' 'Repository:'
-  check_todo 'mutex scope' 'Mutex directory\|Protected repository\|Protected.*scope'
-  check_todo 'mutex escalation' 'escalation\|contact for held'
   check_todo 'install command' 'Install dependencies'
   check_todo 'build command' 'Build:'
   check_todo 'test command' 'Test:'

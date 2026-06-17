@@ -122,15 +122,13 @@ Use this directory for detailed source-of-truth project knowledge that does not 
 - `product-hypotheses.md` — hypotheses and their evidence/status;
 - `analytics-plan.md` — signals and measurement plans;
 - `tools.md` — operational cheat-sheet: repo paths, commands, git conventions, deploy/rollback, dashboards, escalation contacts, local caveats;
-- `delegation-protocol.md` — Marinator delegation rules;
+- `delegation-protocol.md` — Senior Dev Kanban delegation rules;
 - `review-protocol.md` — implementation review and acceptance gates;
 - `reflection-protocol.md` — post-task reflection workflow;
 - `consistency-protocol.md` — contradiction detection/resolution;
-- `implementation-status.md` — implemented/partial/contract-only/deferred status;
-- `backlog-protocol.md` — Hermes-native backlog conventions;
-- `code-mutex-protocol.md` — installed profile mutex protocol.
+- `implementation-status.md` — implemented/partial/contract-only/deferred status.
 
-`HERMES.md` should make consulting relevant profile docs obligatory before meaningful product changes, code changes, architecture decisions, delegation, review, deployment-adjacent work, and mutex escalation.
+`HERMES.md` should make consulting relevant profile docs obligatory before meaningful product changes, code changes, architecture decisions, delegation, review, and deployment-adjacent work.
 
 The orchestrator owns retrieval and summarization. Coding workers do not receive the full docs by default; they receive only relevant extracted context. Markdown-only documentation/guidance updates can be handled directly by the orchestrator when no source code, scripts, tests, config, generated files, or external systems are changed.
 
@@ -149,10 +147,9 @@ Use it for implementation documentation that belongs with the reusable Hermes Ju
 - setup guide;
 - architecture overview;
 - day-to-day routine contract;
-- autonomous/overnight routine contract;
+- overnight routine contract;
 - implementation status;
-- context-file model;
-- code mutex design.
+- context-file model.
 
 These files are not automatically installed into a hired profile unless they are also present under `hermes/distribution/docs/` (the canonical seed source) or copied by the hire script. Keep that distinction explicit: `hermes/docs/` documents the implementation; `hermes/distribution/docs/` seeds live profile knowledge.
 
@@ -177,8 +174,7 @@ Use skills for repeatable Junie workflows, especially:
 - task intake and validation;
 - coding task decomposition;
 - implementation review;
-- post-task reflection and self-improvement;
-- bounded autonomous work windows.
+- post-task reflection and self-improvement.
 
 Skills should emphasize memory and relevant docs retrieval before meaningful work. They should instruct the orchestrator to validate work against strategy, architecture, prior decisions, and existing Hermes capabilities before delegating or proposing implementation.
 
@@ -202,8 +198,8 @@ hermes/distribution/plugins/
 
 Use plugins for Hermes-native tool integrations that Junie needs at runtime. Current core plugins include:
 
-- `marinator-delegation` — exposes `marinator_delegate`, creates durable worker runs, supervises OpenCode, records status/log/result artifacts, and wakes the orchestrator;
-- `autonomous-work` — exposes `autonomous_work_start` and `autonomous_work_step`, creates bounded window directories, and drives deterministic autonomous-window phases.
+- `senior-task` — exposes `senior_active_tasks` and `create_senior_task` for the Chat Agent;
+- `senior-runner` — exposes `senior_run_coding_task` for the `senior-dev` profile's synchronous p1 OpenCode run.
 
 Plugin state belongs under profile-local Junie state, not in the target repo.
 
@@ -218,21 +214,9 @@ Canonical location:
 ```
 
 Use this tree for runtime state:
-
 ```text
 state/
-  backlog/
-    items/
-    archive/
-    events.jsonl
-  code_mutex/
-    holder.json
-  marinator/
-    runs/<job_id>/
-  autonomous_work/
-    windows/<window_id>/
   reflections/
-  overnight/
   logs/
 ```
 

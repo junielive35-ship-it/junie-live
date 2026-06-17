@@ -45,7 +45,7 @@ Before initialization is complete, collect or infer these inputs:
 
 If any required input is missing and cannot be safely inferred, ask one concise question that unblocks initialization.
 
-If docs, backlog, or status files are absent, infer what you can from repo structure, code, tests, git history, build/CI configuration, and available admin/owner communication. Do not use "no docs" as a reason to declare nothing useful can be identified — a senior developer can derive actionable understanding from the repo alone. Ask focused strategy questions only when the repo + history + preferences together provide insufficient grounds for safe autonomous work.
+If docs, task-board, or status files are absent, infer what you can from repo structure, code, tests, git history, build/CI configuration, and available admin/owner communication. Do not use "no docs" as a reason to declare nothing useful can be identified — a senior developer can derive actionable understanding from the repo alone. Ask focused strategy questions only when the repo + history + preferences together provide insufficient grounds for safe proactive work.
 
 ## Initialization workflow
 
@@ -72,7 +72,7 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
    - architecture summary;
    - important constraints;
    - known risks and unknowns;
-   - current task/backlog/PR state, if discoverable;
+   - current task-board/PR state, if discoverable;
    - how to recognize useful work from current repo state vs strategy/target-state.
 5. Build a current-status model before normal work:
    - distinguish implemented behavior, partial implementation, contract-only/aspirational docs, deferred work, and unknowns;
@@ -94,7 +94,7 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
    - if the owner proposes a quick script, copied folder, custom runner, or manual state file during initialization, push for the durable shape before implementing: ownership, source of truth, tests, migration/removal path, and how future entrypoints avoid duplicating logic;
    - accepted custom mechanisms must be recorded as explicit design decisions with context, alternatives considered, tradeoffs, and a revisit trigger. Unexplained custom machinery is not a harmless unknown — it is architecture debt.
 8. Check for contradictions across all three drift directions, not just one:
-   - **spec ↔ implementation** — docs/guidance assert a concrete operational fact (model, reasoning level, delegation target, tool/config names, script paths, mutex location, scheduled routines) that disagrees with actual code, scripts, config, or runtime;
+   - **spec ↔ implementation** — docs/guidance assert a concrete operational fact (model, reasoning level, delegation target, tool/config names, script paths, scheduled routines) that disagrees with actual code, scripts, config, or runtime;
    - **spec ↔ spec** — two docs or guidance files assert conflicting facts or rules;
    - **comments/docstrings ↔ code** — in-code comments or docstrings describe behavior the code no longer implements;
    - also: between user/team instructions and existing project docs; between strategy, architecture, implementation, and workflow rules; between inferred cross-cutting invariants and proposed project routines; between this seed guidance and the target environment.
@@ -107,7 +107,7 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
 10. If initialization can proceed, update durable state:
    - **Memory** (via `memory` tool) — read `~/.hermes/profiles/junie-live/memory-seed.md` for initial memory entries to inject, then add project-specific context on top: global goal, current strategy, non-negotiable priorities, architecture constraints, accepted design choices, owner preferences, authority boundaries, autonomous ownership model, active hypotheses, known unresolved contradictions, pointers to detailed docs. Also save the target repo path so all future sessions know where to work. Keep memory compact; do not duplicate repo docs into memory.
    - **Profile docs** (at `~/.hermes/profiles/junie-live/docs/`) — detailed project knowledge: strategy, architecture, implementation status, design decisions, product hypotheses, review/delegation/reflection protocols, and any operational guardrails future sessions need. Use the seed doc templates already present, but fully reconcile them before completion: remove seed/example placeholders; replace TODOs with verified facts, precise repo-doc links, N/A-with-reason, or explicitly recorded non-blocking unknowns; and make sure the docs agree with memory, `HERMES.md`, and the target repo. Do not duplicate long repo documents into the profile; where the repo already has a good source of truth, write a concise summary plus an explicit pointer to the repo file/section and record only the Junie-specific interpretation, status, or operating consequence.
-   - **Operational references** (`~/.hermes/profiles/junie-live/docs/tools.md`) — fill in the structured cheat-sheet from inspection: project paths, dev commands (install, build, test, lint, run-locally), git & PR conventions (default branch, branch naming, PR target, CI checks), mutex configuration (protected scope, escalation contact), deployment & release (release process, deployment command, rollback procedure, approval requirements), product/analytics references (issue tracker, dashboards, error reporting, support intake), and local caveats. Mark genuinely-not-applicable fields as "N/A" with a one-line reason; leave fields you have not yet confirmed as "TODO" and record them as non-blocking unknowns for follow-up. This file is Junie's operational cheat-sheet — do not skip the dev-command, rollback, and escalation fields, they are the highest-value ones.
+    - **Operational references** (`~/.hermes/profiles/junie-live/docs/tools.md`) — fill in the structured cheat-sheet from inspection: project paths, dev commands (install, build, test, lint, run-locally), git & PR conventions (default branch, branch naming, PR target, CI checks), deployment & release (release process, deployment command, rollback procedure, approval requirements), product/analytics references (issue tracker, dashboards, error reporting, support intake), and local caveats. Mark genuinely-not-applicable fields as "N/A" with a one-line reason; leave fields you have not yet confirmed as "TODO" and record them as non-blocking unknowns for follow-up. This file is Junie's operational cheat-sheet — do not skip the dev-command, rollback, and escalation fields, they are the highest-value ones.
    - **User memory** (via `memory` tool, target: user) — owner name, communication preferences, escalation path, Telegram ID.
 11. Install `HERMES.md` in the target project repository:
      - The seed is at `~/.hermes/profiles/junie-live/HERMES.seed.md`.
@@ -117,14 +117,10 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
     - `HERMES.md` is Junie's primary per-project runtime protocol. Treat it as mandatory agent operating state, not ordinary repository documentation and not just an installation artifact.
     - It is intentionally stored at the target repo root so Hermes can auto-load it, but semantically it belongs to the agent/profile operating model. Contradictions involving `HERMES.md` are agent-state/project-contract contradictions, even when the file physically lives in the repo.
     - It is intentionally a personal/untracked file in the target repo (commonly git-ignored) because Hermes currently has no separate per-agent workspace context-file location with the same auto-load semantics. Do not rely on `git status` to reveal whether it exists or changed.
-    - After copying or discovering it, read it directly, adapt it for the specific project, and compare it against memory, profile docs, skills, target repo docs, and current runtime decisions. If it contains stale paths, authority rules, delegation rules, cron/AW policy, mutex commands, or initialization leftovers, fix it before finalizing.
+    - After copying or discovering it, read it directly, adapt it for the specific project, and compare it against memory, profile docs, skills, target repo docs, and current runtime decisions. If it contains stale paths, authority rules, delegation rules, cron policy, or initialization leftovers, fix it before finalizing.
      - If a correction should affect future hired agents, update both the live target `HERMES.md` and the seed `HERMES.seed.md`; otherwise document why the live file intentionally differs.
-12. Configure the project-specific code mutex context:
-    - identify the owned repository or feature-area scope protected by the mutex;
-    - the mutex state directory at `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` (profile-local) was created by the hire script;
-    - record the administrator/owner escalation path for held or stale mutex decisions in memory.
-13. Check memory size after editing. If it is too large or close to budget, move details into profile docs and keep only the strategic core in memory.
-14. Decide whether initialization is complete:
+12. Check memory size after editing. If it is too large or close to budget, move details into profile docs and keep only the strategic core in memory.
+13. Decide whether initialization is complete:
     - required inputs are captured or safely inferred;
     - no blocking contradiction remains;
     - every process-affecting contradiction (spec↔implementation, spec↔spec, or comments↔code) has an explicit owner-confirmed resolution: fixed with approval, or accepted as a known deviation. Listing unresolved process-affecting contradictions in the completion report is not sufficient to finish initialization, and contradictions must not be fixed silently before the owner confirms;
@@ -135,12 +131,11 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
     - profile docs and target repo `HERMES.md` are reconciled against the current target repo code and docs. They must not contain stale seed examples, generic placeholders, or TODOs for facts that can be recovered from the repo, profile config, installed skills, scripts, git metadata, or existing sessions;
     - `docs/strategy.md` states product purpose, owned area, current strategy, target-state goals, how to identify next useful work from current state vs strategy, goals/non-goals, priorities/tradeoffs, risks, proactive ownership model, and open questions;
     - `docs/architecture.md` (optional — useful when the repo has meaningful architecture to capture; may be omitted with a note if the project is simple and architecture is self-evident) states system overview, key components, important flows, constraints, verification approach, operational notes, and unknowns, with repo-doc references instead of duplicated long-form architecture text where appropriate;
-    - `docs/implementation-status.md` (optional — useful for tracking complex capability matrices; may be omitted if status is self-evident from the repo) contains a project-specific capability/status matrix with evidence, gaps, and next actions, if such tracking adds value. Implementation status is an input for deriving work, not the sole source of truth — empty backlog or no status matrix is not evidence that work is exhausted;
+    - `docs/implementation-status.md` (optional — useful for tracking complex capability matrices; may be omitted if status is self-evident from the repo) contains a project-specific capability/status matrix with evidence, gaps, and next actions, if such tracking adds value. Implementation status is an input for deriving work, not the sole source of truth — an empty task board or no status matrix is not evidence that work is exhausted;
     - `docs/design-decisions.md` records accepted durable decisions discovered during initialization, or says none were found yet and where future decisions should be recorded;
-    - any remaining TODO/unknown in profile docs is explicitly labeled as an external-access or owner-decision dependency, with why it is non-blocking. Do not use a later backlog/autonomous-work item to finish core initialization understanding;
-    - `docs/tools.md` is populated with the operational cheat-sheet (dev commands, git conventions, deployment, escalation contacts). Do not delete INITIALIZATION.md while required seed TODOs remain for project path, mutex scope/escalation, or core dev commands (install/build/test/lint), unless those fields are marked N/A with a one-line reason or listed as non-blocking unknowns where allowed;
+    - any remaining TODO/unknown in profile docs is explicitly labeled as an external-access or owner-decision dependency, with why it is non-blocking. Do not use a later backlog item to finish core initialization understanding;
+    - `docs/tools.md` is populated with the operational cheat-sheet (dev commands, git conventions, deployment, escalation contacts). Do not delete INITIALIZATION.md while required seed TODOs remain for project path or core dev commands (install/build/test/lint), unless those fields are marked N/A with a one-line reason or listed as non-blocking unknowns where allowed;
     - cross-cutting invariants, bypass risks, and guardrails are recorded;
-    - the mutex scope and escalation path are configured;
     - target repo path is saved to memory;
     - `HERMES.md` is installed in the target repo, directly inspected, adapted to the project, and reconciled with memory/profile docs/current runtime decisions even if it is git-ignored;
     - remaining unknowns are non-blocking and recorded.
@@ -148,14 +143,13 @@ If docs, backlog, or status files are absent, infer what you can from repo struc
 16. Send a short completion summary:
     - what project/area you own;
     - target repo path;
-    - what mutex scope and escalation path you configured;
     - what changed at a high level;
     - architecture debt / custom machinery risks and the recommended keep/refactor/replace stance for each meaningful item;
     - unresolved non-blocking unknowns;
     - assumptions that may need future attention.
 17. Clean up permanent files before finalizing:
     - Check `HERMES.md` (installed in target repo), `AGENTS.md`, memory, and long-lived profile docs for any initialization-related guidance that was added during onboarding.
-    - Remove or avoid leaving initialization workflow text in those permanent files. They may keep only minimal non-temporary guardrails that remain valid after initialization (e.g. code mutex, delegation rules, strategy).
+    - Remove or avoid leaving initialization workflow text in those permanent files. They may keep only minimal non-temporary guardrails that remain valid after initialization (e.g. delegation rules, strategy).
     - Search profile docs for seed leftovers: `TODO`, `Example capability`, generic "Seed document" text, contradictory status rows, and placeholder commands/paths. Replace every recoverable placeholder with inspected facts or an explicit repo-doc pointer before deleting this file.
     - See "## What not to leave in permanent files" below.
 18. Finalize:
@@ -176,13 +170,13 @@ Files that survive after initialization (`HERMES.md`, `AGENTS.md`, memory, long-
 
 - Do not copy initialization workflow text (first-response rules, gate check procedures, initialization steps) into `HERMES.md`, `AGENTS.md`, memory, or profile docs.
 - If any initialization-related temporary notes were added to permanent files during onboarding, remove them before deleting `INITIALIZATION.md`.
-- Permanent files may keep only minimal non-temporary guardrails that remain valid after initialization (e.g. code mutex, delegation rules, strategy, challenge protocol).
+- Permanent files may keep only minimal non-temporary guardrails that remain valid after initialization (e.g. delegation rules, strategy, challenge protocol).
 - `SOUL.md` already has the minimal initialization sentinel (check whether `INITIALIZATION.md` exists; if so, follow it). Do not expand it with init workflow text.
 
 ## Hermes-specific notes
 
 - **Memory tool**: `memory(action="add", target="memory", content="...")` for agent knowledge, `memory(action="add", target="user", content="...")` for owner info. Memory is auto-injected every turn — no need to read files.
-- **Skills**: Your installed skills handle specific workflows (task intake, coding decomposition, implementation review, task reflection, autonomous work windows). They auto-load when relevant. Use `skills_list` to see them.
+- **Skills**: Your installed skills handle specific workflows (task intake, coding decomposition, implementation review, task reflection). They auto-load when relevant. Use `skills_list` to see them.
 - **Profile docs**: Stored at `~/.hermes/profiles/<profile>/docs/`. Use `read_file` / `write_file` to manage.
 - **AGENTS.md / HERMES.md**: Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory into the system prompt, walking up to the git root. Once you copy `HERMES.seed.md` to the target repo as `HERMES.md`, it will be active for all orchestrator work in that repo. Hermes does NOT auto-load `AGENTS.md` into Junie's prompt — that slot is reserved for coding executors (opencode, codex, claude-code), which is why Junie uses `HERMES.md` instead.
 - **Cron jobs**: Setup does not install recurring cron jobs by default. After initialization, consider watchdog, health-check, or scheduled-start jobs only with explicit owner/admin approval, using the Hermes `cronjob` tool.

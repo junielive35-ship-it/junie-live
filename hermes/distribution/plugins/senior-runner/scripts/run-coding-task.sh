@@ -8,7 +8,7 @@ set -euo pipefail
 # stdout/stderr/runner logs, writes result.md (including the trailing VERDICT
 # block discipline), and exits with OpenCode's exit code.
 #
-# Unlike marinator-worker.sh this script is fully synchronous: the caller
+# This script is fully synchronous: the caller
 # (senior-runner runner.py / senior_run_coding_task) blocks until OpenCode
 # exits, then reads the artifacts. It never mutates the Kanban board — the
 # senior-dev worker agent does that after reading the artifacts.
@@ -151,12 +151,6 @@ with open(path, 'w', encoding='utf-8') as fh:
 PYUPDATE
 }
 
-# ── OpenCode unattended mode (mirrors marinator-worker.sh) ──
-# `--dangerously-skip-permissions` only auto-approves permissions not explicitly
-# denied/asked by config; this runtime override makes the synchronous Senior
-# worker genuinely headless.
-export OPENCODE_CONFIG_CONTENT='{"permission":{"*":"allow","external_directory":{"/**":"allow"}}}'
-
 # ── Pre-flight checks ──
 
 if [[ ! -d "$repo" ]]; then
@@ -194,11 +188,12 @@ fi
 # ── Build args and run OpenCode synchronously ──
 
 prompt=$(cat "$prompt_file")
-opencode_args=(run --format json --dangerously-skip-permissions -- "$prompt")
+opencode_model="${OPENCODE_MODEL:-openrouter/openai/gpt-5.5}"
+opencode_args=(run --format json --dangerously-skip-permissions --model "$opencode_model" -- "$prompt")
 
-log_runner "Starting opencode (sync): $opencode_bin ${opencode_args[*]}"
-update_status_json "{\"worker_state\":\"running\",\"opencode.bin\":\"$opencode_bin\"}"
-append_event "opencode_starting" opencode_bin "$opencode_bin" repo "$repo"
+log_runner "Starting opencode (sync): model=$opencode_model $opencode_bin ${opencode_args[*]}"
+update_status_json "{\"worker_state\":\"running\",\"opencode.bin\":\"$opencode_bin\",\"opencode.model\":\"$opencode_model\"}"
+append_event "opencode_starting" opencode_bin "$opencode_bin" model "$opencode_model" repo "$repo"
 
 set +e
 (

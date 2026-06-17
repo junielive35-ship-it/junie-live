@@ -35,10 +35,6 @@ CREATE_SENIOR_TASK_SCHEMA = {
                 "type": "string",
                 "description": "Absolute path to the target repository.",
             },
-            "backlog_id": {
-                "type": "string",
-                "description": "Optional originating backlog item id.",
-            },
             "idempotency_key": {
                 "type": "string",
                 "description": (
@@ -119,21 +115,17 @@ def _resolve_notifier_profile(plugin_ctx: Any = None) -> Optional[str]:
     return None
 
 
-def _build_task_body(request: str, repo: str, origin: dict, backlog_id: str = "") -> str:
+def _build_task_body(request: str, repo: str, origin: dict) -> str:
     """Build Kanban task body with metadata embedded as trailing JSON section."""
     metadata = {
         "junie_task_type": "senior_dev_code_task",
         "source": origin if origin.get("platform") else None,
         "repo": repo,
         "owned_area": "",
-        "marinator_job_id": None,
         "opencode_session_id": None,
         "pr_urls": [],
         "duplicate_keys": [],
     }
-    if backlog_id:
-        metadata["backlog_id"] = backlog_id
-
     meta_line = "_junie_metadata: " + json.dumps(metadata, separators=(",", ":"))
     parts = [request, "", "---", meta_line]
     return "\n".join(parts)
@@ -157,7 +149,6 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
     title = params.get("title", "").strip()
     request = params.get("request", "").strip()
     repo = params.get("repo", "").strip()
-    backlog_id = params.get("backlog_id", "").strip()
     idempotency_key = params.get("idempotency_key", "").strip() or None
     priority = params.get("priority", 0)
 
@@ -176,7 +167,7 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
     has_origin = bool(origin.get("platform") and origin.get("chat_id"))
     notifier_profile = _resolve_notifier_profile(plugin_ctx)
 
-    body = _build_task_body(request, repo, origin, backlog_id)
+    body = _build_task_body(request, repo, origin)
 
     try:
         from hermes_cli import kanban_db as kb
@@ -268,189 +259,6 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
     if subscription_error:
         response["subscription_error"] = subscription_error
     return json.dumps(response)
-
-
-# ── senior_dev_task_result: update Kanban from Marinator artifacts ──
-
-SENIOR_DEV_TASK_RESULT_SCHEMA = {
-    "name": "senior_dev_task_result",
-    "description": (
-        "Report the outcome of a completed Marinator/OpenCode run back to "
-        "the Senior Dev Kanban task. Called by the senior-dev profile when "
-        "Marinator wakes it after the worker finishes or needs attention. "
-        "Reads run_dir/status.json and run_dir/result.md if they exist."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "string",
-                "description": "Kanban task ID (t_<hex>) to update.",
-            },
-            "run_dir": {
-                "type": "string",
-                "description": (
-                    "Absolute path to the Marinator run directory containing "
-                    "status.json, result.md, etc."
-                ),
-            },
-            "outcome": {
-                "type": "string",
-                "enum": ["completed", "blocked"],
-                "description": (
-                    "'completed' when the worker finished successfully with "
-                    "PR evidence. 'blocked' when it needs user input, "
-                    "stalled, or hit a failure."
-                ),
-            },
-            "summary": {
-                "type": "string",
-                "description": (
-                    "Human-readable summary of what was done, tests run, "
-                    "files changed, PR URLs, or the block reason."
-                ),
-            },
-            "pr_urls": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Optional list of PR URLs created.",
-                "default": [],
-            },
-            "expected_run_id": {
-                "type": "integer",
-                "description": (
-                    "Optional run id for CAS completion. Usually from "
-                    "kanban_db.current_run_id for this task."
-                ),
-            },
-        },
-        "required": ["task_id", "run_dir", "outcome", "summary"],
-        "additionalProperties": False,
-    },
-}
-
-
-def handle_senior_dev_task_result(params: dict, plugin_ctx: Any = None, **kwargs) -> str:
-    """Handle a senior_dev_task_result tool call.
-
-    Reads Marinator artifacts (status.json / result.md if available),
-    then calls kanban_db.complete_task or kanban_db.block_task.
-    """
-    try:
-        return _do_report_result(params, plugin_ctx)
-    except Exception as e:
-        return json.dumps({"error": f"senior_dev_task_result failed: {e}"})
-
-
-def _do_report_result(params: dict, plugin_ctx: Any = None) -> str:
-    task_id = params.get("task_id", "").strip()
-    run_dir = params.get("run_dir", "").strip()
-    outcome = params.get("outcome", "").strip()
-    summary = params.get("summary", "").strip()
-    pr_urls = params.get("pr_urls", [])
-    expected_run_id = params.get("expected_run_id")
-
-    if not task_id:
-        return json.dumps({"error": "task_id is required"})
-    if not run_dir:
-        return json.dumps({"error": "run_dir is required"})
-    if outcome not in ("completed", "blocked"):
-        return json.dumps({"error": "outcome must be 'completed' or 'blocked'"})
-    if not summary:
-        return json.dumps({"error": "summary is required"})
-
-    # Read Marinator artifacts
-    marinator_info = {}
-    status_path = os.path.join(run_dir, "status.json")
-    result_path = os.path.join(run_dir, "result.md")
-
-    if os.path.isfile(status_path):
-        try:
-            with open(status_path) as f:
-                marinator_status = json.load(f)
-            marinator_info["status"] = marinator_status
-        except (json.JSONDecodeError, IOError):
-            pass
-
-    if os.path.isfile(result_path):
-        try:
-            with open(result_path) as f:
-                marinator_info["result_md"] = f.read()
-        except IOError:
-            pass
-
-    # Build metadata from PR URLs and marinator info
-    metadata = {
-        "marinator_run_dir": run_dir,
-        "pr_urls": list(pr_urls),
-    }
-    if marinator_info.get("status"):
-        opencode_info = marinator_info["status"].get("opencode", {})
-        if opencode_info.get("session_id"):
-            metadata["opencode_session_id"] = opencode_info["session_id"]
-        if opencode_info.get("exit_code") is not None:
-            metadata["opencode_exit_code"] = opencode_info["exit_code"]
-
-    try:
-        from hermes_cli import kanban_db as kb
-    except ImportError as e:
-        return json.dumps({"error": f"Failed to import kanban_db: {e}"})
-
-    conn = kb.connect()
-
-    if outcome == "completed":
-        result_text = summary
-        if pr_urls:
-            result_text += "\n\nPRs: " + ", ".join(pr_urls)
-
-        ok = kb.complete_task(
-            conn,
-            task_id=task_id,
-            result=result_text,
-            summary=summary,
-            metadata=metadata,
-            expected_run_id=expected_run_id,
-        )
-        if ok:
-            return json.dumps({
-                "ok": True,
-                "task_id": task_id,
-                "status": "done",
-                "action": "completed",
-                "message": f"Task {task_id} completed as done",
-            })
-        else:
-            return json.dumps({
-                "error": (
-                    f"Failed to complete task {task_id}: CAS mismatch or "
-                    f"task not in running/ready state"
-                ),
-                "task_id": task_id,
-            })
-
-    else:  # blocked
-        ok = kb.block_task(
-            conn,
-            task_id=task_id,
-            reason=summary,
-            expected_run_id=expected_run_id,
-        )
-        if ok:
-            return json.dumps({
-                "ok": True,
-                "task_id": task_id,
-                "status": "blocked",
-                "action": "blocked",
-                "message": f"Task {task_id} blocked",
-            })
-        else:
-            return json.dumps({
-                "error": (
-                    f"Failed to block task {task_id}: CAS mismatch or "
-                    f"task not in running/ready state"
-                ),
-                "task_id": task_id,
-            })
 
 
 # ── senior_active_tasks: active-task lookup for follow-up routing ──

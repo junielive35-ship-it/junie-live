@@ -218,9 +218,7 @@ fi
 # ── Step 4b: Create state directories ──
 STATE_DIR="$(python3 -m junie_runtime.paths state-root --profile "$PROFILE")"
 log "Creating state directories..."
-mkdir -p "$STATE_DIR"/{backlog/items,backlog/archive,reflections,overnight,logs}
-mkdir -p "$STATE_DIR"/marinator/runs
-mkdir -p "$STATE_DIR"/autonomous_work/windows
+mkdir -p "$STATE_DIR"/{reflections,overnight,logs}
 
 # ── Step 4c: Write runtime manifest ──
 RUNTIME_MANIFEST_DIR="$(python3 -m junie_runtime.paths runtime-manifest-dir --profile "$PROFILE")"
@@ -267,7 +265,7 @@ if plugin not in existing:
     existing.append(plugin)
 print(json.dumps(existing))
 PYENSURE
-  ) || merged='["marinator-delegation","autonomous-work","'"$plugin_name"'"]'
+  ) || merged='["'"$plugin_name"'"]'
 
   if hermes -p "$profile" config set plugins.enabled "$merged" >/dev/null 2>&1; then
     log "  Plugin '$plugin_name' enabled via config set fallback (preserving existing plugins)"
@@ -276,45 +274,7 @@ PYENSURE
   fi
 }
 
-# ── Step 4b: Enable Marinator delegation plugin without Chat Agent toolset ──
-# The plugin source was installed from distribution/plugins/ into
-# $PROFILE_DIR/plugins/ during profile install. Keep the plugin source and
-# enabled plugin available for the companion senior-dev profile/install path,
-# but do not expose the marinator toolset to the main Chat Agent.
-if [[ -d "$PROFILE_DIR/plugins/marinator-delegation" ]]; then
-  log "Enabling Marinator delegation plugin..."
-  _ensure_plugin "$PROFILE_DIR" "$PROFILE" "marinator-delegation"
-
-  for platform in cli telegram; do
-    hermes -p "$PROFILE" tools disable --platform "$platform" marinator >/dev/null 2>&1 || true
-  done
-
-  for platform in cli telegram; do
-    for toolset in terminal file; do
-      hermes -p "$PROFILE" tools enable --platform "$platform" "$toolset" >/dev/null 2>&1 || true
-    done
-  done
-  log "  Toolsets enabled: terminal, file (cli + telegram); marinator remains senior-dev only"
-else
-  log "  WARNING: plugins/marinator-delegation not found in seed; skipping plugin setup"
-fi
-
-# ── Step 4c: Enable Autonomous Work plugin + toolsets ──
-if [[ -d "$PROFILE_DIR/plugins/autonomous-work" ]]; then
-  log "Enabling Autonomous Work plugin..."
-  _ensure_plugin "$PROFILE_DIR" "$PROFILE" "autonomous-work"
-
-  for platform in cli telegram; do
-    for toolset in autonomous terminal file; do
-      hermes -p "$PROFILE" tools enable --platform "$platform" "$toolset" >/dev/null 2>&1 || true
-    done
-  done
-  log "  Toolsets enabled: autonomous, terminal, file (cli + telegram)"
-else
-  log "  WARNING: plugins/autonomous-work not found in seed; skipping plugin setup"
-fi
-
-# ── Step 4d: Enable Senior Task plugin + toolsets ──
+# ── Step 4b: Enable Senior Task plugin + toolsets ──
 if [[ -d "$PROFILE_DIR/plugins/senior-task" ]]; then
   log "Enabling Senior Task plugin..."
   _ensure_plugin "$PROFILE_DIR" "$PROFILE" "senior-task"

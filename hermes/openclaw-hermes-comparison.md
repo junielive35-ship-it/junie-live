@@ -14,7 +14,7 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 | **Persona / personality** | `SOUL.md` file in workspace | `SOUL.md` in `$HERMES_HOME` — auto-loaded as agent identity (slot #1 in system prompt) on every turn |
 | **Operating protocol** | `AGENTS.md` — large protocol file in workspace, loaded by OpenClaw | `HERMES.md` in target repo root (auto-loaded by Hermes from cwd) + skills + `SOUL.md` + memory; `HERMES.md` is used instead of `AGENTS.md` so coding executors don't pick up orchestrator-only rules |
 | **Operational reference** | `TOOLS.md` — auto-loaded workspace file with repo paths, dev commands, deploy process, dashboards, escalation contacts | `docs/tools.md` — same structure (project paths, dev commands, git/PR conventions, mutex configuration, deployment & rollback, analytics, escalation). Not auto-loaded by Hermes; `HERMES.md` instructs the agent to consult `tools.md` before any work that needs build/lint/test/run/deploy/branch/rollback/mutex-escalation info. |
-| **Coding delegation** | `opencode run` via shell scripts (`run-backlog-worker.sh`) | `marinator_delegate` supervised OpenCode worker for code-changing work; `delegate_task` only for non-code subtasks |
+| **Coding delegation** | `opencode run` via shell scripts (`run-backlog-worker.sh`) | `create_senior_task` to the Senior Dev Kanban lane. Current p1 uses synchronous `senior_run_coding_task` (OpenCode) and `blocked(review-required|needs-input|failed)` handoff; `delegate_task` only for non-code subtasks |
 | **Scheduled routines** | System crontab + OpenClaw cron definitions + shell scripts | Hermes native cron jobs — created in-session, no system crontab |
 | **Orchestration logic** | ~25 shell scripts (drive.sh, overnight-controller.sh, etc.) | LLM-driven orchestration guided by skills and docs |
 | **Repo hygiene** | Complex — must prevent workspace artifacts from leaking into target repo | Single tracked file (`HERMES.md`); all other state under `~/.hermes/` |
@@ -23,11 +23,11 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 
 | Aspect | OpenClaw | Hermes |
 | --- | --- | --- |
-| **Worker** | `opencode` CLI with Claude Opus 4.6 low reasoning | `marinator_delegate` starts a supervised OpenCode worker for code changes; `delegate_task` is reserved for non-code research/analysis |
-| **Worker control** | Shell-level: timeout, pid tracking, log capture, exit code checking | Marinator runner records status, logs, events, result artifacts, progress, completion/failure, and orchestrator wake-up |
-| **Worker model** | Hardcoded to `openrouter/anthropic/claude-opus-4.6` low reasoning | Uses OpenCode's configured defaults behind the Marinator boundary |
-| **Context passing** | Prompt file written to disk, passed as CLI argument | Prompt file passed through `marinator_delegate`, with optional attachments and follow-up session resolution |
-| **Fix retry loop** | Shell loop: re-run worker with verification failure output piped as stdin | Orchestrator reviews Marinator artifacts and delegates follow-up fixes with failure context |
+| **Worker** | `opencode` CLI with Claude Opus 4.6 low reasoning | `senior-dev` profile is a thin Kanban worker. In p1 it calls `senior_run_coding_task`, which runs OpenCode synchronously; `delegate_task` is reserved for non-code research/analysis |
+| **Worker control** | Shell-level: timeout, pid tracking, log capture, exit code checking | Senior p1 runner records status, logs, events, result artifacts, and returns synchronously to the Kanban worker, which comments and blocks the task for review/input/failure |
+| **Worker model** | Hardcoded to `openrouter/anthropic/claude-opus-4.6` low reasoning | Uses OpenCode's configured defaults behind the Senior runner boundary |
+| **Context passing** | Prompt file written to disk, passed as CLI argument | Senior task body + comments are assembled by `senior-dev` and passed to `senior_run_coding_task`; the runner writes `prompt.md` and Marinator-style artifacts |
+| **Fix retry loop** | Shell loop: re-run worker with verification failure output piped as stdin | Orchestrator reviews `blocked(review-required)` artifacts/comments, then comments and requeues/unblocks the same Senior task when a fix/follow-up is appropriate. This follow-up ergonomics is still a live-runtime verification point. |
 | **Parallel work** | Blocked by shell-level sequential execution | `delegate_task` supports up to 3 parallel subagents (for non-code work) |
 
 ### Scheduling and Autonomous Work
@@ -111,9 +111,9 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 
 5. **Cron job fragility** — Hermes cron jobs are created in-session with prompts. If the prompt is poorly written, the cron job may not behave correctly. OpenClaw cron definitions are explicit shell commands with predictable behavior.
 
-6. **Marinator boundary is newer than OpenClaw's scripts** — OpenClaw's `run-backlog-worker.sh` has a longer-tested shell boundary. The Hermes implementation now has a Marinator runner with status files, logs, event capture, result artifacts, progress reporting, and orchestrator wake-up, but sustained-load confidence is still developing.
+6. **Senior runner boundary is newer than OpenClaw's scripts** — OpenClaw's `run-backlog-worker.sh` has a longer-tested shell boundary. The Hermes implementation now has a synchronous Senior runner with status files, logs, event capture, result artifacts, and Kanban blocked-state handoff; the older async Marinator runner also remains available, but sustained-load confidence is still developing.
 
-7. **delegate_task is not the coding path** — Native subagents remain useful for non-code research and analysis, but code-changing work must go through `marinator_delegate` so the orchestrator can enforce the mutex, review/fix loop, verification, and acceptance boundary.
+7. **delegate_task is not the coding path** — Native subagents remain useful for non-code research and analysis, but code-changing work must go through `create_senior_task` and the Senior Dev Kanban lane so the orchestrator can enforce active-task lookup, review/fix/requeue, verification, user notification, and acceptance boundaries.
 
 8. **Injection-detection filter on auto-loaded files** — Hermes runs a prompt-injection scanner on `SOUL.md` and `HERMES.md` before loading them into the system prompt. HTML comments (`<!-- ... -->`) trigger the `html_comment_injection` heuristic and cause the entire file to be blocked with no fallback. This is silent from the agent's perspective (the file simply doesn't appear in context) but logged as `[BLOCKED: SOUL.md contained potential prompt injection (html_comment_injection). Content not loaded.]`. In practice this broke Junie's first initialization: `SOUL.md` carried the initialization gate rule, but the file was blocked because it contained developer-documentation HTML comments. The agent had no identity, no operating rules, and no initialization gate — it just greeted the user casually. OpenClaw has no equivalent filter; workspace files are loaded verbatim. **Workaround:** never use HTML comments in `SOUL.md`, `HERMES.md`, or any file auto-loaded into the Hermes system prompt. Move developer notes into companion documentation files or use markdown-native documentation instead.
 
@@ -121,12 +121,12 @@ This document compares the OpenClaw and Hermes implementations of Junie Live to 
 
 ### For current project status (MVP)
 
-The MVP priority is the autonomous ownership loop: strategy → backlog → mutex → delegation → review → commit → reflection.
+The MVP priority is the autonomous ownership loop: strategy → backlog → Senior Dev Kanban → delegation → review/requeue → commit/handoff → reflection. The code mutex remains for legacy/manual protected paths, but Kanban is the active p1 code-work boundary.
 
 **Hermes** is the current MVP path:
 - The Autonomous Work plugin provides durable bounded windows and deterministic phase artifacts
-- Marinator provides the supervised OpenCode boundary for code-changing work
-- `./hermes/scripts/verify.sh` now covers autonomous-work, Marinator delegation, dump/rehire, and initialization-gate regressions
+- Senior Dev Kanban + `senior_run_coding_task` provides the current p1 OpenCode boundary for code-changing work
+- `./hermes/scripts/verify.sh` now covers dump/rehire, initialization-gate, Senior Dev install/toolset, Senior task/result, and Senior runner regressions
 - Profile memory/docs keep the strategic state native to Hermes instead of relying on OpenClaw workspace files
 
 **OpenClaw** remains useful as historical context and a benchmark:
@@ -136,9 +136,9 @@ The MVP priority is the autonomous ownership loop: strategy → backlog → mute
 **Remaining Hermes MVP risk**:
 - Sustained-load confidence is still developing for long autonomous windows
 - Cron watchdog/health jobs are optional and operator-configured, not installed by default
-- The AW plugin + Marinator + memory/docs loop needs continued real-world runs and regression coverage
+- The AW plugin + Senior Dev Kanban runner + memory/docs loop needs continued real-world runs and regression coverage
 
-**Verdict for MVP**: continue stabilizing the Hermes-native AW + Marinator path. Use OpenClaw as a comparison baseline, not as the recommended runtime for new Junie Live MVP work.
+**Verdict for MVP**: continue stabilizing the Hermes-native AW + Senior Dev Kanban p1 path. Use OpenClaw as a comparison baseline, not as the recommended runtime for new Junie Live MVP work.
 
 ### For long-term product vision
 

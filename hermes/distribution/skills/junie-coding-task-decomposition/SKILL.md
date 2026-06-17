@@ -1,6 +1,6 @@
 ---
 name: junie-coding-task-decomposition
-description: "Break accepted code work into mutex-safe delegated tasks."
+description: "Break accepted code work into Senior Dev Kanban-routed tasks."
 version: 1.0.0
 tags: [junie-live, delegation, coding, decomposition]
 ---
@@ -13,16 +13,15 @@ Documentation-only Markdown edits are an explicit exception and may be handled d
 
 ## Workflow
 
-1. Check repo status and code mutex. The mutex is held when `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/holder.json` exists (profile-local).
-2. Acquire the mutex by running `~/.hermes/profiles/junie-live/scripts/code-mutex.sh acquire --holder "junie:<task-id>" --reason "<description>"`.
-3. Restate objective, constraints, and non-goals.
-4. Identify affected components and likely files.
-5. Split work into sequential scoped tasks when useful.
-6. For each code-changing task, prepare a `create_senior_task` request with relevant context, target repo, constraints, and verification expectations. For non-code tasks, use `delegate_task`.
-7. Define verification: tests, typecheck, lint, build, manual inspection.
-8. Plan review gates before any PR/update.
+1. Check repo status and active Senior Dev Kanban tasks. Call `senior_active_tasks` for the target repo/origin (use `include_comments=true` when deciding follow-up routing).
+2. Restate objective, constraints, and non-goals.
+3. Identify affected components and likely files.
+4. Split work into sequential scoped tasks when useful.
+5. For a new code-changing task, prepare a `create_senior_task` request with relevant context, target repo, constraints, and verification expectations. For a related active task, attach a comment; if a blocked `review-required` / `needs-input` ask has been answered, unblock/requeue it instead of creating a duplicate. For non-code tasks, use `delegate_task`.
+6. Define verification: tests, typecheck, lint, build, manual inspection.
+7. Plan review gates before any PR/update.
 
-Do not run parallel code-changing workers against the same repo unless an approved isolation strategy exists.
+Do not run parallel code-changing workers against the same repo unless an approved isolation strategy exists. In p1, Senior Dev Kanban is the active concurrency boundary for normal Chat Agent code work.
 
 ## delegate_task template
 
@@ -43,7 +42,7 @@ Report outcome_status=done|partial|blocked with any gaps.
 
 ## create_senior_task template (all code-changing work)
 
-All code-changing work is delegated through the Senior Dev Kanban lane:
+All new code-changing work is delegated through the Senior Dev Kanban lane after active-task lookup:
 
 ```python
 create_senior_task(
@@ -55,4 +54,4 @@ create_senior_task(
 )
 ```
 
-For follow-up/fix loops, create a follow-up Senior Dev task that references the original Kanban task and required fixes.
+For follow-up/fix loops, prefer the existing active Kanban task: add a comment with the fix/follow-up context and unblock/requeue when the previous `blocked` reason has been answered. Create a new task only when the prior task is done/archived or the new request is semantically separate.

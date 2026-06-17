@@ -53,7 +53,6 @@ required = CREATE_SENIOR_TASK_SCHEMA["parameters"]["required"]
 assert "title" in props
 assert "request" in props
 assert "repo" in props
-assert "backlog_id" in props
 assert "idempotency_key" in props
 assert "priority" in props
 assert "title" in required
@@ -105,11 +104,10 @@ printf '=== Test 5: _build_task_body embeds metadata ===\n'
 load_plugin '
 import json
 origin = {"platform": "telegram", "chat_id": "123", "thread_id": "", "user_id": "u1", "session_key": ""}
-body = _build_task_body("Fix the login bug", "/home/repo", origin, backlog_id="BL-001")
+body = _build_task_body("Fix the login bug", "/home/repo", origin)
 assert "Fix the login bug" in body
 assert "senior_dev_code_task" in body
 assert "/home/repo" in body
-assert "BL-001" in body
 assert "_junie_metadata:" in body
 meta_prefix = "_junie_metadata: "
 idx = body.index(meta_prefix)

@@ -87,10 +87,6 @@ for required_dir in \
     distribution/skills \
     scripts \
     docs \
-    distribution/plugins/marinator-delegation \
-    distribution/plugins/marinator-delegation/scripts \
-    distribution/plugins/autonomous-work \
-    distribution/plugins/autonomous-work/scripts \
     distribution/plugins/senior-task \
     distribution/plugins/senior-runner \
     distribution/plugins/senior-runner/scripts \
@@ -110,20 +106,7 @@ for required_file in \
     distribution/memory-seed.md \
     distribution/HERMES.seed.md \
     distribution/docs/tools.md \
-    distribution/plugins/marinator-delegation/plugin.yaml \
     distribution/scripts/dump-junie.sh \
-    distribution/plugins/marinator-delegation/__init__.py \
-    distribution/plugins/marinator-delegation/tools.py \
-    distribution/plugins/marinator-delegation/runner.py \
-    distribution/plugins/marinator-delegation/state.py \
-    distribution/plugins/marinator-delegation/scripts/marinator-worker.sh \
-    distribution/plugins/autonomous-work/plugin.yaml \
-    distribution/plugins/autonomous-work/__init__.py \
-    distribution/plugins/autonomous-work/tools.py \
-    distribution/plugins/autonomous-work/state.py \
-    distribution/plugins/autonomous-work/prompts.py \
-    distribution/plugins/autonomous-work/backlog.py \
-    distribution/plugins/autonomous-work/scripts/aw-runner.sh \
     distribution/plugins/senior-task/plugin.yaml \
     distribution/plugins/senior-task/__init__.py \
     distribution/plugins/senior-task/tools.py \
@@ -136,10 +119,8 @@ for required_file in \
     distribution/profiles/senior-dev/distribution.yaml \
     distribution/profiles/senior-dev/config.yaml \
     distribution/profiles/senior-dev/SOUL.md \
-    distribution/profiles/senior-dev/HERMES.seed.md \
     scripts/install-senior-dev-profile.sh \
-    scripts/test-install-senior-dev.sh \
-    distribution/docs/backlog-protocol.md; do
+    scripts/test-install-senior-dev.sh; do
   [[ -f "$required_file" ]] || fail "missing required file: $required_file"
 done
 
@@ -152,70 +133,13 @@ for skill_dir in distribution/skills/*/; do
   grep -q '^description: ' "$skill_file" || fail "skill missing description in frontmatter: $skill_file"
 done
 
-log "marinator worker progress-summary regression guard"
-WORKER_SH="distribution/plugins/marinator-delegation/scripts/marinator-worker.sh"
-if [[ -f "$WORKER_SH" ]]; then
-  # Positive checks: required prompt directives
-  grep -qF 'Use only the stdout/stderr excerpts below' "$WORKER_SH" || \
-    fail "$WORKER_SH: missing 'Use only the stdout/stderr excerpts below' in prompt"
-  grep -qF 'Answer in no more than 150 words' "$WORKER_SH" || \
-    fail "$WORKER_SH: missing 'Answer in no more than 150 words' in prompt"
-  grep -qF 'Do not mention files/logs being missing' "$WORKER_SH" || \
-    fail "$WORKER_SH: missing 'Do not mention files/logs being missing' in prompt"
-
-  # Negative checks: no wrapper artifacts in progress context
-  if grep -qF '## artifact paths' "$WORKER_SH"; then
-    fail "$WORKER_SH: artifact paths section still present in progress context"
-  fi
-  if grep -qF '## status.json' "$WORKER_SH"; then
-    fail "$WORKER_SH: status.json section still present in progress context"
-  fi
-  if grep -qF '## recent events.jsonl' "$WORKER_SH"; then
-    fail "$WORKER_SH: events.jsonl section still present in progress context"
-  fi
-  if grep -qF '## runner.log tail' "$WORKER_SH"; then
-    fail "$WORKER_SH: runner.log tail section still present in progress context"
-  fi
-
-  # Sections must exist (regression guard: interval status/delta preserved)
-  grep -qF '## stdout/stderr interval status' "$WORKER_SH" || \
-    fail "$WORKER_SH: missing '## stdout/stderr interval status' section"
-  grep -qF '## stdout/stderr delta' "$WORKER_SH" || \
-    fail "$WORKER_SH: missing '## stdout/stderr delta' section"
-
-  # Must NOT pipe context_file through tail -c (would trim sections)
-  if grep -qE '\|\s*tail\s+-c\s+[0-9]+\s*>\s*"\$context_file"' "$WORKER_SH"; then
-    fail "$WORKER_SH: context_file is piped through tail -c; interval status/delta would be trimmed"
-  fi
-
-  # Must write context_file directly (confirming sections land in final output)
-  grep -qE '>\s*"\$context_file"' "$WORKER_SH" || \
-    fail "$WORKER_SH: no direct write to context_file; sections would be dropped"
-
-  # [:700] truncation must not appear in non-comment lines
-  if grep -qF '[:700]' "$WORKER_SH"; then
-    if grep -nE '\[:700\]' "$WORKER_SH" | grep -vE '^\s*#' | grep -q .; then
-      fail "$WORKER_SH: [:700] truncation still present in non-comment line"
-    fi
-  fi
-
-  # OpenCode progress summary prefix guard (code-level, not LLM prompt)
-  grep -qF '[OpenCode progress summary]' "$WORKER_SH" || \
-    fail "$WORKER_SH: missing '[OpenCode progress summary]' prefix in progress messages"
-  if grep -qE 'send_progress\s+"\$summary"' "$WORKER_SH"; then
-    fail "$WORKER_SH: send_progress uses raw \$summary instead of prefixed variable"
-  fi
-else
-  fail "missing $WORKER_SH"
-fi
-
-log "marinator plugin bash syntax"
+log "plugin bash syntax"
 for plugin_script in distribution/plugins/*/scripts/*.sh; do
   [[ -f "$plugin_script" ]] || continue
   bash -n "$plugin_script" || fail "bash syntax error in $plugin_script"
 done
 
-log "marinator plugin python syntax"
+log "plugin python syntax"
 for plugin_py in distribution/plugins/*/*.py; do
   [[ -f "$plugin_py" ]] || continue
   python3 -m py_compile "$plugin_py" || fail "python syntax error in $plugin_py"
@@ -224,20 +148,11 @@ done
 log "dump/rehire disaster recovery tests"
 "$ROOT/scripts/test-dump-rehire.sh" || fail "dump/rehire disaster recovery tests failed"
 
-log "autonomous-work plugin tests"
-"$ROOT/scripts/test-autonomous-work.sh" || fail "autonomous-work plugin tests failed"
-
-log "marinator delegation regression tests"
-"$ROOT/scripts/test-marinator-delegation.sh" || fail "marinator delegation regression tests failed"
-
 log "initialization gate regression tests"
 "$ROOT/scripts/test-initialization-gate.sh" || fail "initialization gate tests failed"
 
 log "senior-task plugin tests"
 "$ROOT/scripts/test-senior-task.sh" || fail "senior-task plugin tests failed"
-
-log "senior-dev-result plugin tests"
-"$ROOT/scripts/test-senior-dev-result.sh" || fail "senior-dev-result plugin tests failed"
 
 log "senior-dev install script tests"
 "$ROOT/scripts/test-install-senior-dev.sh" || fail "senior-dev install script tests failed"

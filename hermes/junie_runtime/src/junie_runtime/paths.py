@@ -77,10 +77,6 @@ def state_root(home: str | None = None, profile: str | None = None) -> str:
     return os.path.join(profile_dir(home, profile), "junie-live", "state")
 
 
-def mutex_dir(home: str | None = None, profile: str | None = None) -> str:
-    return os.path.join(state_root(home, profile), "code_mutex")
-
-
 # ---------------------------------------------------------------------------
 # CLI entrypoint kept in this module so there is exactly one paths surface.
 # Import argparse / datetime locally to keep library imports lightweight.

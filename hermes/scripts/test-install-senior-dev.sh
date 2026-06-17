@@ -26,7 +26,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 2: Seed has required files ===\n'
 missing=0
-for f in distribution.yaml config.yaml SOUL.md HERMES.seed.md; do
+for f in distribution.yaml config.yaml SOUL.md; do
   if [[ -f "$SEED_DIR/$f" ]]; then
     echo "  OK: $f"
   else
@@ -49,7 +49,7 @@ with open('$SEED_DIR/distribution.yaml') as f:
 assert d.get('name') == 'senior-dev', 'name: ' + str(d.get('name'))
 assert 'distribution_owned' in d, 'missing distribution_owned'
 owned = d['distribution_owned']
-for f in ['SOUL.md', 'HERMES.seed.md', 'distribution.yaml']:
+for f in ['SOUL.md', 'distribution.yaml']:
     assert f in owned, f + ' not in distribution_owned'
 print('OK: name=senior-dev, %d owned files' % len(owned))
 " && pass || fail "distribution.yaml validation failed"
@@ -57,7 +57,7 @@ print('OK: name=senior-dev, %d owned files' % len(owned))
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 4: Plugin sources exist ===\n'
 missing=0
-for p in marinator-delegation senior-task senior-runner; do
+for p in senior-task senior-runner; do
   if [[ -d "$PLUGIN_SRC/$p" ]]; then
     echo "  OK: $p"
   else
@@ -74,7 +74,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 5: Plugin source has required files ===\n'
 missing=0
-for p in marinator-delegation senior-task senior-runner; do
+for p in senior-task senior-runner; do
   for f in plugin.yaml __init__.py tools.py; do
     if [[ -f "$PLUGIN_SRC/$p/$f" ]]; then
       echo "  OK: $p/$f"
@@ -104,19 +104,18 @@ mkdir -p "$PROFILE_DIR"
 # 2. Copy seed files
 cp "$SEED_DIR/config.yaml" "$PROFILE_DIR/config.yaml"
 cp "$SEED_DIR/SOUL.md" "$PROFILE_DIR/SOUL.md"
-cp "$SEED_DIR/HERMES.seed.md" "$PROFILE_DIR/HERMES.seed.md"
 
 # 3. Copy plugins (simulating Step 3 of install script)
 PLUGIN_TARGET="$PROFILE_DIR/plugins"
 mkdir -p "$PLUGIN_TARGET"
-for plugin in marinator-delegation senior-task senior-runner; do
+for plugin in senior-task senior-runner; do
   cp -a "$PLUGIN_SRC/$plugin" "$PLUGIN_TARGET/$plugin"
 done
 
 # 4. Verify expected file layout
 missing=0
 # Profile root files
-for f in config.yaml SOUL.md HERMES.seed.md; do
+for f in config.yaml SOUL.md; do
   if [[ -f "$PROFILE_DIR/$f" ]]; then
     echo "  OK: $f"
   else
@@ -125,7 +124,7 @@ for f in config.yaml SOUL.md HERMES.seed.md; do
   fi
 done
 # Plugin dirs
-for p in marinator-delegation senior-task senior-runner; do
+for p in senior-task senior-runner; do
   for f in plugin.yaml __init__.py tools.py; do
     if [[ -f "$PLUGIN_TARGET/$p/$f" ]]; then
       echo "  OK: plugins/$p/$f"
@@ -159,7 +158,7 @@ config_file = os.path.join('$TEMP_DIR', 'config_merge_test.yaml')
 
 # Write initial config with existing plugins
 with open(config_file, 'w') as f:
-    f.write('plugins:\\n  enabled:\\n    - marinator-delegation\\n')
+    f.write('plugins:\\n  enabled:\\n    - senior-runner\\n')
 
 # Simulate loading and appending a new plugin
 import yaml
@@ -171,7 +170,7 @@ for plugin in ['senior-task']:
     if plugin not in existing:
         existing.append(plugin)
 
-assert 'marinator-delegation' in existing, 'existing plugin preserved'
+assert 'senior-runner' in existing, 'existing plugin preserved'
 assert 'senior-task' in existing, 'new plugin added'
 
 # Verify it can be round-tripped
@@ -181,7 +180,7 @@ with open(config_file, 'w') as f:
 with open(config_file) as f:
     cfg2 = yaml.safe_load(f) or {}
 enabled2 = cfg2['plugins']['enabled']
-assert enabled2 == ['marinator-delegation', 'senior-task'], str(enabled2)
+assert enabled2 == ['senior-runner', 'senior-task'], str(enabled2)
 
 print('OK: config merge round-trips correctly: %s' % enabled2)
 " && pass || fail "Config merge test failed"
@@ -273,11 +272,9 @@ spec.loader.exec_module(module)
 
 # Verify expected symbols exist
 assert hasattr(module, 'handle_create_senior_task'), 'missing handle_create_senior_task'
-assert hasattr(module, 'handle_senior_dev_task_result'), 'missing handle_senior_dev_task_result'
-assert hasattr(module, 'CREATE_SENIOR_TASK_SCHEMA'), 'missing CREATE_SENIOR_TASK_SCHEMA'
-assert hasattr(module, 'SENIOR_DEV_TASK_RESULT_SCHEMA'), 'missing SENIOR_DEV_TASK_RESULT_SCHEMA'
-assert hasattr(module, 'SENIOR_ACTIVE_TASKS_SCHEMA'), 'missing SENIOR_ACTIVE_TASKS_SCHEMA'
 assert hasattr(module, 'handle_senior_active_tasks'), 'missing handle_senior_active_tasks'
+assert hasattr(module, 'CREATE_SENIOR_TASK_SCHEMA'), 'missing CREATE_SENIOR_TASK_SCHEMA'
+assert hasattr(module, 'SENIOR_ACTIVE_TASKS_SCHEMA'), 'missing SENIOR_ACTIVE_TASKS_SCHEMA'
 print('OK: senior-task tools.py imports correctly from simulated install')
 " && pass || fail "Plugin import test failed"
 

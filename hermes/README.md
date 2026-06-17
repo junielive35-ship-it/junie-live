@@ -59,7 +59,7 @@ This directory contains everything needed to run Junie Live on top of [Hermes Ag
 |---------|----------|--------|
 | Orchestration | OpenClaw agent with `AGENTS.md` workspace | Hermes profile with `SOUL.md`, memory, skills, and `HERMES.md` in the target repo |
 | Persistent context | `MEMORY.md` file in workspace | Hermes native memory (user + memory stores) |
-| Coding delegation | `opencode run` subagent via shell scripts | `create_senior_task` to the `senior-dev` Kanban lane for code-changing work; `senior-dev` uses `marinator_delegate` internally; `delegate_task` only for non-code subtasks |
+| Coding delegation | `opencode run` subagent via shell scripts | `create_senior_task` to the `senior-dev` Kanban lane for code-changing work; the current p1 lane uses synchronous `senior_run_coding_task` (OpenCode) and returns `blocked(review-required|needs-input|failed)` for Junie review; `delegate_task` only for non-code subtasks |
 | Scheduled routines | System crontab / OpenClaw cron | Hermes native cron jobs |
 | Skills | OpenClaw skill files in workspace | Hermes skills (first-class, auto-loaded by matching) |
 | Repo hygiene | Shell scripts checking for workspace artifacts | Single tracked file in the target repo (`HERMES.md`); all other state under `~/.hermes/` |
@@ -92,8 +92,8 @@ hermes/
 │   ├── .env                           # Created by hire-junie.sh with Telegram creds
 │   ├── docs/                          # Profile-internal Junie docs (strategy, protocols, etc.)
 │   ├── skills/                        # Installed skills
-│   ├── plugins/                       # Marinator delegation + Autonomous work plugins
-│   ├── scripts/                       # Profile-local helper scripts (code-mutex, dump, etc.)
+│   ├── plugins/                       # Senior task/runner, Marinator delegation, Autonomous work plugins
+│   ├── scripts/                       # Profile-local helper scripts (dump, initialization, etc.)
 │   └── cron/                          # Optional profile cron jobs
 ├── initialization/                    # Superseded by distribution/; kept for migration compatibility
 ├── scripts/
@@ -104,7 +104,6 @@ hermes/
 ├── docs/
 │   ├── setup.md                       # Full setup guide
 │   ├── architecture.md                # Hermes-specific architecture
-│   ├── code-mutex.md                  # Code mutex protocol docs
 │   ├── overnight-routines.md          # Autonomous work window contract
 │   └── day-to-day-routines.md         # Operational routines
 └── openclaw-hermes-comparison.md      # Platform comparison for decision-making
@@ -122,13 +121,13 @@ hermes/
 
 5. **Skills** — Hermes skills replace OpenClaw protocols. They're auto-loaded when relevant tasks match, and they carry the delegation, review, reflection, and intake workflows.
 
-6. **Delegation** — Normal code-changing work is delegated via `create_senior_task` to the `senior-dev` Kanban lane. The orchestrator never codes directly. Non-code subtasks may use `delegate_task` instead.
+6. **Delegation** — Normal code-changing work is delegated via `create_senior_task` to the `senior-dev` Kanban lane. In the current p1 implementation, `senior-dev` is a thin synchronous adapter around OpenCode: it calls `senior_run_coding_task`, writes Marinator-style artifacts, comments the result, and blocks the task as `review-required`, `needs-input`, or `failed`. The orchestrator never codes directly. Non-code subtasks may use `delegate_task` instead.
 
-7. **Cron** — Hermes cron jobs replace shell crontab entries when recurring routines are explicitly approved. Setup does not install watchdog, health-check, or overnight-start jobs by default; owner/admin-triggered autonomous-work windows are the default control plane.
+7. **Cron** — Hermes cron jobs replace shell crontab entries when recurring routines are explicitly approved. Setup does not install watchdog, health-check, or overnight-start jobs by default.
 
 8. **Telegram** — Hermes gateway provides native Telegram integration with DM allowlisting, the same as the OpenClaw version.
 
-9. **Code Mutex** — A lightweight state-file mutex under `~/.hermes/profiles/junie-live/junie-live/state/code_mutex/` prevents parallel code-changing work. Same atomic-`mkdir` primitive as OpenClaw.
+9. **Code Mutex** — A lightweight state-file mutex still ships for legacy/manual protected routines, but the active p1 code-work concurrency boundary is the Hermes Kanban `senior-dev` lane. Normal Chat Agent code tasks go through Kanban rather than a separate mutex gate.
 
 ## Current implementation status
 

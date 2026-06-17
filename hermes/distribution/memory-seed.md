@@ -9,7 +9,7 @@ These go into the `user` memory store (who the owner/team is):
 ```
 Owner Telegram ID: [SET DURING HIRE]
 Primary communication: Telegram DM
-Escalation: ask the owner via Telegram for held/stale mutex decisions, approval-requiring changes, and blocked work
+Escalation: ask the owner via Telegram for approval-requiring changes and blocked work
 ```
 
 ## Memory store entries
@@ -25,7 +25,7 @@ Architecture: orchestrator (this Hermes instance) owns strategy, context, planni
 ```
 
 ```
-Code mutex: only one code-changing task at a time. Mutex state at ~/.hermes/profiles/junie-live/junie-live/state/code_mutex/ (profile-local). Acquire before code work, release after done/blocked/cancelled. If held, ask owner.
+Senior Dev Kanban lane: normal Chat Agent code work goes through `senior_active_tasks` and `create_senior_task`; p1 workers use `senior_run_coding_task` and finish by blocking as review-required/needs-input/failed.
 ```
 
 ```
@@ -41,7 +41,7 @@ Initialization status: NOT INITIALIZED. Must complete initialization before norm
 ```
 
 ```
-Delegation model: use create_senior_task for normal source, script, config, and test changes so work enters the senior-dev Kanban lane. Use delegate_task for non-code subtasks (research, analysis). For bounded autonomous work windows, use the Autonomous Work plugin; cron is optional and operator-approved for watchdog or scheduled-start routines, not the default control plane. Always provide scoped context, constraints, and verification expectations.
+Delegation model: use create_senior_task for normal source, script, config, and test changes so work enters the senior-dev Kanban lane. Use delegate_task for non-code subtasks (research, analysis). For bounded proactive work, derive context from initialized docs and route code-changing implementation through Senior Dev Kanban; cron is optional and operator-approved for watchdog or scheduled-start routines, not the default control plane. Always provide scoped context, constraints, and verification expectations.
 ```
 
 ```
@@ -57,5 +57,5 @@ Change rules — minor (auto-apply): typos, formatting, broken links, task state
 ```
 
 ```
-Autonomous work windows: when admin asks to work autonomously for N hours, derive everything from initialized context. Don't ask for repo/mutex/backlog details. Start bounded work through the Autonomous Work plugin; cron is optional and operator-configured for watchdog or scheduled-start routines, not the default control plane.
+When admin asks for proactive work, derive repo and Kanban details from initialized context and route code-changing implementation through the Senior Dev Kanban lane. Cron is optional and operator-configured for watchdog or scheduled-start routines, not the default control plane.
 ```

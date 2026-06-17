@@ -56,23 +56,23 @@ Do not blindly execute requests. When a request conflicts with strategy, archite
 4. Ask the requester to resolve it.
 5. Proceed only after the contradiction is resolved.
 
-## Batched intake of blocked backlog items
+## Batched intake of blocked Kanban tasks
 
-When the owner says "let's process all blocked items one by one, explain what you want and I'll approve or challenge" (or any equivalent — "go through the blocked queue", "review approvals"), follow this shape:
+When the owner says "let's process all blocked items one by one, explain what you want and I'll approve or challenge" (or any equivalent — "go through the blocked queue", "review approvals"), use the Senior Dev Kanban board as the source of truth:
 
-1. **Pull the authoritative Hermes backlog first.** Use the profile-local Hermes backlog directory, resolved from `$HERMES_HOME`: `$HERMES_HOME/junie-live/state/backlog/items/*.md`. Items are Markdown files with YAML frontmatter. If that directory or matching files do not exist, say there is currently no authoritative Hermes backlog instead of falling back to legacy state.
-2. **Never read OpenClaw backlog state from Hermes.** Do not use `.openclaw/`, `~/.openclaw/`, `JUNIE_WORKSPACE`, `workspace-junie-live`, `openclaw/scripts/backlog.sh`, or raw legacy JSON item files as a Hermes source of truth. Those are historical/OpenClaw-only surfaces.
-3. **Read full item bodies before presenting.** Parse frontmatter for `id`, `status`, `kind`, `title`, `scores`/`priority`, `approval_required`, and read the Markdown body for evidence/notes/history.
-4. **Open with a compact priority-sorted list** of all blocked items: `# | id-suffix | priority | kind | one-line title`. Then say "I'll start with the top three. Quick map first." Don't dump detailed write-ups for every item at once.
-5. **Per-item presentation template:**
-   - **Problem:** what's broken or missing, citing evidence (file path, prior session, observed symptom).
-   - **What I want to do:** the concrete proposed action, scoped narrow. If it's "write a design doc first", say that and *do not* embed implementation details.
+1. **Pull active Senior Dev tasks first.** Use `senior_active_tasks(repo=..., include_comments=true)` for the target repo. If there are no active blocked tasks, say so instead of falling back to legacy OpenClaw or removed Junie backlog state.
+2. **Never read OpenClaw backlog state from Hermes.** Do not use `.openclaw/`, `~/.openclaw/`, `JUNIE_WORKSPACE`, `workspace-junie-live`, `openclaw/scripts/backlog.sh`, raw legacy JSON item files, or removed profile-local backlog directories as a Hermes source of truth.
+3. **Read the task comments/artifacts before presenting.** For each blocked task, inspect the title, status, embedded `_junie_metadata`, comments, `review-required` / `needs-input` / `failed` reason, and referenced result artifacts when needed.
+4. **Open with a compact priority-sorted list** of blocked tasks: `# | task_id suffix | status/reason | one-line title`. Then say "I'll start with the top three. Quick map first." Don't dump detailed write-ups for every item at once.
+5. **Per-task presentation template:**
+   - **Problem:** what's blocked or waiting, citing evidence (Kanban comment, artifact path, observed symptom).
+   - **What I want to do:** the concrete proposed action, scoped narrow. If it's "review the worker result first", say that and *do not* embed implementation details.
    - **Why this is interesting / risk:** strategic framing in 1–2 lines.
    - **My recommendation:** ✅ approve / ⚠ challenge first / ❌ drop. State it explicitly so the owner can disagree fast.
    - **One-line ask:** `Do you approve <action>?` (yes / no / challenge). Then stop and wait.
 6. **One item at a time after the first.** Do not pre-batch responses to items #2…#N. Each turn handles exactly one decision so the owner has a clean rejection path.
-7. **Track decisions in the Hermes backlog as you go.** On approve, update the item frontmatter/body in the profile-local Markdown file. On reject/drop, archive or re-status it with the reason. If no Hermes backlog implementation exists yet, record the decision in the relevant profile docs/status note instead of inventing an OpenClaw fallback.
+7. **Track decisions in Kanban as you go.** On approval or rejection, comment/update/requeue the Kanban task through the available Kanban/Senior task tooling. If a required Kanban update tool is unavailable in the current session, record the decision in the relevant profile docs/status note instead of inventing an OpenClaw or backlog fallback.
 
 ### Why this shape
 
-Per HERMES.md major-change rules, blocked items are exactly the class of work that needs explicit human sign-off — architecture, tooling additions, skill behavior, deploy/CI. A wall of details makes that sign-off harder, not easier. The intake here is a *decision-loop UX*, not a status report. Hermes must not silently import OpenClaw workspace state, because that breaks the Hermes-native ownership boundary and can resurrect stale decisions.
+Per HERMES.md major-change rules, blocked tasks are exactly the class of work that needs explicit human sign-off — architecture, tooling additions, skill behavior, deploy/CI. A wall of details makes that sign-off harder, not easier. The intake here is a *decision-loop UX*, not a status report. Hermes must not silently import OpenClaw workspace state or removed Junie backlog state, because that breaks the Hermes-native Kanban ownership boundary and can resurrect stale decisions.
