@@ -104,6 +104,14 @@ if [[ -e "$SEED_DIR/BOOTSTRAP.md" ]]; then
   exit 1
 fi
 command -v hermes >/dev/null || { err "hermes CLI not found in PATH"; exit 1; }
+
+# Resolve the shared Hermes root early. Junie profile data lives under
+# $HERMES_ROOT/profiles/$PROFILE, but Hermes Kanban is deliberately shared
+# across profiles at $HERMES_ROOT/kanban.db and $HERMES_ROOT/kanban/.
+# A fresh hire must clear both the profile and this shared Junie runtime state
+# after the optional pre-hire backup.
+HERMES_ROOT="$(python3 -m junie_runtime.paths hermes-root --profile "$PROFILE")"
+[[ -n "$HERMES_ROOT" && "$HERMES_ROOT" != "/" ]] || { err "invalid Hermes root resolved for $PROFILE: ${HERMES_ROOT:-'(empty)'}"; exit 1; }
 # ── Early: install/check junie_runtime before any profile ops ──
 RUNTIME_DIR="$HERMES_VERSION_ROOT/junie_runtime"
 if [[ -d "$RUNTIME_DIR" ]]; then
@@ -135,11 +143,30 @@ if [[ "$BACKUP" -eq 1 ]]; then
   fi
 fi
 
+# ── Step 1b: Delete shared Hermes-root Kanban state ──
+# Kanban is not profile-local: hermes_cli/kanban_db.py stores the default board
+# at $HERMES_ROOT/kanban.db and related logs/workspaces/boards under
+# $HERMES_ROOT/kanban/. `hermes profile delete` intentionally does not remove
+# this cross-profile board, so without this cleanup old Senior Dev tasks survive
+# a Junie re-hire and contaminate a supposedly fresh initialization.
+KANBAN_DB_TARGET="$HERMES_ROOT/kanban.db"
+KANBAN_DIR_TARGET="$HERMES_ROOT/kanban"
+if [[ -f "$KANBAN_DB_TARGET" || -d "$KANBAN_DIR_TARGET" ]]; then
+  log "Deleting shared Kanban state for fresh hire..."
+  rm -f "$KANBAN_DB_TARGET" \
+        "$KANBAN_DB_TARGET-wal" \
+        "$KANBAN_DB_TARGET-shm" \
+        "$KANBAN_DB_TARGET-journal"
+  rm -rf "$KANBAN_DIR_TARGET"
+  log "  Shared Kanban state deleted"
+fi
+
 # ── Step 2: Delete existing profile if present ──
 # Use `hermes profile show` to test existence (rc=0 if exists, rc=1 if not).
 # If the profile exists, delete it via Hermes-native profile delete, which
-# removes config, API keys, memories, sessions, skills, cron jobs, state,
-# and alias/service references in one step. Backup was done in Step 1.
+# removes profile-local config, API keys, memories, sessions, skills, cron jobs,
+# state, and alias/service references in one step. Shared Hermes-root Kanban
+# state is removed explicitly above. Backup was done in Step 1.
 if hermes profile show "$PROFILE" >/dev/null 2>&1; then
   log "Profile $PROFILE exists — deleting for fresh reinstall"
   hermes profile delete "$PROFILE" -y || { err "Failed to delete profile $PROFILE"; exit 1; }
@@ -329,7 +356,6 @@ fi
 # admin's DM automatically (no manual /sethome needed).
 log "Configuring profile .env..."
 PROFILE_ENV="$PROFILE_DIR/.env"
-HERMES_ROOT="$(python3 -m junie_runtime.paths hermes-root --profile "$PROFILE")"
 ROOT_ENV="$HERMES_ROOT/.env"
 
 # Provider API keys (and any other env vars) that should be forwarded from
