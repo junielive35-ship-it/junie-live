@@ -10,11 +10,46 @@
 - `senior-dev` is temporary: a thin synchronous adapter around vanilla OpenCode.
 - Reuse useful Marinator wrapper pieces: run dir, `spec.json`, `status.json`, `events.jsonl`, logs, `result.md`.
 - Do not use `marinator_delegate`; replace that tool path for p1.
+- Do not patch Hermes core for this path; use Junie/Hermes profile and plugin
+  surfaces (`senior-task`, `senior-runner`, and `profiles/senior-dev`).
 - Use `blocked` for both user input and review-required states:
   - `blocked: needs-input: ...`
   - `blocked: review-required: PR ...`
 - `done` is not used until PR merge monitoring exists.
 - Duplicate/follow-up detection is Chat Agent judgment from Kanban state, not script fuzzy matching.
+
+## Code-backed facts to preserve from the transition plan
+
+- `create_senior_task` reads origin metadata through
+  `gateway.session_context.get_session_env` with environment fallback:
+  `HERMES_SESSION_PLATFORM`, `HERMES_SESSION_CHAT_ID`,
+  `HERMES_SESSION_THREAD_ID`, `HERMES_SESSION_USER_ID`, and
+  `HERMES_SESSION_KEY`.
+- Senior task bodies carry a trailing `_junie_metadata:` JSON line with
+  `junie_task_type`, `source`, `repo`, `owned_area`, `opencode_session_id`,
+  `pr_urls`, and `duplicate_keys`.
+- The Senior-task helper creates tasks assigned to `senior-dev`, subscribes the
+  origin chat/thread through `add_notify_sub`, and resubscribes an existing
+  idempotency match before returning it as a duplicate.
+- `senior_active_tasks` is implemented for Chat Agent routing; it lists active
+  `senior-dev` tasks in `ready`, `running`, `blocked`, and `scheduled`, can
+  filter by repo/current origin, and can include comments for block/follow-up
+  judgment.
+- The synchronous runner stores state under the profile's
+  `junie-live/state/senior/runs/<job_id>` tree unless `SENIOR_RUNNER_BASE`
+  overrides it for tests.
+- The runner writes `prompt.md` in addition to `spec.json`, `status.json`,
+  `events.jsonl`, `result.md`, `opencode.stdout.log`, `opencode.stderr.log`,
+  and `runner.log`.
+- `run-coding-task.sh` resolves the OpenCode binary, runs
+  `opencode run --format json --dangerously-skip-permissions` synchronously,
+  extracts the OpenCode session id from NDJSON output when present, and
+  normalizes or synthesizes the `VERDICT` block so the worker always has a
+  Kanban-mappable result.
+- `senior-dev` is started with Kanban environment such as
+  `HERMES_KANBAN_TASK`, `HERMES_KANBAN_RUN_ID`, `HERMES_KANBAN_BOARD`, and
+  `HERMES_KANBAN_WORKSPACES_ROOT`; terminal Kanban blocks should pass
+  `expected_run_id=HERMES_KANBAN_RUN_ID`.
 
 ## Target flow
 
@@ -75,6 +110,7 @@
 
 **Tool behavior:**
 - Creates run dir under the existing Marinator-style run root.
+- Writes `prompt.md` containing the assembled OpenCode prompt.
 - Writes `spec.json` and initial `status.json`.
 - Calls `scripts/run-coding-task.sh` in foreground.
 - Waits until OpenCode exits; no p1 hard timeout.
@@ -82,6 +118,7 @@
 - Does not mutate Kanban. The Kanban worker does that after reading artifacts.
 
 **Artifacts:**
+- `prompt.md`
 - `spec.json`
 - `status.json`
 - `events.jsonl`
@@ -131,6 +168,15 @@ This verdict block is output discipline, not a long-term Senior API.
 **Files:**
 - `hermes/distribution/plugins/senior-task/tools.py`
 - Chat Agent prompt/docs if needed
+
+**Existing helper contract:**
+- `create_senior_task` must be the Chat Agent entrypoint for new Senior Dev
+  work because it creates the task and subscribes the origin chat/thread.
+- A bare `kanban_create` or direct `kanban_db.create_task` call is insufficient
+  unless it also performs the helper contract, especially origin subscription
+  and metadata storage.
+- Use `senior_active_tasks` before `create_senior_task` to inspect active
+  Senior work by repo/origin and comments.
 
 **Rules:**
 - If no related active task: create a new task.
