@@ -163,7 +163,7 @@ This verdict block is output discipline, not a long-term Senior API.
 
 **Rules:**
 - Do not remove mutex code yet.
-- Ensure Chat Agent, Autonomous Work, and Senior routing all go through Kanban for code work.
+- Ensure Chat Agent routing all go through Kanban for code work.
 - Senior lane must not start parallel code runs for the same repo in p1.
 
 **Verify:** two code requests create/attach to Kanban work rather than bypassing into direct code execution.
