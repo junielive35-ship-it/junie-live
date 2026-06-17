@@ -242,6 +242,74 @@ print("OK: check_requirements returned %s" % expected)
 ' && pass || fail "check_requirements test failed"
 
 # ════════════════════════════════════════════════════════════════
+printf '=== Test 10: senior_active_tasks schema + metadata parsing ===\n'
+load_plugin '
+import json
+props = SENIOR_ACTIVE_TASKS_SCHEMA["parameters"]["properties"]
+assert SENIOR_ACTIVE_TASKS_SCHEMA["name"] == "senior_active_tasks"
+for f in ("repo", "only_current_origin", "include_comments"):
+    assert f in props, f
+# senior_active_tasks takes no required fields
+assert "required" not in SENIOR_ACTIVE_TASKS_SCHEMA["parameters"] or \
+    SENIOR_ACTIVE_TASKS_SCHEMA["parameters"].get("required") in (None, []), SENIOR_ACTIVE_TASKS_SCHEMA
+
+# _parse_task_metadata round-trips a create_senior_task body
+origin = {"platform": "telegram", "chat_id": "999", "thread_id": "", "user_id": "u", "session_key": ""}
+body = _build_task_body("Fix bug", "/home/repo", origin)
+meta = _parse_task_metadata(body)
+assert meta["repo"] == "/home/repo", meta
+assert meta["junie_task_type"] == "senior_dev_code_task", meta
+assert _parse_task_metadata("no metadata here") == {}
+print("OK: senior_active_tasks schema + metadata parse")
+' && pass || fail "senior_active_tasks schema/parse test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 11: senior_active_tasks finds active task, filters by repo/origin ===\n'
+TEST_REPO="$ROOT" run_with_hermes '
+import json, os, tempfile
+from pathlib import Path
+
+os.environ["HERMES_KANBAN_DB"] = str(Path(tempfile.mkdtemp(prefix="st-")) / "kanban.db")
+os.environ["HERMES_SESSION_PLATFORM"] = "telegram"
+os.environ["HERMES_SESSION_CHAT_ID"] = "555000"
+os.environ["HERMES_SESSION_THREAD_ID"] = ""
+os.environ["HERMES_SESSION_USER_ID"] = "user_test"
+
+from hermes_cli import kanban_db as kb
+kb.init_db(Path(os.environ["HERMES_KANBAN_DB"]))
+
+repo = os.environ.get("TEST_REPO", os.getcwd())
+created = json.loads(handle_create_senior_task({
+    "title": "Active lookup task",
+    "request": "Do work",
+    "repo": repo,
+}))
+task_id = created["task_id"]
+
+# No filter: should include the new task
+r = json.loads(handle_senior_active_tasks({}))
+ids = [t["task_id"] for t in r["tasks"]]
+assert task_id in ids, (task_id, ids)
+hit = [t for t in r["tasks"] if t["task_id"] == task_id][0]
+assert hit["repo"] == repo, hit
+assert hit["status"] in ("ready", "running"), hit
+
+# Matching origin filter: still present
+r2 = json.loads(handle_senior_active_tasks({"only_current_origin": True}))
+assert task_id in [t["task_id"] for t in r2["tasks"]], r2
+
+# Non-matching repo filter: absent
+r3 = json.loads(handle_senior_active_tasks({"repo": "/nonexistent/other/repo"}))
+assert task_id not in [t["task_id"] for t in r3["tasks"]], r3
+
+# Different origin filter: simulate another chat -> absent
+os.environ["HERMES_SESSION_CHAT_ID"] = "111222"
+r4 = json.loads(handle_senior_active_tasks({"only_current_origin": True}))
+assert task_id not in [t["task_id"] for t in r4["tasks"]], r4
+print("OK: active-task lookup filters by repo and origin")
+' && pass || fail "senior_active_tasks lookup test failed"
+
+# ════════════════════════════════════════════════════════════════
 printf '\n'
 printf '=== Results ===\n'
 printf 'Passed: %d, Failed: %d\n' "$pass_count" "$fail_count"

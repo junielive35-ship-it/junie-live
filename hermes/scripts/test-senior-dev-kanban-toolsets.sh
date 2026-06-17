@@ -47,9 +47,9 @@ for section in ('platform_toolsets', 'known_plugin_toolsets'):
 print('OK: distribution config does not default-enable marinator for junie-live')
 PY
 
-printf '=== Test 2: senior-dev installer keeps marinator and senior toolsets ===\n'
-if grep -Eq 'for toolset in marinator senior terminal file; do' "$ROOT/scripts/install-senior-dev-profile.sh"; then
-  printf '  OK: senior-dev installer enables marinator senior terminal file\n'
+printf '=== Test 2: senior-dev installer keeps marinator/senior + sync runner toolsets ===\n'
+if grep -Eq 'for toolset in marinator senior senior_runner kanban terminal file; do' "$ROOT/scripts/install-senior-dev-profile.sh"; then
+  printf '  OK: senior-dev installer enables marinator senior senior_runner kanban terminal file\n'
   pass
 else
   fail "senior-dev installer no longer enables required toolsets"

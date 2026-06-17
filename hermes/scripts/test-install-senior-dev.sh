@@ -57,7 +57,7 @@ print('OK: name=senior-dev, %d owned files' % len(owned))
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 4: Plugin sources exist ===\n'
 missing=0
-for p in marinator-delegation senior-task; do
+for p in marinator-delegation senior-task senior-runner; do
   if [[ -d "$PLUGIN_SRC/$p" ]]; then
     echo "  OK: $p"
   else
@@ -74,7 +74,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 5: Plugin source has required files ===\n'
 missing=0
-for p in marinator-delegation senior-task; do
+for p in marinator-delegation senior-task senior-runner; do
   for f in plugin.yaml __init__.py tools.py; do
     if [[ -f "$PLUGIN_SRC/$p/$f" ]]; then
       echo "  OK: $p/$f"
@@ -109,7 +109,7 @@ cp "$SEED_DIR/HERMES.seed.md" "$PROFILE_DIR/HERMES.seed.md"
 # 3. Copy plugins (simulating Step 3 of install script)
 PLUGIN_TARGET="$PROFILE_DIR/plugins"
 mkdir -p "$PLUGIN_TARGET"
-for plugin in marinator-delegation senior-task; do
+for plugin in marinator-delegation senior-task senior-runner; do
   cp -a "$PLUGIN_SRC/$plugin" "$PLUGIN_TARGET/$plugin"
 done
 
@@ -125,7 +125,7 @@ for f in config.yaml SOUL.md HERMES.seed.md; do
   fi
 done
 # Plugin dirs
-for p in marinator-delegation senior-task; do
+for p in marinator-delegation senior-task senior-runner; do
   for f in plugin.yaml __init__.py tools.py; do
     if [[ -f "$PLUGIN_TARGET/$p/$f" ]]; then
       echo "  OK: plugins/$p/$f"
@@ -135,6 +135,13 @@ for p in marinator-delegation senior-task; do
     fi
   done
 done
+# senior-runner ships its synchronous worker script
+if [[ -f "$PLUGIN_TARGET/senior-runner/scripts/run-coding-task.sh" ]]; then
+  echo "  OK: plugins/senior-runner/scripts/run-coding-task.sh"
+else
+  echo "  MISSING: plugins/senior-runner/scripts/run-coding-task.sh"
+  missing=$((missing+1))
+fi
 
 if [[ "$missing" -eq 0 ]]; then
   pass
@@ -269,8 +276,29 @@ assert hasattr(module, 'handle_create_senior_task'), 'missing handle_create_seni
 assert hasattr(module, 'handle_senior_dev_task_result'), 'missing handle_senior_dev_task_result'
 assert hasattr(module, 'CREATE_SENIOR_TASK_SCHEMA'), 'missing CREATE_SENIOR_TASK_SCHEMA'
 assert hasattr(module, 'SENIOR_DEV_TASK_RESULT_SCHEMA'), 'missing SENIOR_DEV_TASK_RESULT_SCHEMA'
+assert hasattr(module, 'SENIOR_ACTIVE_TASKS_SCHEMA'), 'missing SENIOR_ACTIVE_TASKS_SCHEMA'
+assert hasattr(module, 'handle_senior_active_tasks'), 'missing handle_senior_active_tasks'
 print('OK: senior-task tools.py imports correctly from simulated install')
 " && pass || fail "Plugin import test failed"
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 12: senior-runner tools import from simulated profile ===\n'
+python3 -c "
+import importlib.util, sys, os, types
+
+plugin_dir = os.path.join('$TEMP_DIR', 'profiles', 'senior-dev', 'plugins', 'senior-runner')
+pkg = types.ModuleType('sr_plugin'); pkg.__path__ = [plugin_dir]; sys.modules['sr_plugin'] = pkg
+for name in ['state', 'runner', 'tools']:
+    spec = importlib.util.spec_from_file_location('sr_plugin.' + name, os.path.join(plugin_dir, name + '.py'))
+    m = importlib.util.module_from_spec(spec)
+    sys.modules['sr_plugin.' + name] = m
+    spec.loader.exec_module(m)
+
+tools = sys.modules['sr_plugin.tools']
+assert hasattr(tools, 'SENIOR_RUN_CODING_TASK_SCHEMA'), 'missing SENIOR_RUN_CODING_TASK_SCHEMA'
+assert hasattr(tools, 'handle_senior_run_coding_task'), 'missing handle_senior_run_coding_task'
+print('OK: senior-runner tools.py imports correctly from simulated install')
+" && pass || fail "senior-runner import test failed"
 
 # ════════════════════════════════════════════════════════════════
 printf '\n'

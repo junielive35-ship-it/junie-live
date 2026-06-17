@@ -92,6 +92,8 @@ for required_dir in \
     distribution/plugins/autonomous-work \
     distribution/plugins/autonomous-work/scripts \
     distribution/plugins/senior-task \
+    distribution/plugins/senior-runner \
+    distribution/plugins/senior-runner/scripts \
     distribution/profiles/senior-dev \
     distribution/scripts; do
   [[ -d "$required_dir" ]] || fail "missing required directory: $required_dir"
@@ -125,6 +127,12 @@ for required_file in \
     distribution/plugins/senior-task/plugin.yaml \
     distribution/plugins/senior-task/__init__.py \
     distribution/plugins/senior-task/tools.py \
+    distribution/plugins/senior-runner/plugin.yaml \
+    distribution/plugins/senior-runner/__init__.py \
+    distribution/plugins/senior-runner/tools.py \
+    distribution/plugins/senior-runner/runner.py \
+    distribution/plugins/senior-runner/state.py \
+    distribution/plugins/senior-runner/scripts/run-coding-task.sh \
     distribution/profiles/senior-dev/distribution.yaml \
     distribution/profiles/senior-dev/config.yaml \
     distribution/profiles/senior-dev/SOUL.md \
@@ -236,6 +244,9 @@ log "senior-dev install script tests"
 
 log "senior-dev Kanban toolset split tests"
 "$ROOT/scripts/test-senior-dev-kanban-toolsets.sh" || fail "senior-dev Kanban toolset split tests failed"
+
+log "senior-runner synchronous runner tests"
+"$ROOT/scripts/test-senior-runner.sh" || fail "senior-runner synchronous runner tests failed"
 
 log "junie_runtime package import and tests"
 if python3 -c "import junie_runtime; print(junie_runtime.__version__)" 2>/dev/null; then

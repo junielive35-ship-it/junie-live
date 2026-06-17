@@ -4,7 +4,7 @@ set -euo pipefail
 # install-senior-dev-profile.sh — Install the senior-dev profile into Hermes
 #
 # Installs the senior-dev profile, copies required plugins
-# (marinator-delegation, senior-task), enables them, and enables
+# (marinator-delegation, senior-task, senior-runner), enables them, and enables
 # required toolsets. Safe to re-run (idempotent with --alias).
 # Does not overwrite an existing live senior-dev profile unless --force.
 
@@ -18,8 +18,8 @@ usage() {
 Usage: install-senior-dev-profile.sh [--force]
 
 Installs the '$PROFILE' profile into Hermes with required plugins
-(marinator-delegation, senior-task) and toolsets (marinator, senior,
-terminal, file).
+(marinator-delegation, senior-task, senior-runner) and toolsets
+(senior, senior_runner, kanban, marinator, terminal, file).
 
 Safe to re-run — uses hermes profile install with --alias.
 
@@ -170,7 +170,7 @@ log "Profile directory: $PROFILE_DIR"
 PLUGIN_TARGET="$PROFILE_DIR/plugins"
 mkdir -p "$PLUGIN_TARGET"
 
-for plugin in marinator-delegation senior-task; do
+for plugin in marinator-delegation senior-task senior-runner; do
   if [[ -d "$PLUGIN_SRC/$plugin" ]]; then
     if [[ -d "$PLUGIN_TARGET/$plugin" ]]; then
       log "  Plugin '$plugin' already installed in profile, skipping copy."
@@ -187,14 +187,15 @@ done
 log "Enabling plugins..."
 ensure_plugin "$PROFILE_DIR" "$PROFILE" "marinator-delegation"
 ensure_plugin "$PROFILE_DIR" "$PROFILE" "senior-task"
+ensure_plugin "$PROFILE_DIR" "$PROFILE" "senior-runner"
 
 # ── Step 5: Enable required toolsets ──
 log "Enabling toolsets..."
 for platform in cli; do
-  for toolset in marinator senior terminal file; do
+  for toolset in marinator senior senior_runner kanban terminal file; do
     hermes -p "$PROFILE" tools enable --platform "$platform" "$toolset" >/dev/null 2>&1 || true
   done
 done
-log "  Toolsets enabled: marinator, senior, terminal, file (cli)"
+log "  Toolsets enabled: marinator, senior, senior_runner, kanban, terminal, file (cli)"
 
 log "Profile '$PROFILE' installed successfully."
