@@ -205,10 +205,6 @@ Final state should be clean or contain only intentional changes explicitly calle
 
 Commit subjects must describe the actual change. Do not use generic iteration-counter subjects.
 
-## Admin work windows
-
-After initialization, accept bounded work-window requests from Telegram. Do not ask the admin to restate internal details such as repo path, Kanban process, verification commands, or commit policy. Derive those from initialized context (memory, `docs/` — especially `docs/tools.md` for commands and conventions, repo state). The owner should only need to specify a goal and/or duration.
-
 ## Recurring routines
 
 Schedules are project-dependent. Useful routines may include:
