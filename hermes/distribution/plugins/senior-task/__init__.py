@@ -11,9 +11,28 @@ def register(ctx) -> None:
     from .tools import (
         CREATE_SENIOR_TASK_SCHEMA,
         SENIOR_DEV_TASK_RESULT_SCHEMA,
+        SENIOR_ACTIVE_TASKS_SCHEMA,
         handle_create_senior_task,
         handle_senior_dev_task_result,
+        handle_senior_active_tasks,
         check_requirements,
+    )
+
+    ctx.register_tool(
+        name="senior_active_tasks",
+        toolset="senior",
+        schema=SENIOR_ACTIVE_TASKS_SCHEMA,
+        handler=lambda args, **kw: handle_senior_active_tasks(args, plugin_ctx=ctx, **kw),
+        check_fn=check_requirements,
+        description=(
+            "List active Senior Dev Kanban tasks (ready/running/blocked/"
+            "scheduled), optionally filtered by repo and/or current origin "
+            "chat. Call this BEFORE create_senior_task so a repeat/follow-up "
+            "code request attaches to an existing task instead of creating a "
+            "duplicate. Returns task_id, status, repo, origin, PR URLs, and "
+            "optionally comments for follow-up routing judgment."
+        ),
+        emoji="\U0001f50d",  # magnifying glass
     )
 
     ctx.register_tool(

@@ -59,6 +59,11 @@ CREATE_SENIOR_TASK_SCHEMA = {
 
 _SENIOR_ASSIGNEE = "senior-dev"
 
+# Statuses that count as "active" for follow-up / duplicate detection. A task
+# in any of these states should usually be attached to / followed up on rather
+# than spawning a fresh duplicate Senior task for the same origin+repo.
+_ACTIVE_STATUSES = ("ready", "running", "blocked", "scheduled")
+
 
 def _session_env(name: str, default: str = "") -> str:
     """Read Hermes session metadata from contextvars, falling back to env."""
@@ -404,3 +409,149 @@ def _do_report_result(params: dict, plugin_ctx: Any = None) -> str:
                 ),
                 "task_id": task_id,
             })
+
+
+# ── senior_active_tasks: active-task lookup for follow-up routing ──
+
+SENIOR_ACTIVE_TASKS_SCHEMA = {
+    "name": "senior_active_tasks",
+    "description": (
+        "List active Senior Dev Kanban tasks (ready/running/blocked/scheduled), "
+        "optionally filtered by repo and/or the current origin chat. Use this "
+        "BEFORE create_senior_task to decide whether a new code request is a "
+        "follow-up to an existing task (attach via kanban_comment / unblock) "
+        "or genuinely new. Duplicate/follow-up detection is your judgment from "
+        "this Kanban state, not fuzzy matching."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "repo": {
+                "type": "string",
+                "description": (
+                    "Optional absolute repo path to filter tasks by "
+                    "_junie_metadata.repo."
+                ),
+            },
+            "only_current_origin": {
+                "type": "boolean",
+                "description": (
+                    "If true, only return tasks whose embedded origin matches "
+                    "the current gateway chat (platform + chat_id). Defaults to "
+                    "false (return all active Senior tasks)."
+                ),
+                "default": False,
+            },
+            "include_comments": {
+                "type": "boolean",
+                "description": (
+                    "If true, include each task's comments so you can read "
+                    "prior block reasons / review asks. Defaults to false."
+                ),
+                "default": False,
+            },
+        },
+        "additionalProperties": False,
+    },
+}
+
+
+def _parse_task_metadata(body: str) -> dict:
+    """Extract the trailing _junie_metadata JSON from a task body, if present."""
+    marker = "_junie_metadata:"
+    idx = body.rfind(marker)
+    if idx == -1:
+        return {}
+    raw = body[idx + len(marker):].strip()
+    # Metadata is on a single line; take the first line only.
+    raw = raw.splitlines()[0] if raw else ""
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
+def handle_senior_active_tasks(params: dict, plugin_ctx: Any = None, **kwargs) -> str:
+    """Handle a senior_active_tasks tool call."""
+    try:
+        return _do_active_tasks(params, plugin_ctx)
+    except Exception as e:
+        return json.dumps({"error": f"senior_active_tasks failed: {e}"})
+
+
+def _do_active_tasks(params: dict, plugin_ctx: Any = None) -> str:
+    repo_filter = (params.get("repo") or "").strip()
+    only_current_origin = bool(params.get("only_current_origin", False))
+    include_comments = bool(params.get("include_comments", False))
+
+    origin = _resolve_origin()
+    cur_platform = origin.get("platform") or ""
+    cur_chat = origin.get("chat_id") or ""
+
+    try:
+        from hermes_cli import kanban_db as kb
+    except ImportError as e:
+        return json.dumps({"error": f"Failed to import kanban_db: {e}"})
+
+    conn = kb.connect()
+
+    tasks_out = []
+    seen_ids = set()
+    for status in _ACTIVE_STATUSES:
+        try:
+            rows = kb.list_tasks(conn, assignee=_SENIOR_ASSIGNEE, status=status)
+        except Exception:
+            rows = []
+        for t in rows:
+            task_id = getattr(t, "id", None) or (t["id"] if isinstance(t, dict) else None)
+            if not task_id or task_id in seen_ids:
+                continue
+            body = getattr(t, "body", None)
+            if body is None and isinstance(t, dict):
+                body = t.get("body", "")
+            body = body or ""
+            meta = _parse_task_metadata(body)
+
+            task_repo = meta.get("repo", "")
+            if repo_filter and task_repo != repo_filter:
+                continue
+
+            source = meta.get("source") or {}
+            if only_current_origin:
+                if not (cur_platform and cur_chat):
+                    continue
+                if not (source.get("platform") == cur_platform
+                        and str(source.get("chat_id")) == str(cur_chat)):
+                    continue
+
+            seen_ids.add(task_id)
+            entry = {
+                "task_id": task_id,
+                "title": getattr(t, "title", None) or (t.get("title") if isinstance(t, dict) else ""),
+                "status": status,
+                "repo": task_repo,
+                "origin": source or None,
+                "pr_urls": meta.get("pr_urls", []),
+            }
+            if include_comments:
+                try:
+                    comments = kb.list_comments(conn, task_id)
+                    entry["comments"] = [
+                        {
+                            "author": getattr(c, "author", None) or "",
+                            "body": getattr(c, "body", None) or "",
+                            "created_at": getattr(c, "created_at", None),
+                        }
+                        for c in comments
+                    ]
+                except Exception:
+                    entry["comments"] = []
+            tasks_out.append(entry)
+
+    return json.dumps({
+        "count": len(tasks_out),
+        "repo_filter": repo_filter or None,
+        "only_current_origin": only_current_origin,
+        "current_origin": {"platform": cur_platform, "chat_id": cur_chat} if cur_platform else None,
+        "tasks": tasks_out,
+    })
