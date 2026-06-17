@@ -80,7 +80,7 @@ This replaces the OpenClaw workspace concept with something more native.
 Hermes has two complementary context-file slots, and Junie Live uses both:
 
 - **`SOUL.md`** lives at `~/.hermes/profiles/junie-live/SOUL.md` and is auto-loaded into slot #1 of the system prompt on **every turn**, regardless of working directory. Junie's `SOUL.md` carries the personality plus the always-on operating safety net: the initialization gate, the no-direct-coding rule, the challenge protocol. This keeps the critical rules active even when Junie is handling a Telegram message outside the target repo or running a cron job without `workdir` set.
-- **`HERMES.md`** lives in the **target project repo root** and carries the full project-level operating protocol: detailed delegation rules, code mutex semantics, repo hygiene, change rules, recurring routines. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root. Junie installs it during initialization by copying `~/.hermes/profiles/junie-live/HERMES.seed.md` to `<target-repo>/HERMES.md`.
+- **`HERMES.md`** lives in the **target project repo root** and carries the full project-level operating protocol: detailed delegation rules, Senior Dev routing/concurrency semantics, repo hygiene, change rules, recurring routines. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root. Junie installs it during initialization by copying `~/.hermes/profiles/junie-live/HERMES.seed.md` to `<target-repo>/HERMES.md`.
 
 Why `HERMES.md` and not `AGENTS.md` for the project-level slot: coding executors invoked by Junie (`opencode`, `codex`, `claude-code`) read `AGENTS.md` / `CLAUDE.md` / `.cursorrules`. They do **not** read `HERMES.md`. Putting the orchestrator-only protocol in `HERMES.md` keeps the executor sessions clean and prevents the orchestrator's challenge/delegation/mutex rules from contaminating coding workers. A target project's own `AGENTS.md` (if any) coexists with `HERMES.md` without conflict.
 
@@ -129,14 +129,11 @@ OpenClaw generates crontab entries and OpenClaw cron definitions. Hermes cron:
 - Script + agent hybrid mode
 - No system crontab dependency
 
-### 7. Kanban-first code-work concurrency; mutex retained for legacy/manual paths
+### 7. Kanban-first code-work concurrency
 
 For the current p1 Senior Dev lane, Hermes Kanban is the active concurrency boundary for normal Chat Agent code work. The Chat Agent routes code requests to `create_senior_task`; the Senior lane serializes execution and keeps active work visible as `ready`/`running`/`blocked`.
 
-The lightweight code mutex still exists for legacy/manual protected routines and future scenarios where a process might mutate the repo outside the Senior Kanban lane. It keeps the same atomic `mkdir` primitive as OpenClaw:
-- Atomic `mkdir` as the lock operation (succeeds for exactly one caller)
-- `holder.json` inside the directory for human-readable metadata
-Docs and skills should route ordinary p1 code work through `create_senior_task`; Kanban is the source of truth for active code-changing work.
+Older docs may mention a separate code mutex for legacy/manual protected paths, but no tracked `junie_runtime` mutex implementation exists in the current Hermes repo state. Docs and skills should route ordinary p1 code work through `create_senior_task`; Kanban is the source of truth for active code-changing work. If a future manual-path mutex is reintroduced, record it as an explicit design decision with tests and a clear bypass-risk story.
 
 ### 8. Minimal target-repo footprint
 
@@ -162,8 +159,8 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 | Detailed docs | Target repo `docs/` or profile `docs/` | File read/write |
 | Senior p1 runs | `~/.hermes/profiles/senior-dev/junie-live/state/senior/runs/` by default, overridable for tests | `senior-runner` plugin |
 | Active Senior Dev tasks | Hermes Kanban DB/tasks assigned to `senior-dev` | `senior-task` plugin + Kanban dispatcher |
-| Backlog items | `~/.hermes/profiles/junie-live/junie-live/state/backlog/` | Scripts/cron |
-| Operational logs | `~/.hermes/profiles/junie-live/junie-live/state/logs/` | Scripts/cron |
+| Backlog / work-window state | `~/.hermes/profiles/junie-live/junie-live/state/` when used by approved routines | Junie profile / approved routines |
+| Operational logs | `~/.hermes/profiles/junie-live/junie-live/state/logs/` plus Hermes profile logs | Hermes / approved routines |
 | Skills | `~/.hermes/profiles/junie-live/skills/` | skill_manage |
 | Identity (personality + safety-net rules) | `~/.hermes/profiles/junie-live/SOUL.md` | Manual/hire script |
 | Project operating protocol | `<target-repo>/HERMES.md` (copied from seed during init) | Manual/Junie during init |

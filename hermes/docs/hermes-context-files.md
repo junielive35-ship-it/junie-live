@@ -52,10 +52,10 @@ Hermes auto-loads `HERMES.md` from the current working directory, walking up to 
 - implementation review rules;
 - repository hygiene;
 - approval requirements;
-- code mutex semantics;
+- code-work routing / concurrency semantics;
 - recurring routines and change rules.
 
-`HERMES.md` is deliberately separate from `AGENTS.md`. Coding executors such as OpenCode, Codex, and Claude Code commonly read `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`; they should not inherit orchestrator-only rules such as challenge protocol, no-direct-coding constraints for the orchestrator, or mutex escalation procedures. Keeping the Junie orchestrator protocol in `HERMES.md` keeps worker sessions cleaner.
+`HERMES.md` is deliberately separate from `AGENTS.md`. Coding executors such as OpenCode, Codex, and Claude Code commonly read `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`; they should not inherit orchestrator-only rules such as challenge protocol, no-direct-coding constraints for the orchestrator, or Senior Dev routing/escalation procedures. Keeping the Junie orchestrator protocol in `HERMES.md` keeps worker sessions cleaner.
 
 For consistency checks, bucket conflicts involving `HERMES.md` as agent-state / project-contract conflicts, not as ordinary repo-doc conflicts, even when the file is physically stored in the repository.
 

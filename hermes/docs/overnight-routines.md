@@ -14,7 +14,7 @@ When explicitly approved and enabled, runs every 15 minutes via Hermes cron.
 Setup does not install it by default. It independently monitors:
 
 - Senior Dev Kanban tasks stuck in `ready`/`running`/`blocked` without clear recent progress or comments
-- Code mutex held past stale threshold without recent progress on legacy/manual protected paths
+- Any approved non-Kanban protected path stuck without recent progress (none is currently active by default)
 - Stuck backlog items (in_progress without active owner)
 - Missing expected progress from overnight work
 - Broken routine state
@@ -38,7 +38,7 @@ The controller:
 6. Selects the next safe item only after the active Kanban handoff is resolved or explicitly deferred
 7. Repeats until time bound, max iterations, or blocker
 
-The legacy code mutex is consulted only for routines that mutate the repo outside this Senior Kanban path.
+There is no active default code-mutex path in the current Hermes implementation; any future non-Kanban protected mutating path must be explicitly approved and documented.
 
 ### 3. Morning report
 
@@ -47,7 +47,7 @@ Summarizes what happened overnight:
 - Commits and PRs created/updated
 - Verification results
 - Blockers and recommended next decisions
-- Mutex state transitions
+- Protected-path state transitions, if any
 
 Delivered via Telegram.
 
@@ -100,7 +100,7 @@ Default policy: continue after up to 3 safe local task failures. A local failure
 - Worker timeout
 - Verification failure after fix retry budget exhausted
 
-For each failure: block or keep blocked with evidence, preserve artifacts, clean workspace if safe, and continue only when that will not bypass review or create duplicate active code work. Release the legacy/manual mutex only if one was actually acquired. Stop on cleanup failure or exceeding the failure budget.
+For each failure: block or keep blocked with evidence, preserve artifacts, clean workspace if safe, and continue only when that will not bypass review or create duplicate active code work. Release any approved non-Kanban lock only if one was actually acquired. Stop on cleanup failure or exceeding the failure budget.
 
 ## Commit and repository hygiene
 

@@ -76,12 +76,9 @@ hermes/
 │   │   ├── paths.py                   # Hermes profile path resolution
 │   │   ├── state.py                   # Atomic state file helpers
 │   │   ├── events.py                  # JSONL event helpers
-│   │   ├── mutex.py                   # Code mutex implementation
-│   │   └── cli/mutex.py               # Mutex CLI entrypoint
 │   └── tests/
 │       ├── test_paths.py
-│       ├── test_state.py
-│       └── test_mutex.py
+│       └── test_state.py
 ├── distribution/                      # Canonical Hermes profile distribution (install via `hermes profile install`)
 │   ├── distribution.yaml              # Distribution manifest
 │   ├── SOUL.md                        # Personality + always-on operating rules (auto-loaded by Hermes from profile)
@@ -127,7 +124,7 @@ hermes/
 
 8. **Telegram** — Hermes gateway provides native Telegram integration with DM allowlisting, the same as the OpenClaw version.
 
-9. **Code Mutex** — A lightweight state-file mutex still ships for legacy/manual protected routines, but the active p1 code-work concurrency boundary is the Hermes Kanban `senior-dev` lane. Normal Chat Agent code tasks go through Kanban rather than a separate mutex gate.
+9. **Code-work concurrency** — The active p1 code-work concurrency boundary is the Hermes Kanban `senior-dev` lane. Normal Chat Agent code tasks go through Kanban; older code-mutex references are historical unless a future approved design reintroduces a separate protected manual path.
 
 ## Current implementation status
 
