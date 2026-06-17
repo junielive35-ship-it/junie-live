@@ -214,6 +214,18 @@ archive_contents() {
   tar -tzf "$1" 2>/dev/null || true
 }
 
+has_gateway_start_call() {
+  grep -Eq '^hermes( .*)? gateway (restart|start)( |$)' "$1" 2>/dev/null
+}
+
+has_gateway_install_call() {
+  grep -Eq '^hermes( .*)? gateway install( |$)' "$1" 2>/dev/null
+}
+
+has_gateway_lifecycle_call() {
+  grep -Eq '^hermes( .*)? gateway (restart|start|install)( |$)' "$1" 2>/dev/null
+}
+
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 1: dump creates archive with required files ===\n'
 
@@ -537,7 +549,7 @@ FRESH_LOG="$FRESH_LOG" \
   "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" >/dev/null 2>&1 || true
 
 FRESH_PROFILE_DIR="$FRESH_HOME/profiles/$PROFILE"
-if grep -q 'hermes.*gateway.*restart\|hermes.*gateway.*start' "$FRESH_LOG" 2>/dev/null; then
+if has_gateway_start_call "$FRESH_LOG"; then
   pass
   printf '  OK: gateway restart/start called\n'
 else
@@ -559,7 +571,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 18: rehire does NOT call gateway install ===\n'
 
-if grep -q 'hermes.*gateway.*install' "$FRESH_LOG" 2>/dev/null; then
+if has_gateway_install_call "$FRESH_LOG"; then
   fail "rehire should not call gateway install"
 else
   pass
@@ -569,7 +581,7 @@ fi
 printf '=== Test 19: rehire without --no-gateway-start does not skip gateway ===\n'
 
 # FRESH_LOG already has gateway commands from Test 17
-if grep -q 'hermes.*gateway' "$FRESH_LOG" 2>/dev/null; then
+if has_gateway_lifecycle_call "$FRESH_LOG"; then
   pass
 else
   fail "rehire should start gateway by default"
@@ -592,7 +604,7 @@ FAKE_HERMES_LOG="$SKIP_LOG" \
 SKIP_LOG="$SKIP_LOG" \
   "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" --no-gateway-start >/dev/null 2>&1 || true
 
-if grep -q 'hermes.*gateway' "$SKIP_LOG" 2>/dev/null; then
+if has_gateway_lifecycle_call "$SKIP_LOG"; then
   fail "rehire with --no-gateway-start should not start gateway"
 else
   pass
@@ -1097,7 +1109,7 @@ fi
 printf '=== Test 42: existing gateway start test remains valid ===\n'
 
 # Gateway was started in T40 (no --no-gateway-start)
-if grep -q 'hermes.*gateway' "$T40_LOG" 2>/dev/null; then
+if has_gateway_lifecycle_call "$T40_LOG"; then
   pass
   printf '  OK: gateway started in default rehire\n'
 else
@@ -1107,7 +1119,7 @@ fi
 # ════════════════════════════════════════════════════════════════
 printf '=== Test 43: --no-gateway-start does not start gateway (senior-dev still installed) ===\n'
 
-if grep -q 'hermes.*gateway' "$T41_LOG" 2>/dev/null; then
+if has_gateway_lifecycle_call "$T41_LOG"; then
   fail "gateway was started despite --no-gateway-start"
 else
   pass
