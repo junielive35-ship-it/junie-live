@@ -7,6 +7,13 @@ from pathlib import Path, PurePath
 
 import pytest
 
+from junie_runtime import __version__, get_version
+
+
+def test_get_version_returns_package_version():
+    assert get_version() == __version__
+    assert get_version()
+
 
 def test_wheel_metadata_declares_pyyaml():
     pkg_root = Path(__file__).resolve().parent.parent

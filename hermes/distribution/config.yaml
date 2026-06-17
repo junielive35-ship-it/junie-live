@@ -13,5 +13,7 @@ approvals:
   # clean (rm, mv) without prompting. Hardline-blocked commands (glob rm, etc.) are
   # unaffected.
   destructive_slash_confirm: false
+kanban:
+  dispatch_in_gateway: false
 display:
   busy_input_mode: steer

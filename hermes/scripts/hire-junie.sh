@@ -431,6 +431,11 @@ hermes -p "$PROFILE" config set approvals.mode off 2>/dev/null || true
 hermes -p "$PROFILE" config set approvals.destructive_slash_confirm false 2>/dev/null || true
 log "  approvals.mode set to off (Junie internal ops skip owner approval prompts)"
 
+# Junie Live uses the shared/default Hermes dispatcher for Kanban work; do not
+# start a second embedded dispatcher/notifier from the Junie profile gateway.
+hermes -p "$PROFILE" config set kanban.dispatch_in_gateway false 2>/dev/null || true
+log "  kanban.dispatch_in_gateway set to false (shared/default dispatcher owns Kanban dispatch)"
+
 # ── Step 6b: Configure /start → initialization turn quick command alias ──
 # Maps /start to a normal agent turn so the "send /start to the bot"
 # instruction starts Junie initialization immediately. /new only resets the
