@@ -150,6 +150,8 @@ os.environ["HERMES_SESSION_PLATFORM"] = "telegram"
 os.environ["HERMES_SESSION_CHAT_ID"] = "400847234"
 os.environ["HERMES_SESSION_THREAD_ID"] = ""
 os.environ["HERMES_SESSION_USER_ID"] = "user_test"
+os.environ.pop("HERMES_PROFILE", None)
+os.environ["HERMES_HOME"] = str(Path(tempfile.mkdtemp(prefix="st-home-")) / ".hermes" / "profiles" / "junie-live-test")
 
 from hermes_cli import kanban_db as kb
 kb.init_db(Path(os.environ["HERMES_KANBAN_DB"]))
@@ -181,8 +183,9 @@ subs = conn2.execute("SELECT * FROM kanban_notify_subs WHERE task_id = ?", (resu
 assert len(subs) == 1, "expected 1 subscription, got %d" % len(subs)
 assert subs[0]["platform"] == "telegram"
 assert subs[0]["chat_id"] == "400847234"
+assert subs[0]["notifier_profile"] == "junie-live-test", dict(subs[0])
 conn2.close()
-print("OK: task + subscription created correctly")
+print("OK: task + subscription created correctly with notifier_profile=%s" % subs[0]["notifier_profile"])
 ' && pass || fail "Full create + subscription test failed"
 
 # ════════════════════════════════════════════════════════════════
@@ -196,6 +199,7 @@ os.environ["HERMES_SESSION_PLATFORM"] = "telegram"
 os.environ["HERMES_SESSION_CHAT_ID"] = "400847234"
 os.environ["HERMES_SESSION_THREAD_ID"] = ""
 os.environ["HERMES_SESSION_USER_ID"] = "user_test"
+os.environ.pop("HERMES_PROFILE", None)
 
 from hermes_cli import kanban_db as kb
 kb.init_db(Path(os.environ["HERMES_KANBAN_DB"]))
@@ -231,6 +235,7 @@ os.environ["HERMES_SESSION_PLATFORM"] = "telegram"
 os.environ["HERMES_SESSION_CHAT_ID"] = "400847234"
 os.environ["HERMES_SESSION_THREAD_ID"] = ""
 os.environ["HERMES_SESSION_USER_ID"] = "user_test"
+os.environ["HERMES_PROFILE"] = "junie-live-test"
 
 from hermes_cli import kanban_db as kb
 kb.init_db(Path(os.environ["HERMES_KANBAN_DB"]))
@@ -263,8 +268,11 @@ rows = conn2.execute(
     ("idem-test-001",),
 ).fetchall()
 assert len(rows) == 1, "expected 1 active task, got %d" % len(rows)
+subs = conn2.execute("SELECT * FROM kanban_notify_subs WHERE task_id = ?", (task_id,)).fetchall()
+assert len(subs) == 1, "expected 1 subscription, got %d" % len(subs)
+assert subs[0]["notifier_profile"] == "junie-live-test", dict(subs[0])
 conn2.close()
-print("OK: idempotency returns existing task")
+print("OK: idempotency returns existing task with notifier_profile=%s" % subs[0]["notifier_profile"])
 ' && pass || fail "Idempotency test failed"
 
 # ════════════════════════════════════════════════════════════════
