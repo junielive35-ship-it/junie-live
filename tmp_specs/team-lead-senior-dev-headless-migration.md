@@ -32,7 +32,7 @@ Acceptance:
   - constraints and non-goals;
   - expected report schema.
 - Senior Dev returns structured final verdict:
-  - `done`;
+  - `review-required`;
   - `needs-input`;
   - `failed`.
 - The contract states Senior Dev owns implementation, review, verification, and fix loop end-to-end.

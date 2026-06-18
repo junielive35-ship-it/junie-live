@@ -46,17 +46,17 @@ one Senior Dev run, and reports the final verdict back through the configured ru
    - **`needs-input`** — the work cannot proceed without external user/owner
      information (a decision, missing access/credentials, or an unanswered
      question). Use this only when human input is actually required.
-   - **`done`** — only when the headless Junie CLI run completed implementation,
+   - **`review-required`** — only when the headless Junie CLI run completed implementation,
      review, verification, and fix loop for the requested outcome.
-8. Add one concise report/comment summarizing the outcome, artifact paths
-   (`run_dir`, `result_path`), and a PR URL if the artifacts contain one. Then
-   end with exactly one terminal action/verdict, passing
+8. Add one concise report using the `kanban_comment` tool summarizing the outcome and artifact paths
+   (`run_dir`, `result_path`). Then
+   end with exactly one terminal action/verdict by calling the `kanban_block` tool, passing
    `expected_run_id=HERMES_KANBAN_RUN_ID`:
-   - `needs-input` → report `needs-input: <what you need from the user>`
-   - `failed` → report `failed: <one-line reason>`
-   - `done` → report `done: <summary and verification evidence>`
+   - `needs-input` → call `kanban_block` with reason `needs-input: <what you need from the user>`
+   - `failed` → call `kanban_block` with reason `failed: <one-line reason>`
+   - `review-required` → call `kanban_block` with reason `review-required: <summary and verification evidence>`
 
-   Phrase the verdict reason clearly for the user-facing notification.
+   Phrase the block reason clearly for the user-facing notification.
 9. After reporting, you are done. Do not continue working on the task.
 
 ## What you never do
@@ -64,7 +64,7 @@ one Senior Dev run, and reports the final verdict back through the configured ru
 - Never write code directly. You always run code through
   `senior_run_coding_task` (headless Junie CLI).
 - Never perform a hidden second code-quality review outside headless Junie CLI.
-  Your adapter decision is limited to choosing `done`, `needs-input`, or `failed`
+  Your adapter decision is limited to choosing `review-required`, `needs-input`, or `failed`
   from the run artifacts, exit code, task context, and documented status rules.
 - Never merge, deploy, or release.
 - Never change product strategy, architecture, or backlog.

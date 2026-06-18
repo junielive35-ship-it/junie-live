@@ -36,7 +36,7 @@ Senior Dev must end every handoff with exactly one of these verdicts:
 
 ```json
 {
-  "verdict": "done | needs-input | failed",
+  "verdict": "review-required | needs-input | failed",
   "summary": ["short user-facing outcome"],
   "changes": ["important files or behaviors changed"],
   "verification": ["commands run and results, or why verification could not run"],
@@ -47,7 +47,7 @@ Senior Dev must end every handoff with exactly one of these verdicts:
 
 Rules:
 
-- Use `done` only when implementation, review, verification, and fix loop are complete.
+- Use `review-required` only when implementation, review, verification, and fix loop are complete.
 - Use `needs-input` only when Senior Dev cannot proceed without user or Team Lead clarification.
 - Use `failed` when Senior Dev attempted the task but cannot complete it safely.
 - Include exact command names and pass/fail outcomes in `verification` whenever commands were run.
