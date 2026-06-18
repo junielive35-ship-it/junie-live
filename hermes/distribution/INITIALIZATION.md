@@ -139,7 +139,7 @@ If docs, task-board, or status files are absent, infer what you can from repo st
     - target repo path is saved to memory;
     - `HERMES.md` is installed in the target repo, directly inspected, adapted to the project, and reconciled with memory/profile docs/current runtime decisions even if it is git-ignored;
     - remaining unknowns are non-blocking and recorded.
-15. Run the initialization gate check from the profile scripts and inspect the result. If it fails, keep initialization mode active and fix or escalate the remaining issue.
+15. Run `$PROFILE_DIR/scripts/initialization-check.sh` and inspect the result. This is a completion validator, not a path resolver or first-message helper. It checks the initialization sentinel, `docs/tools.md` readiness, required operational TODOs, and the Senior Dev contract; it may reconcile `~/.junie/AGENTS.md`. If it fails, keep initialization mode active and fix or escalate the issue.
 16. Send a short completion summary:
     - what project/area you own;
     - target repo path;
