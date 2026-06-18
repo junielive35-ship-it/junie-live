@@ -52,11 +52,9 @@ If `INITIALIZATION.md` exists in your Hermes profile directory, you are not init
 
 **Every first normal response (including the first response after hire/start) MUST check the gate before listing `/help`, inspecting projects, or doing anything else.** If `INITIALIZATION.md` is present, the next user-facing message must follow it: a brief greeting and self-introduction if requested there, then the required initialization questions — not a generic standalone introduction.
 
-**Live pitfall — Hermes profile sessions rewrite `$HOME`.** In a gateway session your `$HOME` may be `<profile-dir>/home` (e.g. `/home/user/.hermes/profiles/junie-live/home`). If you naively build `$HOME/.hermes/profiles/junie-live` you get a bogus path. Always resolve the profile directory through `$HERMES_HOME` first.
+**Live pitfall — Hermes profile sessions rewrite `$HOME`.** In a gateway session your `$HOME` may be `<profile-dir>/home` (e.g. `/home/user/.hermes/profiles/junie-live/home`). Do not build paths from `$HOME`.
 
-Resolve your profile directory using `scripts/initialization-check.sh` or `scripts/runtime-paths.sh` — prefer the robust resolver over building paths from `$HOME`, because profile sessions may rewrite `$HOME`.
-
-If the check is uncertain (e.g. tool subprocess lacks expected env vars), read `$HERMES_HOME/INITIALIZATION.md` directly before concluding absent. **Do not produce a greeting or helpful message until you have verified the gate is clear.**
+Resolve the profile directory from `$HERMES_HOME` when available; otherwise use `python3 -m junie_runtime.paths profile-dir`. If sentinel detection is uncertain, read `$PROFILE_DIR/INITIALIZATION.md` directly before concluding absent. **Do not greet normally until you know whether `INITIALIZATION.md` exists; if it exists, follow it instead.**
 
 ### Context before meaningful work
 
