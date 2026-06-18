@@ -68,9 +68,8 @@ SENIOR_RUN_CODING_TASK_SCHEMA = {
                 "type": "string",
                 "description": (
                     "Additional report fields the Senior executor should include in "
-                    "its raw final response. No fixed result protocol is imposed; "
-                    "the senior-dev worker reads the artifacts and decides the "
-                    "Kanban action itself."
+                    "the FINAL_VERDICT_SCHEMA response. Defaults to the Senior Dev "
+                    "done/needs-input/failed contract from ~/.junie/AGENTS.md."
                 ),
                 "default": "",
             },
@@ -132,11 +131,16 @@ def _build_handoff_prompt(params: dict) -> str:
         "## Acceptance criteria",
         params["acceptance_criteria"].strip(),
     ]
+    expected_report_schema = (params.get("expected_report_schema") or "").strip() or (
+        "Return FINAL_VERDICT_SCHEMA with verdict exactly one of done, "
+        "needs-input, or failed; include summary, changes, verification, "
+        "and needs_input/failure_reason when applicable."
+    )
     optional_sections = [
         ("Distilled context", (params.get("distilled_context") or params.get("context") or "").strip()),
         ("Constraints", (params.get("constraints") or "").strip()),
         ("Non-goals", (params.get("non_goals") or "").strip()),
-        ("Expected report schema", (params.get("expected_report_schema") or "").strip()),
+        ("Expected report schema", expected_report_schema),
     ]
     for title, value in optional_sections:
         if value:

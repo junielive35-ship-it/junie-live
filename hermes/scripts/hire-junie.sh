@@ -6,9 +6,10 @@ set -euo pipefail
 # One command does everything: backs up any existing profile, deletes it via
 # Hermes-native profile delete, then installs a fresh profile from the
 # distribution (SOUL.md / skills / docs / HERMES.seed.md / memory-seed.md /
-# INITIALIZATION.md), configures Telegram with DM restriction, creates state
-# directories, installs the shared runtime package, enables plugins, configures
-# model/provider/reasoning, installs and starts the gateway.
+# INITIALIZATION.md), installs the Senior Dev ~/.junie/AGENTS.md contract,
+# configures Telegram with DM restriction, creates state directories, installs
+# the shared runtime package, enables plugins, configures model/provider/reasoning,
+# installs and starts the gateway.
 
 usage() {
   cat <<'EOF'
@@ -99,6 +100,7 @@ log "Will use distribution directory: $SEED_DIR"
 [[ -d "$SEED_DIR" ]] || { err "distribution directory not found: $SEED_DIR"; exit 1; }
 [[ -f "$SEED_DIR/distribution.yaml" ]] || { err "distribution directory must contain distribution.yaml: $SEED_DIR"; exit 1; }
 [[ -f "$SEED_DIR/INITIALIZATION.md" ]] || { err "distribution directory must contain INITIALIZATION.md: $SEED_DIR"; exit 1; }
+[[ -f "$SEED_DIR/junie/AGENTS.md" ]] || { err "distribution directory must contain junie/AGENTS.md Senior Dev contract: $SEED_DIR"; exit 1; }
 if [[ -e "$SEED_DIR/BOOTSTRAP.md" ]]; then
   err "distribution directory must not contain BOOTSTRAP.md for Junie multi-round initialization: $SEED_DIR/BOOTSTRAP.md"
   exit 1
@@ -214,6 +216,38 @@ else
   err "docs/tools.md missing after install."
   exit 1
 fi
+
+# ── Step 4a: Install/reconcile Senior Dev ~/.junie/AGENTS.md contract ──
+install_senior_agents_contract() {
+  local seed="$1"
+  local junie_home="${JUNIE_HOME:-$HOME/.junie}"
+  local live="$junie_home/AGENTS.md"
+  local marker="Senior Dev Operating Contract v2026-06-18"
+
+  mkdir -p "$junie_home"
+
+  if [[ ! -f "$live" ]]; then
+    cp "$seed" "$live"
+    log "  Created $live from Junie Live distribution seed."
+  elif grep -q "$marker" "$live"; then
+    cp "$seed" "$junie_home/AGENTS.seed.md"
+    log "  Preserved live-edited $live; refreshed AGENTS.seed.md for update comparison."
+  else
+    local ts
+    ts="$(date +%Y%m%d-%H%M%S)"
+    mv "$live" "$junie_home/AGENTS.local-before-senior-contract-$ts.md"
+    cp "$seed" "$live"
+    cp "$seed" "$junie_home/AGENTS.seed.md"
+    log "  Reconciled $live with current Senior Dev contract."
+    log "  Previous file preserved as $junie_home/AGENTS.local-before-senior-contract-$ts.md"
+  fi
+
+  grep -q "$marker" "$live" || { err "$live does not contain current Senior Dev contract marker"; exit 1; }
+  grep -q 'FINAL_VERDICT_SCHEMA' "$live" || { err "$live does not contain Senior Dev final verdict schema"; exit 1; }
+}
+
+log "Installing Senior Dev operating contract..."
+install_senior_agents_contract "$SEED_DIR/junie/AGENTS.md"
 
 # ── Step 4b: Create state directories ──
 STATE_DIR="$(python3 -m junie_runtime.paths state-root --profile "$PROFILE")"

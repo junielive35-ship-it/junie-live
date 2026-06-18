@@ -2,8 +2,9 @@
 # Test the senior-runner synchronous Senior Dev coding runner:
 # schema, input validation, job_id derivation, prompt assembly, and a full
 # synchronous run against a fake junie CLI (artifacts + exit code + runner
-# state). The runner emits no verdict; the senior-dev worker decides the
-# Kanban action. Does NOT call the hermes CLI or modify live profiles/Kanban.
+# state). The runner requires a structured Senior Dev final verdict but still
+# leaves the Kanban action to the senior-dev worker. Does NOT call the hermes
+# CLI or modify live profiles/Kanban.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -90,14 +91,17 @@ print("OK: derived job_id=%s" % jid)
 ' && pass || fail "job_id derivation test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 4: prompt carries request + context and no verdict protocol ===\n'
+printf '=== Test 4: prompt carries request + context + verdict protocol ===\n'
 load_plugin '
 p = _build_prompt("do the thing", context="extra ctx")
-# The runner must not impose a structured result/verdict protocol: the prompt
-# is exactly the request plus optional context, with no appended block.
-assert p == "do the thing\n\n## Additional context\n\nextra ctx", p
-assert _build_prompt("just the request") == "just the request"
-print("OK: prompt carries request/context with no appended result protocol")
+# The runner must append the Senior Dev contract so the headless worker returns
+# a machine-readable final state without Team Lead re-review.
+assert p.startswith("do the thing\n\n## Additional context\n\nextra ctx"), p
+assert "## Required final verdict" in p, p
+assert "FINAL_VERDICT_SCHEMA" in p, p
+assert "needs-input" in p and "failed" in p and "done" in p, p
+assert "FINAL_VERDICT_SCHEMA" in _build_prompt("just the request")
+print("OK: prompt carries request/context with required verdict protocol")
 ' && pass || fail "prompt assembly test failed"
 
 # ════════════════════════════════════════════════════════════════
@@ -144,6 +148,7 @@ status = json.load(open(res["status_path"]))
 assert status["worker_state"] == "completed", status
 assert status["junie"]["exit_code"] == 0, status
 assert status["junie"]["bin"] == fake, status
+assert status["junie"]["model"] == "opus-4.8", status
 print("OK: artifacts written, runner_state=completed, Junie status captured")
 ' && pass || fail "synchronous run test failed"
 

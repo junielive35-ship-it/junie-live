@@ -18,6 +18,7 @@ distribution_owned:
   - skills
   - plugins
   - scripts
+  - junie
   - cron
   - mcp.json
   - distribution.yaml
