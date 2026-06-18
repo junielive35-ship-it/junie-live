@@ -148,7 +148,7 @@ status = json.load(open(res["status_path"]))
 assert status["worker_state"] == "completed", status
 assert status["junie"]["exit_code"] == 0, status
 assert status["junie"]["bin"] == fake, status
-assert status["junie"]["model"] == "opus-4.8", status
+assert status["junie"]["model"] == "claude-opus-4.8", status
 print("OK: artifacts written, runner_state=completed, Junie status captured")
 ' && pass || fail "synchronous run test failed"
 

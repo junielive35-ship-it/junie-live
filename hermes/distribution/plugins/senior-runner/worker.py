@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover - used by the compatibility shell wrappe
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-_DEFAULT_JUNIE_MODEL = "opus-4.8"
+_DEFAULT_JUNIE_MODEL = "claude-opus-4.8"
 _DEFAULT_JUNIE_AUTH_FILE = "~/junie.key"
 
 
