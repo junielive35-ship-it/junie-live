@@ -7,7 +7,7 @@ tags: [junie-live, delegation, coding, decomposition]
 
 # Coding Task Decomposition
 
-Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; normal source, script, config, and test changes are delegated with `create_senior_task` to the `senior-dev` Kanban lane. Use `delegate_task` only for non-code subtasks.
+Use after a code-changing task is accepted and before delegating implementation. The orchestrator must never do coding work itself; normal source, script, config, and test changes are delegated with `create_senior_task` to the configured Senior Dev Kanban lane. Use `delegate_task` only for non-code subtasks.
 
 Documentation-only Markdown edits are an explicit exception and may be handled directly by the orchestrator.
 
@@ -21,7 +21,7 @@ Documentation-only Markdown edits are an explicit exception and may be handled d
 6. Define verification: tests, typecheck, lint, build, manual inspection.
 7. Plan review gates before any PR/update.
 
-Do not run parallel code-changing workers against the same repo unless an approved isolation strategy exists. In p1, Senior Dev Kanban is the active concurrency boundary for normal Chat Agent code work.
+Do not run parallel code-changing workers against the same repo unless an approved isolation strategy exists. Senior Dev Kanban is the active concurrency boundary for normal Chat Agent code work.
 
 ## delegate_task template
 

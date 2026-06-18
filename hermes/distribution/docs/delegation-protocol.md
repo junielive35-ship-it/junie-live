@@ -1,6 +1,6 @@
 # Senior Dev Kanban Protocol
 
-Current Junie Live code-changing work uses the Senior Dev p1 Kanban path.
+Normal Junie code-changing work uses the configured Senior Dev Kanban path.
 
 ## Chat Agent Path
 

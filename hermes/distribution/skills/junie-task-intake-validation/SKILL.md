@@ -32,7 +32,7 @@ Meaningful work needs strategic review. Trivial lookups and tiny formatting fixe
 
 Backlog items, prior agent reports, autonomous-run notes, and earlier session summaries already frame problems a certain way ("we need to change Hermes core to handle X"). Their framing is not authoritative — re-derive the problem from current evidence before proposing a solution. A prior Junie's analysis is a hypothesis, not a spec. Cron-generated backlog items in particular accrete complexity bias because no one challenges them at write-time.
 
-Verified 2026-05-27: a prior cron run framed a Hermes mid-turn-message UX gap as "we need a design doc and probably a Hermes-core change to conversation_loop." Step 4 above would have surfaced `/busy queue|steer|interrupt`, `/queue <prompt>`, and `/steer <prompt>` immediately — feature complete, no code needed. The reflex that was missing: ask "does this exist?" before "how would I build it?".
+Example: a request may frame an agent UX gap as requiring core code, when Hermes already provides the relevant slash command or config. The reflex should be: ask "does this exist?" before "how would I build it?".
 
 ## Pitfall: normalizing custom machinery
 
@@ -42,9 +42,9 @@ Do not accept an ad hoc installer, shell runner, copied runtime folder, custom q
 
 The answer to an existing-solution check is often in a skill that's *already in your context window* from earlier in the session (e.g. `hermes-agent` was auto-loaded but its `/busy` / `/queue` / `/steer` section was not re-read at intake time). When step 4 fires, explicitly re-scan currently-loaded skill content for the capability — do not rely on memory of what you read. Loaded ≠ retrieved.
 
-## Why this matters for Junie Live specifically
+## Why this matters
 
-Junie Live's product premise is that Hermes provides the agent framework. Building features Hermes already ships dilutes the product, accretes maintenance cost, and contradicts the "compatible with existing architecture" technical-taste rule in SOUL. The existing-solution check is not a productivity tip — it's a guardrail against undermining the product Junie owns.
+Junie Live runs on Hermes. Building features Hermes, the target project, or the language ecosystem already provides accretes maintenance cost and conflicts with the "compatible with existing architecture" technical-taste rule in SOUL. The existing-solution check is not a productivity tip — it is a guardrail against undermining the product Junie owns.
 
 ## Challenge protocol
 
@@ -58,10 +58,10 @@ Do not blindly execute requests. When a request conflicts with strategy, archite
 
 ## Batched intake of blocked Kanban tasks
 
-When the owner says "let's process all blocked items one by one, explain what you want and I'll approve or challenge" (or any equivalent — "go through the blocked queue", "review approvals"), use the Senior Dev Kanban board as the source of truth:
+When the owner says "let's process all blocked items one by one, explain what you want and I'll approve or challenge" (or any equivalent — "go through the blocked queue", "review approvals"), use the configured Senior Dev Kanban board as the source of truth:
 
-1. **Pull active Senior Dev tasks first.** Use `senior_active_tasks(repo=..., include_comments=true)` for the target repo. If there are no active blocked tasks, say so instead of falling back to legacy OpenClaw or removed Junie backlog state.
-2. **Never read OpenClaw backlog state from Hermes.** Do not use `.openclaw/`, `~/.openclaw/`, `JUNIE_WORKSPACE`, `workspace-junie-live`, `openclaw/scripts/backlog.sh`, raw legacy JSON item files, or removed profile-local backlog directories as a Hermes source of truth.
+1. **Pull active Senior Dev tasks first.** Use `senior_active_tasks(repo=..., include_comments=true)` for the target repo. If there are no active blocked tasks, say so instead of falling back to legacy backlog files or unrelated task sources.
+2. **Never read legacy backlog state as the source of truth.** Do not use old project-local backlog directories, profile-local backlog files, raw JSON task files, or removed automation state as a Hermes source of truth unless the initialized project explicitly documents them as current.
 3. **Read the task comments/artifacts before presenting.** For each blocked task, inspect the title, status, embedded `_junie_metadata`, comments, `review-required` / `needs-input` / `failed` reason, and referenced result artifacts when needed.
 4. **Open with a compact priority-sorted list** of blocked tasks: `# | task_id suffix | status/reason | one-line title`. Then say "I'll start with the top three. Quick map first." Don't dump detailed write-ups for every item at once.
 5. **Per-task presentation template:**
@@ -75,4 +75,4 @@ When the owner says "let's process all blocked items one by one, explain what yo
 
 ### Why this shape
 
-Per HERMES.md major-change rules, blocked tasks are exactly the class of work that needs explicit human sign-off — architecture, tooling additions, skill behavior, deploy/CI. A wall of details makes that sign-off harder, not easier. The intake here is a *decision-loop UX*, not a status report. Hermes must not silently import OpenClaw workspace state or removed Junie backlog state, because that breaks the Hermes-native Kanban ownership boundary and can resurrect stale decisions.
+Per HERMES.md major-change rules, blocked tasks are often exactly the class of work that needs explicit human sign-off — architecture, tooling additions, skill behavior, deploy/CI. A wall of details makes that sign-off harder, not easier. The intake here is a *decision-loop UX*, not a status report. Hermes must not silently import legacy backlog state, because that breaks the Kanban ownership boundary and can resurrect stale decisions.
