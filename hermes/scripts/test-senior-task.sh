@@ -51,14 +51,20 @@ load_plugin '
 props = CREATE_SENIOR_TASK_SCHEMA["parameters"]["properties"]
 required = CREATE_SENIOR_TASK_SCHEMA["parameters"]["required"]
 assert "title" in props
-assert "request" in props
+assert "user_outcome" in props
+assert "acceptance_criteria" in props
+assert "distilled_context" in props
+assert "constraints" in props
+assert "non_goals" in props
+assert "expected_report_schema" in props
 assert "repo" in props
 assert "idempotency_key" in props
 assert "priority" in props
 assert "title" in required
-assert "request" in required
+assert "user_outcome" in required
+assert "acceptance_criteria" in required
 assert "repo" in required
-assert len(required) == 3
+assert len(required) == 4
 print("OK: %d properties, %d required" % (len(props), len(required)))
 ' && pass || fail "Schema test failed"
 
@@ -104,8 +110,18 @@ printf '=== Test 5: _build_task_body embeds metadata ===\n'
 load_plugin '
 import json
 origin = {"platform": "telegram", "chat_id": "123", "thread_id": "", "user_id": "u1", "session_key": ""}
-body = _build_task_body("Fix the login bug", "/home/repo", origin)
-assert "Fix the login bug" in body
+handoff = {
+    "user_outcome": "Fix the login bug",
+    "acceptance_criteria": "Login succeeds for valid users",
+    "distilled_context": "Regression after auth refactor",
+    "constraints": "Do not change public API",
+    "non_goals": "No UI redesign",
+    "expected_report_schema": "List tests run",
+}
+body = _build_task_body(handoff, "/home/repo", origin)
+assert "## User-visible outcome\nFix the login bug" in body
+assert "## Acceptance criteria\nLogin succeeds for valid users" in body
+assert "## Distilled context\nRegression after auth refactor" in body
 assert "senior_dev_code_task" in body
 assert "/home/repo" in body
 assert "_junie_metadata:" in body
@@ -123,16 +139,19 @@ print("OK: metadata embedded correctly")
 printf '=== Test 6: handle_create_senior_task validates inputs ===\n'
 load_plugin '
 import json
-r = json.loads(handle_create_senior_task({"request": "test", "repo": "/tmp"}))
+r = json.loads(handle_create_senior_task({"user_outcome": "test", "acceptance_criteria": "done", "repo": "/tmp"}))
 assert "error" in r and "title" in r["error"]
 
-r = json.loads(handle_create_senior_task({"title": "test", "repo": "/tmp"}))
+r = json.loads(handle_create_senior_task({"title": "test", "acceptance_criteria": "done", "repo": "/tmp"}))
+assert "error" in r and "user_outcome" in r["error"]
+
+r = json.loads(handle_create_senior_task({"title": "test", "user_outcome": "test", "repo": "/tmp"}))
+assert "error" in r and "acceptance_criteria" in r["error"]
+
+r = json.loads(handle_create_senior_task({"title": "test", "user_outcome": "test", "acceptance_criteria": "done", "repo": "relative/path"}))
 assert "error" in r
 
-r = json.loads(handle_create_senior_task({"title": "test", "request": "test", "repo": "relative/path"}))
-assert "error" in r
-
-r = json.loads(handle_create_senior_task({"title": "test", "request": "test", "repo": "/nonexistent/path/54321_test_nope"}))
+r = json.loads(handle_create_senior_task({"title": "test", "user_outcome": "test", "acceptance_criteria": "done", "repo": "/nonexistent/path/54321_test_nope"}))
 assert "error" in r
 print("OK: all input validations pass")
 ' && pass || fail "Input validation test failed"
@@ -157,7 +176,9 @@ kb.init_db(Path(os.environ["HERMES_KANBAN_DB"]))
 repo = os.environ.get("TEST_REPO", os.getcwd())
 result = json.loads(handle_create_senior_task({
     "title": "Test senior task",
-    "request": "Implement a test feature",
+    "user_outcome": "Implement a test feature",
+    "acceptance_criteria": "The feature is implemented and verified",
+    "distilled_context": "Created from an isolated test",
     "repo": repo,
     "idempotency_key": "test-idem-001",
     "priority": 5,
@@ -176,6 +197,7 @@ assert row["assignee"] == "senior-dev", "assignee: " + str(row["assignee"])
 assert row["status"] == "ready", "status: " + str(row["status"])
 assert row["priority"] == 5, "priority: " + str(row["priority"])
 assert "Implement a test feature" in row["body"]
+assert "The feature is implemented and verified" in row["body"]
 
 subs = conn2.execute("SELECT * FROM kanban_notify_subs WHERE task_id = ?", (result["task_id"],)).fetchall()
 assert len(subs) == 1, "expected 1 subscription, got %d" % len(subs)
@@ -210,7 +232,8 @@ kb.add_notify_sub = fail_add_notify_sub
 repo = os.environ.get("TEST_REPO", os.getcwd())
 result = json.loads(handle_create_senior_task({
     "title": "Test senior task subscription failure",
-    "request": "Implement a test feature",
+    "user_outcome": "Implement a test feature",
+    "acceptance_criteria": "The feature is implemented and verified",
     "repo": repo,
 }))
 
@@ -242,7 +265,8 @@ repo = os.environ.get("TEST_REPO", os.getcwd())
 
 r1 = json.loads(handle_create_senior_task({
     "title": "Test idempotency",
-    "request": "Some request",
+    "user_outcome": "Some request",
+    "acceptance_criteria": "The requested work is done",
     "repo": repo,
     "idempotency_key": "idem-test-001",
 }))
@@ -251,7 +275,8 @@ assert r1["duplicate"] == False
 
 r2 = json.loads(handle_create_senior_task({
     "title": "Test idempotency (dup)",
-    "request": "Some other request",
+    "user_outcome": "Some other request",
+    "acceptance_criteria": "Different criteria should not create a duplicate",
     "repo": repo,
     "idempotency_key": "idem-test-001",
 }))
@@ -296,7 +321,10 @@ assert "required" not in SENIOR_ACTIVE_TASKS_SCHEMA["parameters"] or \
 
 # _parse_task_metadata round-trips a create_senior_task body
 origin = {"platform": "telegram", "chat_id": "999", "thread_id": "", "user_id": "u", "session_key": ""}
-body = _build_task_body("Fix bug", "/home/repo", origin)
+body = _build_task_body({
+    "user_outcome": "Fix bug",
+    "acceptance_criteria": "Bug is fixed and verified",
+}, "/home/repo", origin)
 meta = _parse_task_metadata(body)
 assert meta["repo"] == "/home/repo", meta
 assert meta["junie_task_type"] == "senior_dev_code_task", meta
@@ -322,7 +350,8 @@ kb.init_db(Path(os.environ["HERMES_KANBAN_DB"]))
 repo = os.environ.get("TEST_REPO", os.getcwd())
 created = json.loads(handle_create_senior_task({
     "title": "Active lookup task",
-    "request": "Do work",
+    "user_outcome": "Do work",
+    "acceptance_criteria": "Work is complete",
     "repo": repo,
 }))
 task_id = created["task_id"]

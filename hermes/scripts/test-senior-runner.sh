@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Test the senior-runner synchronous Senior Dev coding runner:
-# schema, input validation, job_id derivation, prompt discipline, a full
-# synchronous run against a fake opencode, and VERDICT normalization.
-# Does NOT call the hermes CLI or modify live profiles/Kanban.
+# schema, input validation, job_id derivation, prompt assembly, and a full
+# synchronous run against a fake junie CLI (artifacts + exit code + runner
+# state). The runner emits no verdict; the senior-dev worker decides the
+# Kanban action. Does NOT call the hermes CLI or modify live profiles/Kanban.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,9 +43,9 @@ load_plugin '
 props = SENIOR_RUN_CODING_TASK_SCHEMA["parameters"]["properties"]
 required = SENIOR_RUN_CODING_TASK_SCHEMA["parameters"]["required"]
 assert SENIOR_RUN_CODING_TASK_SCHEMA["name"] == "senior_run_coding_task"
-for f in ("task_id", "repo", "request", "context", "job_id"):
+for f in ("task_id", "repo", "user_outcome", "acceptance_criteria", "distilled_context", "context", "job_id"):
     assert f in props, f
-assert set(required) == {"task_id", "repo", "request"}, required
+assert set(required) == {"task_id", "repo", "user_outcome", "acceptance_criteria"}, required
 assert SENIOR_RUN_CODING_TASK_SCHEMA["parameters"].get("additionalProperties") is False
 print("OK: %d properties, required=%s" % (len(props), sorted(required)))
 ' && pass || fail "Schema test failed"
@@ -54,19 +55,22 @@ printf '=== Test 2: Input validation ===\n'
 load_plugin '
 import json
 # missing task_id
-r = json.loads(handle_senior_run_coding_task({"repo": "/tmp", "request": "x"}))
+r = json.loads(handle_senior_run_coding_task({"repo": "/tmp", "user_outcome": "x", "acceptance_criteria": "done"}))
 assert r["ok"] is False and "task_id" in r["error"], r
 # relative repo
-r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "rel", "request": "x"}))
+r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "rel", "user_outcome": "x", "acceptance_criteria": "done"}))
 assert r["ok"] is False and "absolute" in r["error"], r
 # nonexistent repo
-r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "/nope/54321_x", "request": "x"}))
+r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "/nope/54321_x", "user_outcome": "x", "acceptance_criteria": "done"}))
 assert r["ok"] is False, r
-# missing request
-r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "/tmp", "request": "  "}))
-assert r["ok"] is False and "request" in r["error"], r
+# missing user_outcome
+r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "/tmp", "user_outcome": "  ", "acceptance_criteria": "done"}))
+assert r["ok"] is False and "user_outcome" in r["error"], r
+# missing acceptance_criteria
+r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "/tmp", "user_outcome": "x", "acceptance_criteria": "  "}))
+assert r["ok"] is False and "acceptance_criteria" in r["error"], r
 # bad job_id
-r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "/tmp", "request": "x", "job_id": "../escape"}))
+r = json.loads(handle_senior_run_coding_task({"task_id": "t_1", "repo": "/tmp", "user_outcome": "x", "acceptance_criteria": "done", "job_id": "../escape"}))
 assert r["ok"] is False and "job_id" in r["error"], r
 print("OK: all input validations pass")
 ' && pass || fail "Input validation test failed"
@@ -86,77 +90,94 @@ print("OK: derived job_id=%s" % jid)
 ' && pass || fail "job_id derivation test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 4: prompt includes the VERDICT discipline block ===\n'
+printf '=== Test 4: prompt carries request + context and no verdict protocol ===\n'
 load_plugin '
 p = _build_prompt("do the thing", context="extra ctx")
-assert "do the thing" in p
-assert "extra ctx" in p
-assert "VERDICT: pr-ready|needs-input|failed" in p
-assert "USER_MESSAGE:" in p
-print("OK: prompt carries VERDICT discipline")
-' && pass || fail "prompt discipline test failed"
+# The runner must not impose a structured result/verdict protocol: the prompt
+# is exactly the request plus optional context, with no appended block.
+assert p == "do the thing\n\n## Additional context\n\nextra ctx", p
+assert _build_prompt("just the request") == "just the request"
+print("OK: prompt carries request/context with no appended result protocol")
+' && pass || fail "prompt assembly test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 5: full synchronous run writes artifacts + verdict (pr-ready) ===\n'
+printf '=== Test 5: full synchronous run writes artifacts + completed state ===\n'
 load_plugin '
 import json, os, tempfile, stat
 
 tmp = tempfile.mkdtemp(prefix="sr-")
 repo = os.path.join(tmp, "repo"); os.makedirs(repo)
-fake = os.path.join(tmp, "opencode")
+fake = os.path.join(tmp, "junie")
 with open(fake, "w") as f:
     f.write(
         "#!/usr/bin/env bash\n"
-        "echo '"'"'{\"sessionID\":\"ses_ABC123\",\"type\":\"start\"}'"'"'\n"
-        "echo '"'"'{\"type\":\"text\",\"part\":{\"type\":\"text\",\"text\":\"Did work.\\nVERDICT: pr-ready\\nSUMMARY: Implemented X\\nUSER_MESSAGE: All done.\\nPR_URL: https://example.com/pr/9\"}}'"'"'\n"
+        "echo '"'"'{\"type\":\"text\",\"part\":{\"type\":\"text\",\"text\":\"Did work. Implemented X. PR: https://example.com/pr/9\"}}'"'"'\n"
         "exit 0\n"
     )
 os.chmod(fake, 0o755)
+auth = os.path.join(tmp, "junie.key")
+with open(auth, "w") as f:
+    f.write("test-key")
 
 os.environ["SENIOR_RUNNER_BASE"] = os.path.join(tmp, "senior")
-os.environ["OPENCODE_BIN"] = fake
+os.environ["JUNIE_BIN"] = fake
+os.environ["JUNIE_SENIOR_AUTH_FILE"] = auth
 
 res = json.loads(handle_senior_run_coding_task({
-    "task_id": "t_run1", "repo": repo, "request": "do something",
+    "task_id": "t_run1",
+    "repo": repo,
+    "user_outcome": "do something",
+    "acceptance_criteria": "the work is done",
 }))
 assert res["ok"] is True, res
 assert res["exit_code"] == 0, res
-assert res["verdict"] == "pr-ready", res
+assert res["worker_state"] == "completed", res
 for key in ("run_dir", "status_path", "result_path"):
     assert os.path.isfile(res[key]) or os.path.isdir(res[key]), (key, res[key])
-for artifact in ("spec.json", "status.json", "events.jsonl", "result.md", "opencode.stdout.log"):
+for artifact in ("spec.json", "status.json", "events.jsonl", "result.md", "junie.stdout.log"):
     assert os.path.isfile(os.path.join(res["run_dir"], artifact)), artifact
 result_md = open(res["result_path"]).read()
-assert "VERDICT: pr-ready" in result_md, result_md
+assert "Implemented X" in result_md, result_md
+assert "runner_state: completed" in result_md, result_md
 assert "https://example.com/pr/9" in result_md, result_md
 status = json.load(open(res["status_path"]))
 assert status["worker_state"] == "completed", status
-assert status["opencode"]["session_id"] == "ses_ABC123", status
-print("OK: artifacts written, verdict=pr-ready, session captured")
-' && pass || fail "synchronous pr-ready run test failed"
+assert status["junie"]["exit_code"] == 0, status
+assert status["junie"]["bin"] == fake, status
+print("OK: artifacts written, runner_state=completed, Junie status captured")
+' && pass || fail "synchronous run test failed"
 
 # ════════════════════════════════════════════════════════════════
-printf '=== Test 6: failed exit yields failed verdict ===\n'
+printf '=== Test 6: nonzero exit yields failed runner state ===\n'
 load_plugin '
 import json, os, tempfile
 
 tmp = tempfile.mkdtemp(prefix="sr-")
 repo = os.path.join(tmp, "repo"); os.makedirs(repo)
-fake = os.path.join(tmp, "opencode")
+fake = os.path.join(tmp, "junie")
 with open(fake, "w") as f:
     f.write("#!/usr/bin/env bash\necho boom >&2\nexit 3\n")
 os.chmod(fake, 0o755)
+auth = os.path.join(tmp, "junie.key")
+with open(auth, "w") as f:
+    f.write("test-key")
 
 os.environ["SENIOR_RUNNER_BASE"] = os.path.join(tmp, "senior")
-os.environ["OPENCODE_BIN"] = fake
+os.environ["JUNIE_BIN"] = fake
+os.environ["JUNIE_SENIOR_AUTH_FILE"] = auth
 
 res = json.loads(handle_senior_run_coding_task({
-    "task_id": "t_run2", "repo": repo, "request": "break it",
+    "task_id": "t_run2",
+    "repo": repo,
+    "user_outcome": "break it",
+    "acceptance_criteria": "failure is reported",
 }))
 assert res["ok"] is False, res
 assert res["exit_code"] == 3, res
-assert res["verdict"] == "failed", res
-print("OK: failed run mapped to verdict=failed exit_code=3")
+assert res["worker_state"] == "failed", res
+status = json.load(open(res["status_path"]))
+assert status["worker_state"] == "failed", status
+print("OK: nonzero exit mapped to worker_state=failed exit_code=3")
 ' && pass || fail "failed run test failed"
 
 # ════════════════════════════════════════════════════════════════

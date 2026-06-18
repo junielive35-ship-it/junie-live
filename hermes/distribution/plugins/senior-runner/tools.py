@@ -1,8 +1,8 @@
 """Public tool schema and handler for senior_run_coding_task.
 
 The synchronous Senior Dev coding tool. The senior-dev Kanban worker calls
-this once per task: it runs the dummy Senior executor (vanilla OpenCode) in
-the foreground and returns the artifact paths. It does NOT mutate the Kanban
+this once per task: it runs the headless Junie CLI Senior executor in the
+foreground and returns the artifact paths. It does NOT mutate the Kanban
 board — the worker reads result.md/status.json and applies the single
 terminal Kanban action itself.
 """
@@ -19,9 +19,9 @@ _SAFE_JOB_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 SENIOR_RUN_CODING_TASK_SCHEMA = {
     "name": "senior_run_coding_task",
     "description": (
-        "Run a single coding task synchronously via the dummy Senior executor "
-        "(vanilla OpenCode) and return Marinator-style artifact paths. Blocks "
-        "until OpenCode exits. Does not touch the Kanban board."
+        "Run a single coding task synchronously via the headless Junie CLI "
+        "Senior executor and return artifact paths. Blocks until Junie CLI "
+        "exits. Does not touch the Kanban board."
     ),
     "parameters": {
         "type": "object",
@@ -34,17 +34,50 @@ SENIOR_RUN_CODING_TASK_SCHEMA = {
                 "type": "string",
                 "description": "Absolute path to the target repository.",
             },
-            "request": {
+            "user_outcome": {
                 "type": "string",
                 "description": (
-                    "The full request/prompt the Senior executor should work on."
+                    "User-visible outcome the Senior executor must achieve."
                 ),
+            },
+            "acceptance_criteria": {
+                "type": "string",
+                "description": (
+                    "Concrete checks that define done for the requested outcome."
+                ),
+            },
+            "distilled_context": {
+                "type": "string",
+                "description": (
+                    "Relevant local findings, task history, comments, and constraints "
+                    "distilled for the Senior executor."
+                ),
+                "default": "",
+            },
+            "constraints": {
+                "type": "string",
+                "description": "Hard constraints the Senior executor must obey.",
+                "default": "",
+            },
+            "non_goals": {
+                "type": "string",
+                "description": "Explicit work that is out of scope for this handoff.",
+                "default": "",
+            },
+            "expected_report_schema": {
+                "type": "string",
+                "description": (
+                    "Additional report fields the Senior executor should include in "
+                    "its raw final response. No fixed result protocol is imposed; "
+                    "the senior-dev worker reads the artifacts and decides the "
+                    "Kanban action itself."
+                ),
+                "default": "",
             },
             "context": {
                 "type": "string",
                 "description": (
-                    "Optional additional context (relevant comments, prior "
-                    "block reasons, the user's follow-up answer)."
+                    "Deprecated compatibility field. Prefer distilled_context."
                 ),
                 "default": "",
             },
@@ -57,24 +90,23 @@ SENIOR_RUN_CODING_TASK_SCHEMA = {
                 ),
             },
         },
-        "required": ["task_id", "repo", "request"],
+        "required": ["task_id", "repo", "user_outcome", "acceptance_criteria"],
         "additionalProperties": False,
     },
 }
 
 
-def _resolve_opencode_bin() -> str | None:
-    """Resolve the OpenCode binary path (local helper, mirrors runner logic)."""
-    opencode_bin = os.environ.get("OPENCODE_BIN", "")
-    if opencode_bin and os.path.isfile(opencode_bin) and os.access(opencode_bin, os.X_OK):
-        return opencode_bin
+def _resolve_junie_bin() -> str | None:
+    """Resolve the Junie CLI binary path (local helper, mirrors runner logic)."""
+    junie_bin = os.environ.get("JUNIE_BIN", "")
+    if junie_bin and os.path.isfile(junie_bin) and os.access(junie_bin, os.X_OK):
+        return junie_bin
     import shutil
-    path_bin = shutil.which("opencode")
+    path_bin = shutil.which("junie")
     if path_bin:
         return path_bin
     for fallback in [
-        "/home/Danila.Savenkov/.opencode/bin/opencode",
-        os.path.expanduser("~/.opencode/bin/opencode"),
+        os.path.expanduser("~/.local/bin/junie"),
     ]:
         if os.path.isfile(fallback) and os.access(fallback, os.X_OK):
             return fallback
@@ -82,8 +114,34 @@ def _resolve_opencode_bin() -> str | None:
 
 
 def check_requirements() -> bool:
-    """Return True if prerequisites (OpenCode binary) are available."""
-    return _resolve_opencode_bin() is not None
+    """Return True if prerequisites (Junie CLI binary) are available."""
+    return _resolve_junie_bin() is not None
+
+
+def _build_handoff_prompt(params: dict) -> str:
+    """Build the structured p.0 Team Lead -> Senior Dev handoff prompt."""
+    parts = [
+        "# Team Lead -> Senior Dev handoff",
+        "",
+        "## Repository",
+        params["repo"].strip(),
+        "",
+        "## User-visible outcome",
+        params["user_outcome"].strip(),
+        "",
+        "## Acceptance criteria",
+        params["acceptance_criteria"].strip(),
+    ]
+    optional_sections = [
+        ("Distilled context", (params.get("distilled_context") or params.get("context") or "").strip()),
+        ("Constraints", (params.get("constraints") or "").strip()),
+        ("Non-goals", (params.get("non_goals") or "").strip()),
+        ("Expected report schema", (params.get("expected_report_schema") or "").strip()),
+    ]
+    for title, value in optional_sections:
+        if value:
+            parts.extend(["", f"## {title}", value])
+    return "\n".join(parts)
 
 
 def _derive_job_id(task_id: str) -> str:
@@ -106,9 +164,13 @@ def _validate_inputs(params: dict) -> str | None:
     if not os.path.isdir(repo):
         return f"repo directory does not exist: {repo}"
 
-    request = params.get("request", "").strip()
-    if not request:
-        return "request is required"
+    user_outcome = params.get("user_outcome", "").strip()
+    if not user_outcome:
+        return "user_outcome is required"
+
+    acceptance_criteria = params.get("acceptance_criteria", "").strip()
+    if not acceptance_criteria:
+        return "acceptance_criteria is required"
 
     job_id = params.get("job_id")
     if job_id:
@@ -133,8 +195,8 @@ def handle_senior_run_coding_task(params: dict, plugin_ctx: Any = None, **kwargs
 
     task_id = params["task_id"].strip()
     repo = params["repo"].strip()
-    request = params["request"].strip()
-    context = (params.get("context") or "").strip()
+    request = _build_handoff_prompt(params)
+    context = ""
     job_id = (params.get("job_id") or "").strip() or _derive_job_id(task_id)
 
     from .runner import run_coding_task

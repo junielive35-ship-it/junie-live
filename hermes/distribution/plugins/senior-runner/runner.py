@@ -3,10 +3,12 @@
 Owns run-dir creation, spec.json/status.json/events.jsonl writing, and a
 *blocking* invocation of the plugin-local Python worker. Unlike the Marinator
 runner, this does not background the worker or wake any session: the call
-returns only after OpenCode has exited and the artifacts are written.
+returns only after Junie CLI has exited and the artifacts are written.
 
-The runner never mutates the Kanban board. The senior-dev worker agent reads
-the returned artifact paths and performs the single terminal Kanban action.
+The runner never mutates the Kanban board and never decides a semantic
+outcome. The senior-dev worker agent reads the returned artifact paths,
+exit code, and run status, then chooses the single terminal Kanban action
+itself using the repo-documented status rules.
 """
 
 import os
@@ -18,26 +20,24 @@ from . import state
 from . import worker
 
 
-def _resolve_opencode_bin() -> Optional[str]:
-    """Resolve the OpenCode binary path.
+def _resolve_junie_bin() -> Optional[str]:
+    """Resolve the Junie CLI binary path.
 
     Priority:
-      1. OPENCODE_BIN env var
-      2. 'opencode' from PATH
-      3. /home/Danila.Savenkov/.opencode/bin/opencode  (profile-home)
-      4. ~/.opencode/bin/opencode  (expanded ~)
+      1. JUNIE_BIN env var
+      2. 'junie' from PATH
+      3. ~/.local/bin/junie  (expanded ~)
     """
-    env_bin = os.environ.get("OPENCODE_BIN", "")
+    env_bin = os.environ.get("JUNIE_BIN", "")
     if env_bin and os.path.isfile(env_bin) and os.access(env_bin, os.X_OK):
         return env_bin
 
-    path_bin = shutil.which("opencode")
+    path_bin = shutil.which("junie")
     if path_bin:
         return path_bin
 
     for fallback in [
-        "/home/Danila.Savenkov/.opencode/bin/opencode",
-        os.path.expanduser("~/.opencode/bin/opencode"),
+        os.path.expanduser("~/.local/bin/junie"),
     ]:
         if os.path.isfile(fallback) and os.access(fallback, os.X_OK):
             return fallback
@@ -45,29 +45,16 @@ def _resolve_opencode_bin() -> Optional[str]:
     return None
 
 
-# Result discipline appended to every Senior prompt: OpenCode must end its
-# response with this block. The worker script normalizes / synthesizes it,
-# but asking for it directly produces far better verdicts.
-_VERDICT_INSTRUCTIONS = """\
-
----
-
-When you are finished, end your response with exactly this block (no code fence):
-
-VERDICT: pr-ready|needs-input|failed
-SUMMARY: <one sentence>
-USER_MESSAGE: <message safe to send to the user>
-PR_URL: <url or empty>
-"""
-
-
 def _build_prompt(request: str, context: str = "") -> str:
-    """Assemble the OpenCode prompt from the request, optional context, and
-    the fixed result-discipline block."""
+    """Assemble the Junie CLI prompt from the request and optional context.
+
+    The runner does not impose a structured result/verdict protocol on the
+    executor: it captures whatever Junie CLI produces as artifacts and lets
+    the senior-dev worker make the semantic Kanban decision.
+    """
     parts = [request.strip()]
     if context.strip():
         parts.append("\n## Additional context\n\n" + context.strip())
-    parts.append(_VERDICT_INSTRUCTIONS)
     return "\n".join(parts)
 
 
@@ -80,17 +67,17 @@ def run_coding_task(
 ) -> dict:
     """Create run dir, write spec/status/events, run the worker synchronously.
 
-    Blocks until OpenCode exits. Returns a dict with ok, job_id, run_dir,
+    Blocks until Junie CLI exits. Returns a dict with ok, job_id, run_dir,
     status_path, result_path, exit_code.
     """
-    opencode_bin = _resolve_opencode_bin()
-    if not opencode_bin:
+    junie_bin = _resolve_junie_bin()
+    if not junie_bin:
         return {
             "ok": False,
             "error": (
-                "opencode_not_found: could not resolve OpenCode binary. "
-                "Set OPENCODE_BIN, add opencode to PATH, or install to "
-                "~/.opencode/bin/opencode."
+                "junie_not_found: could not resolve Junie CLI binary. "
+                "Set JUNIE_BIN, add junie to PATH, or install to "
+                "~/.local/bin/junie."
             ),
             "job_id": job_id,
         }
@@ -106,7 +93,9 @@ def run_coding_task(
         "task_id": task_id,
         "repo": repo,
         "prompt_file": prompt_dest,
-        "opencode_bin": opencode_bin,
+        "junie_bin": junie_bin,
+        "auth_file": os.environ.get("JUNIE_SENIOR_AUTH_FILE", "~/junie.key"),
+        "model": os.environ.get("JUNIE_SENIOR_MODEL", "opus"),
         "created_at": time.time(),
         "created_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
@@ -120,7 +109,7 @@ def run_coding_task(
         task_id=task_id,
         repo=repo,
         run_dir=run_dir,
-        opencode_bin=opencode_bin,
+        junie_bin=junie_bin,
     )
     state.atomic_write_json(status_path, initial_status)
 
@@ -134,7 +123,7 @@ def run_coding_task(
 
     result_path = os.path.join(run_dir, "result.md")
 
-    # Synchronous, blocking invocation. This call returns only after OpenCode exits.
+    # Synchronous, blocking invocation. This call returns only after Junie CLI exits.
     state.append_event(events_path, "worker_started", {
         "worker_module": "senior-runner.worker",
         "dispatch_method": "in_process_sync",
@@ -168,9 +157,10 @@ def run_coding_task(
         "status_path": status_path,
         "result_path": result_path,
         "exit_code": exit_code,
-        "verdict": final_status.get("verdict"),
+        "worker_state": final_status.get("worker_state"),
         "message": (
             "Synchronous Senior coding run finished. Read result.md and "
-            "status.json, then apply exactly one terminal Kanban action."
+            "status.json, then decide and apply exactly one terminal Kanban "
+            "action yourself."
         ),
     }

@@ -1,6 +1,6 @@
 name: senior-runner
 version: 0.1.0
-description: "Junie Live Senior Dev synchronous runner: run one coding task via vanilla OpenCode in the foreground and return Marinator-style artifact paths. p1 execution boundary for the senior-dev Kanban worker."
+description: "Junie Live Senior Dev synchronous runner: run one coding task via headless Junie CLI in the foreground and return artifact paths. p.0 execution boundary for the senior-dev Kanban worker."
 author: Danila Savenkov / Junie Live
 kind: standalone
 provides_tools:

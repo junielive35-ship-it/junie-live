@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Compatibility wrapper for the synchronous Senior Dev OpenCode executor.
+# Compatibility wrapper for the synchronous Senior Dev Junie CLI executor.
 # Runtime logic lives in ../worker.py; inline Python in shell is prohibited.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

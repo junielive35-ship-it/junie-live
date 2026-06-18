@@ -142,7 +142,7 @@ def make_initial_status(
     task_id: str,
     repo: str,
     run_dir: str,
-    opencode_bin: Optional[str] = None,
+    junie_bin: Optional[str] = None,
 ) -> dict:
     """Create the initial status.json structure for a Senior run."""
     return {
@@ -150,21 +150,21 @@ def make_initial_status(
         "task_id": task_id,
         "repo": repo,
         "run_dir": run_dir,
-        "opencode": {
-            "bin": opencode_bin,
+        "junie": {
+            "bin": junie_bin,
             "pid": None,
             "exit_code": None,
-            "session_id": None,
+            "model": None,
+            "auth_file": None,
         },
         "worker_state": "queued",
-        "verdict": None,
     }
 
 
 def update_status(status_path: str, updates: dict) -> dict:
     """Read status.json, apply shallow-merge updates, and write back atomically.
 
-    Supports dotted keys like 'opencode.pid' for nested updates.
+    Supports dotted keys like 'junie.pid' for nested updates.
     Returns the updated status dict.
     """
     status = read_json(status_path) or {}

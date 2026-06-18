@@ -4,7 +4,7 @@
 
 Junie Live on Hermes uses native Hermes features for orchestration, persistence, communication, and scheduling. The architecture eliminates the need for shell-script orchestration layers and OpenClaw workspace conventions.
 
-Junie Live's named task-solving loop is the **Marinator**: validate/decompose a task, delegate to the executor, check results, request fixes, verify, accept/report, and reflect. In the current Hermes p1 implementation, user-visible code tasks are routed from the Chat Agent into Hermes Kanban as one Senior Dev task. The `senior-dev` profile is a thin synchronous adapter: it runs OpenCode through `senior_run_coding_task`, writes Marinator-style artifacts, comments the result, then leaves the Kanban task `blocked` with a substatus (`review-required`, `needs-input`, or `failed`) for Junie/origin review. `done` is intentionally unused until PR merge monitoring exists.
+Junie Live's named task-solving loop is the **Marinator**: validate/decompose a task, delegate to the executor, check results, request fixes, verify, accept/report, and reflect. In the current Hermes p1 implementation, user-visible code tasks are routed from the Chat Agent into Hermes Kanban as one Senior Dev task. The `senior-dev` profile is a thin synchronous adapter: it runs OpenCode through `senior_run_coding_task`, writes Marinator-style artifacts, comments the result, then decides exactly one terminal Kanban action itself from the artifacts/exit code and the documented status rules — usually leaving the task `blocked` with a substatus (`review-required` by default, or `needs-input`/`failed`) for Junie/origin review. `kanban_complete`/`done` is reserved for genuinely terminal no-review work.
 
 ## Component mapping
 
@@ -114,10 +114,10 @@ Code-changing work now has a Hermes-native active-work lane instead of staying i
 - Before creating a task, the Chat Agent checks active Senior tasks for the same origin/repo and uses semantic judgment to attach follow-ups instead of duplicating.
 - `create_senior_task` creates one Hermes Kanban task per user-visible code item and subscribes the originating chat/thread for terminal updates.
 - `senior-dev` is a Hermes profile installed from `distribution/profiles/senior-dev/`; it is spawned by the Kanban dispatcher for tasks assigned to `senior-dev`.
-- In p1, `senior-dev` calls `senior_run_coding_task` from the `senior-runner` plugin. That tool runs one foreground OpenCode execution and returns artifact paths (`run_dir`, `status_path`, `result_path`) plus a verdict.
-- The runner writes Marinator-style artifacts (`spec.json`, `status.json`, `events.jsonl`, `result.md`, stdout/stderr logs, `runner.log`) under the Senior run root. It does not mutate Kanban.
-- The `senior-dev` profile reads the artifacts, adds a concise `kanban_comment`, and performs exactly one terminal `kanban_block`: `review-required:` for `pr-ready`, `needs-input:` for user input, or `failed:` for infrastructure/executor failure.
-- `done` / `kanban_complete` is intentionally unused in p1 because PR merge monitoring is not implemented. A `blocked(review-required: ...)` task is an awaiting-review handoff, not a failure by default.
+- In p1, `senior-dev` calls `senior_run_coding_task` from the `senior-runner` plugin. That tool runs one foreground OpenCode execution, records the exit code and runner state, and returns artifact paths (`run_dir`, `status_path`, `result_path`). It emits no verdict.
+- The runner writes Marinator-style artifacts (`spec.json`, `status.json`, `events.jsonl`, `result.md`, stdout/stderr logs, `runner.log`) under the Senior run root. It does not mutate Kanban and does not decide the outcome.
+- The `senior-dev` profile reads the artifacts, exit code, and task context, adds a concise `kanban_comment`, and decides exactly one terminal Kanban action itself using the documented status rules: `review-required:` (default for successful code-changing work), `needs-input:` when external user/owner input is required, `failed:` for execution/verification/requested-outcome failure, or `done`/`kanban_complete` only for genuinely terminal no-review work.
+- `kanban_complete`/`done` is intentionally rare in p1 and reserved for terminal no-review work. A `blocked(review-required: ...)` task is an awaiting-review handoff, not a failure by default.
 - `hire-junie.sh` and `rehire-junie.sh` install/update the companion `senior-dev` profile and required plugins/toolsets so fresh installs and disaster recovery do not leave the pipeline half-working.
 
 ### 6. Native cron instead of system crontab
