@@ -107,18 +107,11 @@ if [[ -e "$SEED_DIR/BOOTSTRAP.md" ]]; then
 fi
 command -v hermes >/dev/null || { err "hermes CLI not found in PATH"; exit 1; }
 
-# Resolve the shared Hermes root early. Junie profile data lives under
-# $HERMES_ROOT/profiles/$PROFILE, but Hermes Kanban is deliberately shared
-# across profiles at $HERMES_ROOT/kanban.db and $HERMES_ROOT/kanban/.
-# A fresh hire must clear both the profile and this shared Junie runtime state
-# after the optional pre-hire backup.
-HERMES_ROOT="$(python3 -m junie_runtime.paths hermes-root --profile "$PROFILE")"
-[[ -n "$HERMES_ROOT" && "$HERMES_ROOT" != "/" ]] || { err "invalid Hermes root resolved for $PROFILE: ${HERMES_ROOT:-'(empty)'}"; exit 1; }
 # ── Early: install/check junie_runtime before any profile ops ──
 RUNTIME_DIR="$HERMES_VERSION_ROOT/junie_runtime"
 if [[ -d "$RUNTIME_DIR" ]]; then
   log "Installing junie_runtime package..."
-  if python3 -m pip install -e "$RUNTIME_DIR" -q 2>/dev/null; then
+  if python3 -m pip install --quiet --disable-pip-version-check -e "$RUNTIME_DIR" >/dev/null 2>&1; then
     log "  junie_runtime installed from $RUNTIME_DIR"
   else
     err "Failed to install junie_runtime from $RUNTIME_DIR"
@@ -128,6 +121,15 @@ else
   err "junie_runtime directory not found: $RUNTIME_DIR"
   exit 1
 fi
+
+# Resolve the shared Hermes root early. Junie profile data lives under
+# $HERMES_ROOT/profiles/$PROFILE, but Hermes Kanban is deliberately shared
+# across profiles at $HERMES_ROOT/kanban.db and $HERMES_ROOT/kanban/.
+# A fresh hire must clear both the profile and this shared Junie runtime state
+# after the optional pre-hire backup.
+# Note: hermes-root requires junie_runtime to be installed first.
+HERMES_ROOT="$(python3 -m junie_runtime.paths hermes-root --profile "$PROFILE")"
+[[ -n "$HERMES_ROOT" && "$HERMES_ROOT" != "/" ]] || { err "invalid Hermes root resolved for $PROFILE: ${HERMES_ROOT:-'(empty)'}"; exit 1; }
 
 # ── Step 1: Back up any existing profile via dump-junie.sh ──
 if [[ "$BACKUP" -eq 1 ]]; then
@@ -400,34 +402,13 @@ if [[ "$FORWARD_KEYS" -eq 1 && -f "$ROOT_ENV" ]]; then
   done
 fi
 
-# ── Slack tokens from ~/slack-tokens ──
-SLACK_TOKENS_SOURCE="$(getent passwd "$(id -u)" | cut -d: -f6)/slack-tokens"
-if [[ -f "$SLACK_TOKENS_SOURCE" ]]; then
-  SLACK_FORWARDABLE_KEYS=(
-    SLACK_BOT_TOKEN
-    SLACK_APP_TOKEN
-    SLACK_ALLOWED_USERS
-    SLACK_ALLOW_ALL_USERS
-    SLACK_HOME_CHANNEL
-    SLACK_HOME_CHANNEL_NAME
-    SLACK_ALLOWED_CHANNELS
-  )
-  slack_count=0
-  slack_names=()
-  echo "" >> "$PROFILE_ENV"
-  echo "# Slack tokens from $SLACK_TOKENS_SOURCE" >> "$PROFILE_ENV"
-  for key in "${SLACK_FORWARDABLE_KEYS[@]}"; do
-    line="$(grep -E "^${key}=." "$SLACK_TOKENS_SOURCE" | head -n1 || true)"
-    if [[ -n "$line" ]]; then
-      echo "$line" >> "$PROFILE_ENV"
-      slack_count=$((slack_count + 1))
-      slack_names+=("$key")
-    fi
-  done
-  if [[ "$slack_count" -gt 0 ]]; then
-    log "  Forwarded $slack_count Slack credential(s) from $SLACK_TOKENS_SOURCE: ${slack_names[*]}"
-  fi
-fi
+# ── Slack tokens from ~/slack-tokens (override path with SLACK_TOKENS_FILE) ──
+# Credential forwarding + missing-home-channel-notice suppression live in a
+# sourceable helper so the behavior can be unit-tested without a full hire.
+# shellcheck source=lib/slack-tokens.sh
+source "$SCRIPT_DIR/lib/slack-tokens.sh"
+SLACK_TOKENS_SOURCE="${SLACK_TOKENS_FILE:-$(getent passwd "$(id -u)" | cut -d: -f6)/slack-tokens}"
+forward_slack_tokens "$PROFILE_ENV" "$SLACK_TOKENS_SOURCE"
 
 log "  Telegram configured (DM restricted to admin $ADMIN_TELEGRAM_ID; home channel set to admin DM)"
 if [[ "$forwarded_count" -gt 0 ]]; then
