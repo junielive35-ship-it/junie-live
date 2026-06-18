@@ -47,19 +47,19 @@ Restore is an operator action from this repo:
 JUNIE_HERMES_ROOT=~/.hermes ./hermes/scripts/rehire-junie.sh /tmp/junie-live.tgz --profile junie-live
 ```
 
-The dump includes config, `.env`, `state.db`, sessions, skills, plugins, Junie state, and Hermes-root Kanban state (`kanban.db`, `kanban/`). `rehire-junie.sh` restores the profile and restarts the gateway without running `gateway install`.
+The dump includes config, `.env`, `state.db`, sessions, skills, plugins, Junie state, and Hermes active-work state where present. `rehire-junie.sh` restores the profile and restarts the gateway without running `gateway install`.
 
 ## What is this?
 
-This directory contains everything needed to run Junie Live on top of [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) instead of OpenClaw. The behavioral contract — product ownership, strategic validation, delegation, review, reflection, autonomous work windows — stays the same. Junie Live's task-solving loop is called the **Marinator** when referring to validation/decomposition, delegation, result checking, fix requests, verification, acceptance/reporting, and reflection as one loop. The implementation leverages Hermes-native features instead of shell scripts and OpenClaw workspace conventions.
+This directory contains everything needed to run Junie Live on top of [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) instead of OpenClaw. The behavioral contract is now split by role: Team Lead owns product context, strategic validation, intake, handoff quality, reporting, reflection, and autonomous work windows; Senior Dev owns implementation, review, verification, fix loop, and final verdict after handoff. The implementation leverages Hermes-native features instead of shell scripts and OpenClaw workspace conventions.
 
 ## Key architectural differences from OpenClaw version
 
 | Concern | OpenClaw | Hermes |
 |---------|----------|--------|
-| Orchestration | OpenClaw agent with `AGENTS.md` workspace | Hermes profile with `SOUL.md`, memory, skills, and `HERMES.md` in the target repo |
+| Team Lead context | OpenClaw agent with `AGENTS.md` workspace | Hermes profile with `SOUL.md`, memory, skills, and `HERMES.md` in the target repo |
 | Persistent context | `MEMORY.md` file in workspace | Hermes native memory (user + memory stores) |
-| Coding delegation | `opencode run` subagent via shell scripts | `create_senior_task` to the `senior-dev` Kanban lane for code-changing work; the current p1 lane uses synchronous `senior_run_coding_task` (OpenCode) and returns `blocked(review-required|needs-input|failed)` for Junie review; `delegate_task` only for non-code subtasks |
+| Code handoff | Shell-script worker delegation | Structured Team Lead → headless Senior Dev handoff; `senior_run_coding_task` runs Junie CLI and returns `done`, `needs-input`, or `failed`; `delegate_task` only for non-code subtasks |
 | Scheduled routines | System crontab / OpenClaw cron | Hermes native cron jobs |
 | Skills | OpenClaw skill files in workspace | Hermes skills (first-class, auto-loaded by matching) |
 | Repo hygiene | Shell scripts checking for workspace artifacts | Single tracked file in the target repo (`HERMES.md`); all other state under `~/.hermes/` |
@@ -89,7 +89,7 @@ hermes/
 │   ├── .env                           # Created by hire-junie.sh with Telegram creds
 │   ├── docs/                          # Profile-internal Junie docs (strategy, protocols, etc.)
 │   ├── skills/                        # Installed skills
-│   ├── plugins/                       # Senior task/runner, Marinator delegation, Autonomous work plugins
+│   ├── plugins/                       # Senior task/runner and autonomous work plugins
 │   ├── scripts/                       # Profile-local helper scripts (dump, initialization, etc.)
 │   └── cron/                          # Optional profile cron jobs
 ├── initialization/                    # Superseded by distribution/; kept for migration compatibility
@@ -112,19 +112,19 @@ hermes/
 
 2. **SOUL.md** — `distribution/SOUL.md` is installed into the profile root as `~/.hermes/profiles/junie-live/SOUL.md` via Hermes profile distribution. Hermes auto-loads it as the agent identity (slot #1 in the system prompt) on every turn, regardless of working directory. It carries Junie's personality plus the always-on operating safety net (initialization gate, no-direct-coding rule, challenge protocol). Replaces OpenClaw's `SOUL.md`.
 
-3. **HERMES.md** — `distribution/HERMES.seed.md` is installed into the profile as `HERMES.seed.md` via profile distribution. During initialization, the agent copies it to the target project repo root as `HERMES.md`. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root, so the full project-level protocol is active whenever Junie works in the target repo. We pick `HERMES.md` over `AGENTS.md` because coding executors (opencode, codex, claude-code) read `AGENTS.md` — keeping the orchestrator protocol in `HERMES.md` prevents executor sessions from being polluted by orchestrator-only rules.
+3. **HERMES.md** — `distribution/HERMES.seed.md` is installed into the profile as `HERMES.seed.md` via profile distribution. During initialization, the agent copies it to the target project repo root as `HERMES.md`. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root, so the full project-level Team Lead protocol is active whenever Junie works in the target repo. We pick `HERMES.md` over `AGENTS.md` because Senior Dev and coding executors read their own contracts — keeping Team Lead protocol in `HERMES.md` prevents executor sessions from being polluted by Team Lead-only rules.
 
 4. **Memory** — Hermes native memory stores durable strategic context (replaces `MEMORY.md`). Compact facts in user/memory stores; detailed knowledge in profile `docs/` read on demand.
 
-5. **Skills** — Hermes skills replace OpenClaw protocols. They're auto-loaded when relevant tasks match, and they carry the delegation, review, reflection, and intake workflows.
+5. **Skills** — Hermes skills replace OpenClaw protocols. They're auto-loaded when relevant tasks match, and active Team Lead skills carry intake and reflection workflows.
 
-6. **Delegation** — Normal code-changing work is delegated via `create_senior_task` to the `senior-dev` Kanban lane. In the current p1 implementation, `senior-dev` is a thin synchronous adapter around OpenCode: it calls `senior_run_coding_task`, writes Marinator-style artifacts, comments the result, and blocks the task as `review-required`, `needs-input`, or `failed`. The orchestrator never codes directly. Non-code subtasks may use `delegate_task` instead.
+6. **Senior Dev handoff** — Normal code-changing work is handed off to the `senior-dev` headless Junie CLI runtime with repository path, user-visible outcome, acceptance criteria, distilled context, constraints, non-goals, and expected report schema. Senior Dev returns exactly one final verdict: `done`, `needs-input`, or `failed`. Team Lead never codes directly. Non-code subtasks may use `delegate_task` instead.
 
 7. **Cron** — Hermes cron jobs replace shell crontab entries when recurring routines are explicitly approved. Setup does not install watchdog, health-check, or overnight-start jobs by default.
 
 8. **Telegram** — Hermes gateway provides native Telegram integration with DM allowlisting, the same as the OpenClaw version.
 
-9. **Code-work concurrency** — The active p1 code-work concurrency boundary is the Hermes Kanban `senior-dev` lane. Normal Chat Agent code tasks go through Kanban; older code-mutex references are historical unless a future approved design reintroduces a separate protected manual path.
+9. **Code-work concurrency** — The active code-work concurrency boundary is the configured Senior Dev handoff/runtime state. Normal Team Lead code tasks go through Senior Dev; older code-mutex or Senior Kanban review-queue references are historical unless a future approved design reintroduces a separate protected manual path.
 
 ## Current implementation status
 

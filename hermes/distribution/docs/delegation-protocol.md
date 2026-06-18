@@ -1,25 +1,25 @@
-# Senior Dev Kanban Protocol
+# Senior Dev Handoff Protocol
 
-Normal Junie code-changing work uses the configured Senior Dev Kanban path.
+Normal Junie code-changing work uses the Team Lead → headless Senior Dev handoff contract.
 
-## Chat Agent Path
+## Team Lead Path
 
-1. Inspect active Senior work with `senior_active_tasks`.
-2. If related active work exists, add the follow-up as a comment and requeue only when it answers the current block reason.
-3. Otherwise create one Senior Dev task with `create_senior_task`.
-4. Do not implement source, script, config, or test changes directly. Documentation-only Markdown edits are the explicit exception.
+1. Confirm the target repository path and the user-visible outcome.
+2. Gather only the context Senior Dev needs: acceptance criteria, relevant docs/memory/task history, constraints, non-goals, required commands, and expected report schema.
+3. Check current active Senior Dev follow-ups if the configured runtime/tooling exposes them, and attach related clarifications when that is the current documented path.
+4. Create or send one Senior Dev handoff through the configured headless runtime/tooling.
+5. Pass through Senior Dev's final verdict (`done`, `needs-input`, or `failed`) accurately.
+6. Do not implement source, script, config, or test changes directly. Documentation-only Markdown edits are the explicit exception.
 
-## Senior Dev Worker Path
+## Senior Dev Runtime Contract
 
-1. Read the assigned Kanban task with `kanban_show`.
-2. Build a structured handoff for `senior_run_coding_task`: repo path, user-visible outcome, acceptance criteria, distilled context, constraints/non-goals, and expected report schema.
-3. Run exactly one synchronous coding attempt with `senior_run_coding_task`.
-4. Read the returned `result.md` and `status.json` artifacts, plus the `exit_code` and runner state.
-5. Add one `kanban_comment` summarizing the result and artifact paths.
-6. Decide the outcome yourself from the artifacts, exit code, task context, and the allowed Kanban statuses — the runner does not emit a verdict. End with exactly one terminal Kanban action:
-   - `kanban_block` with `review-required:` — default for successful code-changing work that Junie must review.
-   - `kanban_block` with `needs-input:` — only when external user/owner information is required.
-   - `kanban_block` with `failed:` — for execution, verification, or requested-outcome failure (including `exit_code != 0`).
-   - `kanban_complete` with `done:` — only for genuinely terminal work that needs no review.
+Senior Dev receives the Team Lead handoff and owns delivery end-to-end:
 
-`kanban_complete` is intentionally rare in p1 and reserved for terminal no-review work; ordinary code-changing work blocks as `review-required`.
+1. Inspect the target repository before editing.
+2. Implement only the requested outcome.
+3. Write or update tests when the task type requires them.
+4. Run relevant verification commands for changed code and downstream impacted modules.
+5. Fix failures caused by the changes instead of bypassing or weakening tests.
+6. End with exactly one final verdict: `done`, `needs-input`, or `failed`, including exact verification evidence.
+
+Team Lead must not add a hidden second implementation review after Senior Dev returns. Reflection may improve future handoff quality or protocol, but not re-open Senior Dev's completed review loop.

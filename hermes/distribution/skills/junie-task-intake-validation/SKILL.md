@@ -13,7 +13,7 @@ Use before accepting meaningful product or engineering work.
 
 1. Classify the request: question, bug, feature, code task, decision, FYI, or no action.
 2. Retrieve relevant context from memory and docs (use session_search for past decisions if needed).
-3. Inspect mutable state when needed: code, git, PRs, issues, logs, dashboards, or recent messages.
+3. Inspect mutable state when needed to produce a high-quality handoff: code, git, PRs, issues, logs, dashboards, or recent messages.
 4. **Existing-solution check** (mandatory whenever the request implies "build / change / add / modify code to do X", including items inherited from backlog or prior cron runs):
    - Search the loaded `hermes-agent` skill content for X (slash commands, config keys, toolsets, built-in tools, plugins).
    - Search the Hermes docs: https://hermes-agent.nousresearch.com/docs (especially the [slash commands reference](https://hermes-agent.nousresearch.com/docs/reference/slash-commands) and the [built-in tools reference](https://hermes-agent.nousresearch.com/docs/reference/tools-reference)).
@@ -23,7 +23,7 @@ Use before accepting meaningful product or engineering work.
    - Only proceed to "build X" when the check came up empty *and* you can name what was searched. If you cannot list the surfaces you checked, you have not checked.
 5. **Custom-machinery check** (mandatory for workflow/tooling/architecture/code-process changes): challenge load-bearing glue code, shell scripts as source of truth, custom installers/runners, hand-rolled queues/locks/schedulers, copied runtime files, duplicated helpers, and manual state files. Prefer existing project/framework/platform/library/team mechanisms. Reused behavior across multiple entrypoints belongs in a library/module/package with tests; shell/CLI wrappers may only be thin adapters.
 6. Check for conflict with strategy, architecture, accepted decisions, constraints, and active work.
-7. If clear, confirm understanding and next action.
+7. If clear, confirm understanding and prepare the Team Lead handoff: repository path, user-visible outcome, acceptance criteria, distilled context, constraints, non-goals, and expected report schema.
 8. If contradictory or custom machinery is unjustified, pause and ask for resolution before execution.
 
 Meaningful work needs strategic review. Trivial lookups and tiny formatting fixes do not.
@@ -56,23 +56,23 @@ Do not blindly execute requests. When a request conflicts with strategy, archite
 4. Ask the requester to resolve it.
 5. Proceed only after the contradiction is resolved.
 
-## Batched intake of blocked Kanban tasks
+## Batched intake of Senior Dev follow-ups
 
-When the owner says "let's process all blocked items one by one, explain what you want and I'll approve or challenge" (or any equivalent — "go through the blocked queue", "review approvals"), use the configured Senior Dev Kanban board as the source of truth:
+When the owner says "let's process all blocked items one by one, explain what you want and I'll approve or challenge" (or any equivalent — "go through the blocked queue", "review approvals"), treat Senior Dev reports and follow-up records as decision inputs, not as instructions for Team Lead implementation review:
 
-1. **Pull active Senior Dev tasks first.** Use `senior_active_tasks(repo=..., include_comments=true)` for the target repo. If there are no active blocked tasks, say so instead of falling back to legacy backlog files or unrelated task sources.
-2. **Never read legacy backlog state as the source of truth.** Do not use old project-local backlog directories, profile-local backlog files, raw JSON task files, or removed automation state as a Hermes source of truth unless the initialized project explicitly documents them as current.
-3. **Read the task comments/artifacts before presenting.** For each blocked task, inspect the title, status, embedded `_junie_metadata`, comments, `review-required` / `needs-input` / `failed` reason, and referenced result artifacts when needed.
+1. **Use the current handoff/follow-up source first.** Prefer the configured Senior Dev runtime output, active task tool, or profile docs that the initialized project documents as current. If there are no active follow-ups, say so instead of falling back to legacy backlog files or unrelated task sources.
+2. **Never read legacy backlog state as the source of truth.** Do not use old project-local backlog directories, profile-local backlog files, raw JSON task files, removed automation state, or obsolete Senior Kanban assumptions as a Hermes source of truth unless the initialized project explicitly documents them as current.
+3. **Read Senior Dev reports before presenting.** For each follow-up, inspect the title, final verdict (`done`, `needs-input`, or `failed`), comments/artifacts when available, and the exact question or blocker when the verdict is `needs-input`.
 4. **Open with a compact priority-sorted list** of blocked tasks: `# | task_id suffix | status/reason | one-line title`. Then say "I'll start with the top three. Quick map first." Don't dump detailed write-ups for every item at once.
 5. **Per-task presentation template:**
-   - **Problem:** what's blocked or waiting, citing evidence (Kanban comment, artifact path, observed symptom).
-   - **What I want to do:** the concrete proposed action, scoped narrow. If it's "review the worker result first", say that and *do not* embed implementation details.
+   - **Problem:** what's blocked or waiting, citing evidence (Senior Dev verdict/report, artifact path, observed symptom).
+   - **What I want to do:** the concrete proposed action, scoped narrow. If the action is to answer Senior Dev's `needs-input` question or create a new handoff, say that and *do not* embed implementation details.
    - **Why this is interesting / risk:** strategic framing in 1–2 lines.
    - **My recommendation:** ✅ approve / ⚠ challenge first / ❌ drop. State it explicitly so the owner can disagree fast.
    - **One-line ask:** `Do you approve <action>?` (yes / no / challenge). Then stop and wait.
 6. **One item at a time after the first.** Do not pre-batch responses to items #2…#N. Each turn handles exactly one decision so the owner has a clean rejection path.
-7. **Track decisions in Kanban as you go.** On approval or rejection, comment/update/requeue the Kanban task through the available Kanban/Senior task tooling. If a required Kanban update tool is unavailable in the current session, record the decision in the relevant profile docs/status note instead of inventing an OpenClaw or backlog fallback.
+7. **Track decisions as you go.** On approval or rejection, update the configured Senior Dev follow-up/task mechanism if available. If the required update tool is unavailable in the current session, record the decision in the relevant profile docs/status note instead of inventing an OpenClaw, backlog, or Senior Kanban fallback.
 
 ### Why this shape
 
-Per HERMES.md major-change rules, blocked tasks are often exactly the class of work that needs explicit human sign-off — architecture, tooling additions, skill behavior, deploy/CI. A wall of details makes that sign-off harder, not easier. The intake here is a *decision-loop UX*, not a status report. Hermes must not silently import legacy backlog state, because that breaks the Kanban ownership boundary and can resurrect stale decisions.
+Per HERMES.md major-change rules, blocked follow-ups are often exactly the class of work that needs explicit human sign-off — architecture, tooling additions, skill behavior, deploy/CI. A wall of details makes that sign-off harder, not easier. The intake here is a *decision-loop UX*, not a status report. Hermes must not silently import legacy backlog or obsolete Senior Kanban state, because that breaks the Team Lead/Senior Dev ownership boundary and can resurrect stale decisions.

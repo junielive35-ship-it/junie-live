@@ -4,7 +4,7 @@
 
 Junie Live on Hermes uses native Hermes features for orchestration, persistence, communication, and scheduling. The architecture eliminates the need for shell-script orchestration layers and OpenClaw workspace conventions.
 
-Junie Live's named task-solving loop is the **Marinator**: validate/decompose a task, delegate to the executor, check results, request fixes, verify, accept/report, and reflect. In the current Hermes p1 implementation, user-visible code tasks are routed from the Chat Agent into Hermes Kanban as one Senior Dev task. The `senior-dev` profile is a thin synchronous adapter: it runs OpenCode through `senior_run_coding_task`, writes Marinator-style artifacts, comments the result, then decides exactly one terminal Kanban action itself from the artifacts/exit code and the documented status rules — usually leaving the task `blocked` with a substatus (`review-required` by default, or `needs-input`/`failed`) for Junie/origin review. `kanban_complete`/`done` is reserved for genuinely terminal no-review work.
+Junie Live now separates user-facing leadership from delivery. **Team Lead** is the Hermes Agent profile: it validates intake, owns live context, shapes acceptance criteria, prepares handoffs, reports outcomes, and reflects on protocol/context quality. **Senior Dev** is the headless Junie CLI runtime: it owns implementation, review, verification, fix loop, and final verdict end-to-end after handoff. User-visible code tasks are routed from Team Lead into the configured Senior Dev handoff runtime with repository path, user-visible outcome, acceptance criteria, distilled context, constraints, non-goals, and expected report schema.
 
 ## Component mapping
 
@@ -25,13 +25,13 @@ Junie Live's named task-solving loop is the **Marinator**: validate/decompose a 
 │  └──────────┘  └──────────┘  └──────────┘  └────────────┘  │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │           Agent Loop / Marinator                       │   │
+│  │           Team Lead Agent Loop                         │   │
 │  │  - Receives messages from Telegram                    │   │
 │  │  - Loads relevant skills automatically                │   │
 │  │  - Consults memory for strategic context              │   │
 │  │  - Reads project docs/ when needed                    │   │
-│  │  - Routes code work to Senior Dev Kanban tasks        │   │
-│  │  - Reports Kanban terminal outcomes to the owner      │   │
+│  │  - Sends code work to headless Senior Dev             │   │
+│  │  - Reports Senior Dev final verdicts to the owner     │   │
 │  │  - Updates memory with lessons learned                │   │
 │  └───────────┬──────────────────────┬───────────────────┘   │
 │              │                      │                        │
@@ -80,9 +80,9 @@ This replaces the OpenClaw workspace concept with something more native.
 Hermes has two complementary context-file slots, and Junie Live uses both:
 
 - **`SOUL.md`** lives at `~/.hermes/profiles/junie-live/SOUL.md` and is auto-loaded into slot #1 of the system prompt on **every turn**, regardless of working directory. Junie's `SOUL.md` carries the personality plus the always-on operating safety net: the initialization gate, the no-direct-coding rule, the challenge protocol. This keeps the critical rules active even when Junie is handling a Telegram message outside the target repo or running a cron job without `workdir` set.
-- **`HERMES.md`** lives in the **target project repo root** and carries the full project-level operating protocol: detailed delegation rules, Senior Dev routing/concurrency semantics, repo hygiene, change rules, recurring routines. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root. Junie installs it during initialization by copying `~/.hermes/profiles/junie-live/HERMES.seed.md` to `<target-repo>/HERMES.md`.
+- **`HERMES.md`** lives in the **target project repo root** and carries the full project-level Team Lead operating protocol: detailed handoff rules, Senior Dev routing/concurrency semantics, repo hygiene, change rules, recurring routines. Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory, walking up to the git root. Junie installs it during initialization by copying `~/.hermes/profiles/junie-live/HERMES.seed.md` to `<target-repo>/HERMES.md`.
 
-Why `HERMES.md` and not `AGENTS.md` for the project-level slot: coding executors invoked by Junie (`opencode`, `codex`, `claude-code`) read `AGENTS.md` / `CLAUDE.md` / `.cursorrules`. They do **not** read `HERMES.md`. Putting the orchestrator-only protocol in `HERMES.md` keeps the executor sessions clean and prevents the orchestrator's challenge/delegation/mutex rules from contaminating coding workers. A target project's own `AGENTS.md` (if any) coexists with `HERMES.md` without conflict.
+Why `HERMES.md` and not `AGENTS.md` for the project-level slot: coding executors and the headless Senior Dev runtime read their own contracts (`AGENTS.md` / `CLAUDE.md` / `.cursorrules` as applicable). They do **not** read `HERMES.md`. Putting Team Lead-only protocol in `HERMES.md` keeps Senior Dev sessions clean and prevents challenge/intake/handoff rules from contaminating coding workers. A target project's own `AGENTS.md` (if any) coexists with `HERMES.md` without conflict.
 
 Approved cron jobs use the `workdir` parameter to set the target repo as cwd, which loads `HERMES.md` automatically. Setup does not install recurring cron jobs by default.
 
@@ -107,17 +107,14 @@ OpenClaw uses protocol docs (`delegation-protocol.md`, `review-protocol.md`) loa
 - Patchable in-session when issues are found
 - Managed by the curator for lifecycle
 
-### 5. Senior Dev Kanban lane with synchronous OpenCode p1 runner
+### 5. Senior Dev handoff runtime with synchronous headless Junie CLI runner
 
-Code-changing work now has a Hermes-native active-work lane instead of staying inside the Chat Agent session:
-- `senior-task` plugin exposes `create_senior_task` and `senior_active_tasks` for the Chat Agent. `senior_dev_task_result` remains as a legacy async/Marinator reporting helper, but it is not the p1 Senior worker path.
-- Before creating a task, the Chat Agent checks active Senior tasks for the same origin/repo and uses semantic judgment to attach follow-ups instead of duplicating.
-- `create_senior_task` creates one Hermes Kanban task per user-visible code item and subscribes the originating chat/thread for terminal updates.
-- `senior-dev` is a Hermes profile installed from `distribution/profiles/senior-dev/`; it is spawned by the Kanban dispatcher for tasks assigned to `senior-dev`.
-- In p1, `senior-dev` calls `senior_run_coding_task` from the `senior-runner` plugin. That tool runs one foreground OpenCode execution, records the exit code and runner state, and returns artifact paths (`run_dir`, `status_path`, `result_path`). It emits no verdict.
-- The runner writes Marinator-style artifacts (`spec.json`, `status.json`, `events.jsonl`, `result.md`, stdout/stderr logs, `runner.log`) under the Senior run root. It does not mutate Kanban and does not decide the outcome.
-- The `senior-dev` profile reads the artifacts, exit code, and task context, adds a concise `kanban_comment`, and decides exactly one terminal Kanban action itself using the documented status rules: `review-required:` (default for successful code-changing work), `needs-input:` when external user/owner input is required, `failed:` for execution/verification/requested-outcome failure, or `done`/`kanban_complete` only for genuinely terminal no-review work.
-- `kanban_complete`/`done` is intentionally rare in p1 and reserved for terminal no-review work. A `blocked(review-required: ...)` task is an awaiting-review handoff, not a failure by default.
+Code-changing work has a Hermes-native handoff path instead of staying inside the Team Lead session:
+- Team Lead creates one structured Senior Dev handoff per user-visible code item with repository path, outcome, acceptance criteria, distilled context, constraints, non-goals, and expected report schema.
+- `senior-task` still exposes compatibility tool names such as `create_senior_task` and `senior_active_tasks` where the current runtime uses Hermes active-work/task state.
+- `senior-dev` is a Hermes companion profile installed from `distribution/profiles/senior-dev/`; it adapts configured task/runtime state into a headless Junie CLI request.
+- `senior-dev` calls `senior_run_coding_task` from the `senior-runner` plugin. That tool runs one foreground headless Junie CLI execution, records the exit code and runner state, and returns artifact paths (`run_dir`, `status_path`, `result_path`).
+- Senior Dev owns implementation, review, verification, fix loop, and final verdict. The final verdict is exactly `done`, `needs-input`, or `failed`; Team Lead passes it through and reflects on context/protocol quality rather than performing hidden second code review.
 - `hire-junie.sh` and `rehire-junie.sh` install/update the companion `senior-dev` profile and required plugins/toolsets so fresh installs and disaster recovery do not leave the pipeline half-working.
 
 ### 6. Native cron instead of system crontab
@@ -129,11 +126,11 @@ OpenClaw generates crontab entries and OpenClaw cron definitions. Hermes cron:
 - Script + agent hybrid mode
 - No system crontab dependency
 
-### 7. Kanban-first code-work concurrency
+### 7. Senior Dev active-work concurrency
 
-For the current p1 Senior Dev lane, Hermes Kanban is the active concurrency boundary for normal Chat Agent code work. The Chat Agent routes code requests to `create_senior_task`; the Senior lane serializes execution and keeps active work visible as `ready`/`running`/`blocked`.
+For the current Senior Dev path, configured Hermes active-work/task state is the concurrency boundary for normal Team Lead code handoffs. Team Lead routes code requests through the Senior Dev handoff runtime; the Senior path serializes execution and keeps active work visible when the runtime exposes task state.
 
-Older docs may mention a separate code mutex for legacy/manual protected paths, but no tracked `junie_runtime` mutex implementation exists in the current Hermes repo state. Docs and skills should route ordinary p1 code work through `create_senior_task`; Kanban is the source of truth for active code-changing work. If a future manual-path mutex is reintroduced, record it as an explicit design decision with tests and a clear bypass-risk story.
+Older docs may mention a separate code mutex, Marinator, or Senior Kanban review queue for legacy/manual protected paths. Current docs and skills should route ordinary code work through the Team Lead → Senior Dev handoff contract. If a future manual-path mutex or alternate queue is introduced, record it as an explicit design decision with tests and a clear bypass-risk story.
 
 ### 8. Minimal target-repo footprint
 
@@ -145,9 +142,9 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 2. **Skill matching** → relevant skills loaded automatically
 3. **Memory check** → strategic context available in prompt
 4. **Task validation** → intake skill validates against strategy
-5. **Senior Dev dispatch** → create a Kanban task for code work and subscribe the origin chat/thread
-6. **Senior execution** → `senior-dev` runs synchronous OpenCode via `senior_run_coding_task` and writes Marinator-style artifacts
-7. **Kanban result** → `senior-dev` comments with artifacts/summary, then blocks as `review-required`, `needs-input`, or `failed` for origin notification and Junie review
+5. **Senior Dev handoff** → Team Lead sends a structured code-work handoff to the configured Senior Dev runtime
+6. **Senior execution** → `senior-dev` runs synchronous headless Junie CLI via `senior_run_coding_task` and writes artifacts
+7. **Final verdict** → Senior Dev returns `done`, `needs-input`, or `failed` with summary, changes, verification, and blockers when applicable
 8. **Reflection/report** → lessons saved to memory/skills/docs; terminal task events notify Telegram
 
 ## State management
@@ -158,7 +155,7 @@ OpenClaw can leak workspace artifacts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `.ope
 | Session history | `~/.hermes/profiles/junie-live/state.db` | Hermes sessions |
 | Detailed docs | Target repo `docs/` or profile `docs/` | File read/write |
 | Senior p1 runs | `~/.hermes/profiles/senior-dev/junie-live/state/senior/runs/` by default, overridable for tests | `senior-runner` plugin |
-| Active Senior Dev tasks | Hermes Kanban DB/tasks assigned to `senior-dev` | `senior-task` plugin + Kanban dispatcher |
+| Active Senior Dev tasks | Configured Hermes active-work/task state for `senior-dev` | `senior-task` plugin/runtime dispatcher where enabled |
 | Backlog / work-window state | `~/.hermes/profiles/junie-live/junie-live/state/` when used by approved routines | Junie profile / approved routines |
 | Operational logs | `~/.hermes/profiles/junie-live/junie-live/state/logs/` plus Hermes profile logs | Hermes / approved routines |
 | Skills | `~/.hermes/profiles/junie-live/skills/` | skill_manage |

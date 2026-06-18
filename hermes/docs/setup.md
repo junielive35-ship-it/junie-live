@@ -5,9 +5,9 @@
 - [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) installed
 - A Telegram bot token (from [@BotFather](https://t.me/BotFather))
 - Your Telegram user ID
-- An LLM provider configured in Hermes (OpenRouter, Anthropic, etc.) — for orchestrator turns
-- [opencode](https://github.com/sst/opencode) installed at `~/.opencode/bin/opencode` — for code-changing delegations
-- An OpenRouter API key — for opencode (see step 5 below for installation)
+- An LLM provider configured in Hermes (OpenRouter, Anthropic, etc.) — for Team Lead turns
+- Junie CLI installed and authenticated for headless Senior Dev code-changing handoffs
+- A Junie CLI auth token/key appropriate for the target environment (see step 5 below)
 - Python 3.10+ with `pip` available
 
 ## Quick Setup
@@ -58,28 +58,28 @@ Configure the gateway:
 hermes -p junie-live gateway setup
 ```
 
-### 5. Configure opencode for code-changing delegations
+### 5. Configure Junie CLI for Senior Dev code-changing handoffs
 
-Junie delegates normal code-changing work through `create_senior_task` to the `senior-dev` profile. In the current p1 lane, `senior-dev` runs [opencode](https://github.com/sst/opencode) synchronously through the `senior_run_coding_task` tool (`senior-runner` plugin) and leaves the Kanban task blocked as `review-required`, `needs-input`, or `failed`. OpenCode authenticates *independently* of Hermes — it does not read the profile's `.env`. You must configure it once at the system level:
-
-```bash
-# One-time: install your OpenRouter key where opencode can find it from the system home
-echo "your-openrouter-key" > ~/openrouter.key
-chmod 600 ~/openrouter.key
-```
-
-Then verify opencode readiness with a live smoke execution:
+Junie routes normal code-changing work through the Team Lead → headless Senior Dev contract. The `senior-dev` companion profile runs Junie CLI synchronously through the `senior_run_coding_task` tool (`senior-runner` plugin) and reports exactly one final verdict: `done`, `needs-input`, or `failed`. Junie CLI authenticates independently of Hermes profile memory and must be configured once at the system level:
 
 ```bash
-/home/$USER/.opencode/bin/opencode run 'Respond with exactly: OPENCODE_SMOKE_OK'
-# Expected: output contains OPENCODE_SMOKE_OK, exit 0
+# One-time: install/configure Junie CLI auth for headless Senior Dev runs.
+# The exact command depends on your deployment and account policy.
+junie --version
 ```
 
-`opencode auth list` is useful diagnostic context but is **not** authoritative readiness. An operational OpenCode install may report `0 credentials` yet still execute code-changing work successfully. The canonical readiness check is the smoke above — a real execution that tests the full runtime path OpenCode uses for Senior Dev coding runs.
+Then verify Junie CLI readiness with a small headless smoke execution:
 
-**Important for cron sessions:** when Hermes invokes a skill, cron job, or subagent, `$HOME` is rewritten to the profile-scoped home (`~/.hermes/profiles/junie-live/home/`), where `openrouter.key` does NOT exist. The fallback `$HOME/openrouter.key` lookup that works from an interactive shell silently breaks under cron. The Senior runner resolves the system-home OpenCode path explicitly; direct custom `opencode` calls still need care.
+```bash
+junie "Respond with exactly: JUNIE_SMOKE_OK"
+# Expected: output contains JUNIE_SMOKE_OK, exit 0
+```
 
-If you write your own cron prompts or skills that invoke opencode directly (rather than through the Senior Dev Kanban lane), export `OPENROUTER_API_KEY` explicitly. See `docs/tools.md` ("$HOME indirection trap") and `senior-runner` for the canonical invocation patterns.
+The canonical readiness check is a real headless execution that tests the full runtime path Senior Dev uses for coding runs.
+
+**Important for cron sessions:** when Hermes invokes a skill, cron job, or subagent, `$HOME` may be rewritten to the profile-scoped home (`~/.hermes/profiles/junie-live/home/`). Configure Senior Dev auth through the supported Junie CLI mechanism for the environment, and avoid ad-hoc scripts that assume the interactive shell's `$HOME`.
+
+If you write your own cron prompts or skills that invoke code-changing runs directly, route them through the Senior Dev handoff runtime instead of bypassing the contract. See `docs/tools.md` and `senior-runner` for canonical invocation patterns.
 
 ### 5. Set up Telegram DM allowlist
 
@@ -152,8 +152,6 @@ backlog items until 8am or blockers.
 │   ├── HERMES.seed.md    # Project-level operating protocol; copied to <target-repo>/HERMES.md during init
 │   └── tools.md          # Operational cheat-sheet (commands, git conventions, deploy, escalation) — filled during init
 ├── skills/               # Installed skills
-│   ├── junie-coding-task-decomposition/
-│   ├── junie-implementation-review/
 │   ├── junie-task-intake-validation/
 │   └── junie-task-reflection/
 ├── sessions/             # Session history
@@ -198,7 +196,7 @@ Or run the hire script for a full re-hire (deletes then reinstalls the profile):
 
 ### Disaster recovery (dump / rehire)
 
-`dump-junie.sh` (in the profile's `scripts/`) wraps `hermes profile export`, then embeds the exact `junie_runtime` wheel and provenance manifest inside the single native-import-compatible profile directory at `junie-live/runtime_artifact/`. It also embeds Hermes-root Kanban state (`kanban.db`, `kanban/`) so active Senior Dev routing state survives disaster recovery. `rehire-junie.sh` wraps `hermes profile import`, restores Kanban state beside `profiles/` in the target Hermes root, restores the exact wheel from the embedded artifact, verifies its SHA-256 hash, and writes restore metadata to the profile runtime manifest. If target Kanban state already exists, rehire requires `--force` and moves the old state aside. If the runtime artifact is missing from the dump archive, rehire fails clearly instead of silently installing from a sibling source directory. There is no profile-local venv — the wheel is installed into the system Python environment.
+`dump-junie.sh` (in the profile's `scripts/`) wraps `hermes profile export`, then embeds the exact `junie_runtime` wheel and provenance manifest inside the single native-import-compatible profile directory at `junie-live/runtime_artifact/`. It also embeds Hermes active-work state where present so Senior Dev routing state can survive disaster recovery. `rehire-junie.sh` wraps `hermes profile import`, restores active-work state beside `profiles/` in the target Hermes root, restores the exact wheel from the embedded artifact, verifies its SHA-256 hash, and writes restore metadata to the profile runtime manifest. If target active-work state already exists, rehire requires `--force` and moves the old state aside. If the runtime artifact is missing from the dump archive, rehire fails clearly instead of silently installing from a sibling source directory. There is no profile-local venv — the wheel is installed into the system Python environment.
 
 Or selectively update a skill:
 ```bash

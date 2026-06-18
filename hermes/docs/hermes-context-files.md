@@ -30,7 +30,7 @@ Avoid HTML comments or other prompt-injection-looking markup in `SOUL.md`, becau
 
 ### `HERMES.md`
 
-Target-repo operating protocol for the orchestrator. Although the file lives at the target repo root for Hermes auto-load semantics, treat it as Junie agent operating state, not ordinary repository documentation.
+Target-repo operating protocol for Team Lead. Although the file lives at the target repo root for Hermes auto-load semantics, treat it as Junie agent operating state, not ordinary repository documentation.
 
 Installed location in an initialized target repo:
 
@@ -48,14 +48,14 @@ Hermes auto-loads `HERMES.md` from the current working directory, walking up to 
 
 - senior-owner behavior for the assigned project/area;
 - context retrieval before meaningful work;
-- delegation rules;
-- implementation review rules;
+- Team Lead handoff rules;
+- Senior Dev contract/reference rules;
 - repository hygiene;
 - approval requirements;
 - code-work routing / concurrency semantics;
 - recurring routines and change rules.
 
-`HERMES.md` is deliberately separate from `AGENTS.md`. Coding executors such as OpenCode, Codex, and Claude Code commonly read `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`; they should not inherit orchestrator-only rules such as challenge protocol, no-direct-coding constraints for the orchestrator, or Senior Dev routing/escalation procedures. Keeping the Junie orchestrator protocol in `HERMES.md` keeps worker sessions cleaner.
+`HERMES.md` is deliberately separate from `AGENTS.md`. Coding executors and the headless Senior Dev runtime commonly read `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`; they should not inherit Team Lead-only rules such as challenge protocol, no-direct-coding constraints for Team Lead, or user-facing escalation procedures. Keeping the Team Lead protocol in `HERMES.md` keeps Senior Dev sessions cleaner.
 
 For consistency checks, bucket conflicts involving `HERMES.md` as agent-state / project-contract conflicts, not as ordinary repo-doc conflicts, even when the file is physically stored in the repository.
 
@@ -122,15 +122,15 @@ Use this directory for detailed source-of-truth project knowledge that does not 
 - `product-hypotheses.md` — hypotheses and their evidence/status;
 - `analytics-plan.md` — signals and measurement plans;
 - `tools.md` — operational cheat-sheet: repo paths, commands, git conventions, deploy/rollback, dashboards, escalation contacts, local caveats;
-- `delegation-protocol.md` — Senior Dev Kanban delegation rules;
-- `review-protocol.md` — implementation review and acceptance gates;
+- `delegation-protocol.md` — Team Lead → headless Senior Dev handoff rules;
+- `review-protocol.md` — Senior Dev review reference and transition notes;
 - `reflection-protocol.md` — post-task reflection workflow;
 - `consistency-protocol.md` — contradiction detection/resolution;
 - `implementation-status.md` — implemented/partial/contract-only/deferred status.
 
-`HERMES.md` should make consulting relevant profile docs obligatory before meaningful product changes, code changes, architecture decisions, delegation, review, and deployment-adjacent work.
+`HERMES.md` should make consulting relevant profile docs obligatory before meaningful product changes, code changes, architecture decisions, handoffs, reflection, and deployment-adjacent work.
 
-The orchestrator owns retrieval and summarization. Coding workers do not receive the full docs by default; they receive only relevant extracted context. Markdown-only documentation/guidance updates can be handled directly by the orchestrator when no source code, scripts, tests, config, generated files, or external systems are changed.
+Team Lead owns retrieval and summarization. Senior Dev does not receive the full docs by default; it receives only relevant extracted context in the handoff. Markdown-only documentation/guidance updates can be handled directly by Team Lead when no source code, scripts, tests, config, generated files, or external systems are changed.
 
 ### Repo `hermes/docs/`
 
@@ -169,14 +169,12 @@ Seed source:
 hermes/distribution/skills/
 ```
 
-Use skills for repeatable Junie workflows, especially:
+Use skills for repeatable Team Lead workflows, especially:
 
 - task intake and validation;
-- coding task decomposition;
-- implementation review;
 - post-task reflection and self-improvement.
 
-Skills should emphasize memory and relevant docs retrieval before meaningful work. They should instruct the orchestrator to validate work against strategy, architecture, prior decisions, and existing Hermes capabilities before delegating or proposing implementation.
+Skills should emphasize memory and relevant docs retrieval before meaningful work. They should instruct Team Lead to validate work against strategy, architecture, prior decisions, and existing Hermes capabilities before sending a Senior Dev handoff or proposing implementation.
 
 When a skill is incomplete, stale, or wrong, patch it immediately. Skills are procedural memory; stale procedures become liabilities.
 
@@ -198,8 +196,8 @@ hermes/distribution/plugins/
 
 Use plugins for Hermes-native tool integrations that Junie needs at runtime. Current core plugins include:
 
-- `senior-task` — exposes `senior_active_tasks` and `create_senior_task` for the Chat Agent;
-- `senior-runner` — exposes `senior_run_coding_task` for the `senior-dev` profile's synchronous p1 OpenCode run.
+- `senior-task` — exposes compatibility tools such as `senior_active_tasks` and `create_senior_task` for Team Lead handoff/follow-up routing;
+- `senior-runner` — exposes `senior_run_coding_task` for the `senior-dev` profile's synchronous headless Junie CLI run.
 
 Plugin state belongs under profile-local Junie state, not in the target repo.
 
@@ -245,7 +243,7 @@ Junie Live should not rely on one huge always-loaded context file. The durable a
 5. Skills enforce reusable workflows and retrieval discipline.
 6. Plugins provide Hermes-native runtime tools.
 7. Profile-local state stores mutable runtime evidence and work queues.
-8. The orchestrator extracts only necessary context for coding workers and remains responsible for review, without doing coding work itself.
-9. The orchestrator continuously checks that guidance remains coherent; contradictions are resolved from context when safe, otherwise escalated to the owner or relevant team.
+8. Team Lead extracts only necessary context for Senior Dev and remains responsible for handoff quality, without doing coding work itself.
+9. Team Lead continuously checks that guidance remains coherent; contradictions are resolved from context when safe, otherwise escalated to the owner or relevant team.
 
 This layered model keeps the strategic core available, the details inspectable, and coding-worker prompts focused.
