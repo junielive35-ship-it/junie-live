@@ -7,7 +7,7 @@ tags: [junie-live, review, quality]
 
 # Implementation Review
 
-Use before accepting delegated code work or opening/updating a PR. Coding work from the Chat Agent must be performed through `create_senior_task` and the `senior-dev` Kanban lane, not directly by the orchestrator. Documentation-only Markdown edits may be made directly by the orchestrator.
+Use before accepting delegated code work or opening/updating a PR. Coding work from the orchestrator must be performed through `create_senior_task` and the configured Senior Dev Kanban lane, not directly by the orchestrator. Documentation-only Markdown edits may be made directly by the orchestrator.
 
 ## Workflow
 
@@ -24,14 +24,14 @@ Use before accepting delegated code work or opening/updating a PR. Coding work f
    - Is initialization/update wiring present when the feature requires baseline state?
    - Do docs name the exact command or message the user should use?
    If only the backend runner/library exists, classify the result as `partial` and state the missing entrypoint explicitly.
-8. For Junie Live profile, plugin, setup, worker-routing, Kanban/Senior Dev, or pipeline changes, review the **owned lifecycle**, not just the narrow delegated task:
-   - fresh hire/install: `hire-junie.sh` or profile install creates every required companion profile, plugin, toolset, config, script, and helper;
+8. For setup, runtime, deployment/update, worker-routing, automation, or operator-workflow changes, review the **owned lifecycle**, not just the narrow delegated task:
+   - fresh install/setup: a new checkout or documented setup path creates every required dependency, config, helper, profile, plugin, or service;
    - live runtime path: the actual operator/user entrypoint works, not only unit tests or internal helpers;
-   - dump/rehire disaster recovery: `dump-junie.sh` and `rehire-junie.sh` restore a fully working system, including companion profiles or support plugins outside the primary profile archive;
-   - update/hot-swap: deployed profile copies are refreshed if the task claims live behavior is fixed now;
-   - verification hooks: focused tests or `verify.sh` cover the lifecycle surface;
-   - docs/status sync: repo, distribution, and profile docs reflect the new behavior;
-   - git handoff: branch state, commits, untracked artifacts, PR/CI visibility, and active Kanban task state are checked and reported.
+   - recovery/rollback: project restore, rollback, migration, or disaster-recovery paths remain valid when applicable;
+   - update/hot-swap: deployed copies, configs, or services are refreshed if the task claims live behavior is fixed now;
+   - verification hooks: focused tests, CI, smoke checks, or a project verification script cover the lifecycle surface;
+   - docs/status sync: project docs, runbooks, status matrices, and any distribution/seed docs reflect the new behavior;
+   - git handoff: branch state, commits, untracked artifacts, PR/CI visibility, and active work-item state are checked and reported.
    If any required lifecycle surface is broken or unverified, the status is not `done`.
    - Senior-developer handoff rule: do not hand off a PR or report merge-ready work if the owned area is non-functional, stale, or misleading in a way a senior developer should have caught. Junie Live is not a task-only coding agent. Stop with a broken/partial project only when the user explicitly requested that state, and label it `partial` or `blocked`.
 9. If the work needs fixes, create a follow-up Senior Dev Kanban task with the required fix context; do not rubber-stamp worker output.
@@ -39,7 +39,7 @@ Use before accepting delegated code work or opening/updating a PR. Coding work f
 
 ## Senior Dev Kanban review-handoff convention
 
-When reviewing Senior Dev work, do **not** treat Kanban `blocked` as failure by default. In the current p1 workflow, `blocked` is also the durable **awaiting Junie review / owner input** state. The worker leaves the task active/blocked and includes the real substatus in the block reason and comments/artifacts:
+When reviewing Senior Dev work, do **not** treat Kanban `blocked` as failure by default. In this workflow, `blocked` is also the durable **awaiting Junie review / owner input** state. The worker leaves the task active/blocked and includes the real substatus in the block reason and comments/artifacts:
 
 - `review-required:` — OpenCode returned `VERDICT: pr-ready`; Junie must review evidence/diff/tests before acceptance or follow-up.
 - `needs-input:` — the worker needs user/owner information.
@@ -68,6 +68,6 @@ If gaps exist, the status is not `done`.
 
 Custom machinery gaps count as real gaps. A task is not `done` if it meets the narrow behavior but leaves avoidable duplicated runtime logic, scripts-as-source-of-truth, or unexplained custom infrastructure that future entrypoints will copy.
 
-Lifecycle gaps count as real gaps. For Junie Live itself, a PR that passes the worker's narrow tests but breaks fresh hire, dump/rehire, live operator entrypoints, or docs is unacceptable and must be fixed before acceptance.
+Lifecycle gaps count as real gaps. A PR that passes the worker's narrow tests but breaks setup, recovery/rollback, live operator entrypoints, or docs is unacceptable and must be fixed before acceptance.
 
 The standard is senior-engineer handoff, not coding-agent task completion. “I changed the requested file” is irrelevant if the project would be embarrassing or unsafe to merge.

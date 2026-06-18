@@ -1,12 +1,7 @@
 # tools.md — Local Operational References
 
 <!--
-This file is the Hermes-port equivalent of OpenClaw's workspace TOOLS.md.
-
-It lives at ~/.hermes/profiles/junie-live/docs/tools.md (deployed from the seed
-during hire) and serves as Junie's structured cheat-sheet for project paths,
-development commands, git/PR conventions, deployment,
-analytics references, and local caveats.
+This file is Junie's structured cheat-sheet for the assigned project: project paths, development commands, git/PR conventions, deployment, analytics references, and local caveats.
 
 Hermes does not auto-load this file. Use `read_file` to consult it (or load
 specific sections into memory pointers) before relevant work. HERMES.md
@@ -55,17 +50,17 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 - CI checks to watch (names of required workflows / status checks): TODO
 - Commit-message conventions, if the project enforces any: TODO
 
-## Senior Dev Kanban lane (p1 sync OpenCode path)
+## Senior Dev Kanban lane
 
 - **Chat Agent tools:** `senior_active_tasks` (inspect active Senior tasks before routing) and `create_senior_task` (create/subscribe one Senior Dev Kanban task). Both live in the `senior-task` plugin under the `senior` toolset.
 - **Senior worker tool:** `senior_run_coding_task` (Hermes plugin `senior-runner`, toolset `senior_runner`; enabled only for the `senior-dev` profile).
 - **Senior worker protocol:** `kanban_show` → `senior_run_coding_task` → read `result.md`/`status.json` → `kanban_comment` → exactly one `kanban_block`.
 - **Terminal blocked reasons:** `review-required:` for `VERDICT: pr-ready`, `needs-input:` for `VERDICT: needs-input`, `failed:` for `VERDICT: failed`. `done` / `kanban_complete` is intentionally unused in p1 until PR merge monitoring exists.
 - **Review handoff:** `blocked(review-required: ...)` means the worker is done and Junie/origin review is required; it is not a failure by default. Always read comments/artifacts before interpreting a blocked Senior task.
-- **Senior run ledger:** `~/.hermes/profiles/senior-dev/junie-live/state/senior/runs/<job_id>/` by default; tests may override with `SENIOR_RUNNER_BASE`.
+- **Senior run ledger:** under the Senior Dev profile's per-project state directory by default; tests may override with `SENIOR_RUNNER_BASE`.
 - **Run artifacts:** `prompt.md`, `spec.json`, `status.json`, `events.jsonl`, `result.md`, `opencode.stdout.log`, `opencode.stderr.log`, `runner.log`.
 - **Follow-up routing:** if a related task is `blocked`, add a comment with the user's follow-up and unblock/requeue only when the follow-up answers the `review-required` or `needs-input` ask.
-- **Companion profile install:** `scripts/install-senior-dev-profile.sh --force`; `hire-junie.sh` and `rehire-junie.sh` run it for the `junie-live` pipeline.
+- **Companion profile install:** handled by the Junie installation/rehire scripts when the distribution includes a Senior Dev companion profile.
 
 ## Deployment / release
 
