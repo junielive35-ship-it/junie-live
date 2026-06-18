@@ -58,6 +58,29 @@ else
   fail "INITIALIZATION.md must greet, briefly introduce Junie, then ask the two initialization questions"
 fi
 
+printf '\n=== initialization-check.sh: creates and validates Senior Dev AGENTS.md ===\n'
+TMP_INIT="$(mktemp -d)"
+trap 'rm -rf "$TMP_INIT"' EXIT
+PROFILE_TMP="$TMP_INIT/profile"
+JUNIE_HOME_TMP="$TMP_INIT/junie-home"
+mkdir -p "$PROFILE_TMP/docs" "$PROFILE_TMP/junie" "$JUNIE_HOME_TMP"
+cp "$ROOT/distribution/junie/AGENTS.md" "$PROFILE_TMP/junie/AGENTS.md"
+cp "$ROOT/distribution/INITIALIZATION.md" "$PROFILE_TMP/INITIALIZATION.md"
+cat > "$PROFILE_TMP/docs/tools.md" <<'TOOLS'
+Repository: /tmp/project
+Install dependencies: N/A - test fixture
+Build: N/A - test fixture
+Test: N/A - test fixture
+Lint: N/A - test fixture
+TOOLS
+if "$CHECK_SCRIPT" --profile-dir "$PROFILE_TMP" --junie-home "$JUNIE_HOME_TMP" >/dev/null 2>&1 && \
+   grep -q 'Senior Dev Operating Contract v2026-06-18' "$JUNIE_HOME_TMP/AGENTS.md" && \
+   grep -q 'FINAL_VERDICT_SCHEMA' "$JUNIE_HOME_TMP/AGENTS.md"; then
+  pass
+else
+  fail "initialization-check.sh did not create/validate the Senior Dev AGENTS.md contract"
+fi
+
 printf '\n=== HERMES.seed.md: no Initialization mode section ===\n'
 SEED_MD="$ROOT/distribution/HERMES.seed.md"
 if grep -q '## Initialization mode' "$SEED_MD" 2>/dev/null; then

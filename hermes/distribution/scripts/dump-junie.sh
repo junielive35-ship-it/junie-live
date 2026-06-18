@@ -5,7 +5,8 @@ set -euo pipefail
 #
 # Archives the entire profile directory using Hermes-native export, then
 # embeds a Junie Runtime wheel artifact inside the profile tree under
-# junie-live/runtime_artifact/.
+# junie-live/runtime_artifact/. It also preserves the live Senior Dev
+# ~/.junie/AGENTS.md contract under __junie_home/ for rehire recovery.
 
 usage() {
   cat <<'EOF'
@@ -127,6 +128,20 @@ if [[ -f "$HERMES_ROOT/kanban.db" || -d "$HERMES_ROOT/kanban" ]]; then
 
   find "$KANBAN_STAGING" \( -name '*.db-wal' -o -name '*.db-shm' -o -name '*.db-journal' -o -name '*.pid' \) -delete 2>/dev/null || true
   find "$KANBAN_STAGING" -name '*.lock' -exec rm -rf {} + 2>/dev/null || true
+fi
+
+# ── Include live Senior Dev ~/.junie/AGENTS.md contract ──
+JUNIE_HOME="${JUNIE_HOME:-$HOME/.junie}"
+LIVE_SENIOR_CONTRACT="$JUNIE_HOME/AGENTS.md"
+if [[ -f "$LIVE_SENIOR_CONTRACT" ]]; then
+  log "including Senior Dev AGENTS.md from $LIVE_SENIOR_CONTRACT..."
+  JUNIE_HOME_STAGING="$ARCHIVE_PROFILE_DIR/__junie_home"
+  mkdir -p "$JUNIE_HOME_STAGING"
+  cp "$LIVE_SENIOR_CONTRACT" "$JUNIE_HOME_STAGING/AGENTS.md"
+else
+  err "Senior Dev AGENTS.md not found: $LIVE_SENIOR_CONTRACT"
+  err "  Re-run hire or initialization check to create the current contract before dumping."
+  exit 1
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

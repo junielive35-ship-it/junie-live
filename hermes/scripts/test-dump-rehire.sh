@@ -19,8 +19,10 @@ trap 'rm -rf "$TMP"' EXIT
 
 FAKE_HERMES_HOME="$TMP/hermes-home"
 FAKE_REHIRE_HOME="$TMP/rehire-home"
+FAKE_JUNIE_HOME="$TMP/junie-home"
 FAKE_HERMES_LOG="$TMP/fake-hermes.log"
 FAKE_REHIRE_HERMES_LOG="$TMP/fake-hermes-rehire.log"
+export JUNIE_HOME="$FAKE_JUNIE_HOME"
 
 PROFILE="junie-live"
 PROFILE_DIR="$FAKE_HERMES_HOME/profiles/$PROFILE"
@@ -127,6 +129,8 @@ sed -i 's/FAKE_HERMES_LOG/FAKE_REHIRE_HERMES_LOG/' "$FAKE_REHIRE_HERMES_BIN"
 mkdir -p "$PROFILE_DIR"/{sessions,skills,plugins,junie-live/state,__pycache__,cache,logs,backups}
 mkdir -p "$PROFILE_DIR"/docs
 mkdir -p "$PROFILE_DIR"/junie-live/state/{reflections,logs}
+mkdir -p "$FAKE_JUNIE_HOME"
+cp "$ROOT/distribution/junie/AGENTS.md" "$FAKE_JUNIE_HOME/AGENTS.md"
 
 cat > "$PROFILE_DIR/config.yaml" <<'CFG'
 profile: junie-live
@@ -234,6 +238,7 @@ printf '=== Test 1: dump creates archive with required files ===\n'
 
 DUMP_OUTPUT="$TMP/test-dump.tgz"
 HERMES_HOME="$FAKE_HERMES_HOME" \
+JUNIE_HOME="$FAKE_JUNIE_HOME" \
 FAKE_HERMES_LOG="$FAKE_HERMES_LOG" \
 PATH="$TMP/bin:$PATH" \
   "$DUMP_SCRIPT" --profile "$PROFILE" --output "$DUMP_OUTPUT" >/dev/null 2>&1
@@ -432,11 +437,21 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
+printf '=== Test 13f: archive contains Senior Dev AGENTS.md contract ===\n'
+
+if archive_contents "$DUMP_OUTPUT" | grep -q '__junie_home/AGENTS\.md'; then
+  pass
+else
+  fail "archive missing __junie_home/AGENTS.md"
+fi
+
+# ════════════════════════════════════════════════════════════════
 printf '=== Test 14: rehire restores profile ===\n'
 
 mkdir -p "$FAKE_REHIRE_HOME"
 PATH="$TMP/bin:$PATH" \
 HERMES_HOME="$FAKE_REHIRE_HOME" \
+JUNIE_HOME="$FAKE_JUNIE_HOME" \
 FAKE_HERMES_LOG="$FAKE_HERMES_LOG" \
   "$REHIRE_SCRIPT" "$DUMP_OUTPUT" --profile "$PROFILE" >/dev/null 2>&1 && rc=0 || rc=$?
 
@@ -464,6 +479,18 @@ if [[ -f "$FAKE_REHIRE_HOME/profiles/$PROFILE/junie-live/state/reflections/refle
   pass
 else
   fail "rehire did not restore junie-live/state/"
+fi
+
+# ════════════════════════════════════════════════════════════════
+printf '=== Test 16a: rehire restored Senior Dev AGENTS.md contract ===\n'
+
+if [[ -f "$FAKE_JUNIE_HOME/AGENTS.md" ]] && \
+   grep -q 'Senior Dev Operating Contract v2026-06-18' "$FAKE_JUNIE_HOME/AGENTS.md" && \
+   grep -q 'FINAL_VERDICT_SCHEMA' "$FAKE_JUNIE_HOME/AGENTS.md"; then
+  pass
+  printf '  OK: Senior Dev AGENTS.md restored with current schema\n'
+else
+  fail "rehire did not restore Senior Dev AGENTS.md contract"
 fi
 
 # ════════════════════════════════════════════════════════════════
@@ -1178,7 +1205,7 @@ HIRE_SCRIPT="$ROOT/scripts/hire-junie.sh"
 
 # Create a minimal seed directory for hire-junie.sh
 HIRE_SEED_DIR="$TMP/hire-seed"
-mkdir -p "$HIRE_SEED_DIR"/docs
+mkdir -p "$HIRE_SEED_DIR"/docs "$HIRE_SEED_DIR"/junie
 cat > "$HIRE_SEED_DIR/distribution.yaml" <<'EOF'
 distribution: junie-live
 version: "1.0"
@@ -1186,6 +1213,7 @@ EOF
 echo "# SOUL.md" > "$HIRE_SEED_DIR/SOUL.md"
 echo "# INITIALIZATION.md" > "$HIRE_SEED_DIR/INITIALIZATION.md"
 echo "# tools.md" > "$HIRE_SEED_DIR/docs/tools.md"
+cp "$ROOT/distribution/junie/AGENTS.md" "$HIRE_SEED_DIR/junie/AGENTS.md"
 
 # Fake hermes factory for hire-junie tests.
 # Usage: make_hire_fake_hermes <bin_path> <log_path> <profile_exists (0|1)>

@@ -48,13 +48,21 @@ def _resolve_junie_bin() -> Optional[str]:
 def _build_prompt(request: str, context: str = "") -> str:
     """Assemble the Junie CLI prompt from the request and optional context.
 
-    The runner does not impose a structured result/verdict protocol on the
-    executor: it captures whatever Junie CLI produces as artifacts and lets
-    the senior-dev worker make the semantic Kanban decision.
+    The runner appends the Senior Dev final verdict contract so the headless
+    executor returns a machine-readable done/needs-input/failed verdict while
+    still preserving the raw response as artifacts.
     """
     parts = [request.strip()]
     if context.strip():
         parts.append("\n## Additional context\n\n" + context.strip())
+    parts.append(
+        "\n## Required final verdict\n\n"
+        "End with a JSON object matching FINAL_VERDICT_SCHEMA from "
+        "~/.junie/AGENTS.md. The `verdict` value must be exactly one of "
+        "`done`, `needs-input`, or `failed`. Senior Dev owns implementation, "
+        "review, verification, and the fix loop end-to-end before returning "
+        "`done`."
+    )
     return "\n".join(parts)
 
 
@@ -95,7 +103,7 @@ def run_coding_task(
         "prompt_file": prompt_dest,
         "junie_bin": junie_bin,
         "auth_file": os.environ.get("JUNIE_SENIOR_AUTH_FILE", "~/junie.key"),
-        "model": os.environ.get("JUNIE_SENIOR_MODEL", "opus"),
+        "model": os.environ.get("JUNIE_SENIOR_MODEL", "opus-4.8"),
         "created_at": time.time(),
         "created_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }

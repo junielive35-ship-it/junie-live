@@ -107,6 +107,8 @@ for required_file in \
     distribution/HERMES.seed.md \
     distribution/docs/tools.md \
     distribution/scripts/dump-junie.sh \
+    distribution/scripts/initialization-check.sh \
+    distribution/junie/AGENTS.md \
     distribution/plugins/senior-task/plugin.yaml \
     distribution/plugins/senior-task/__init__.py \
     distribution/plugins/senior-task/tools.py \

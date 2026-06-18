@@ -4,7 +4,8 @@ set -euo pipefail
 # rehire-junie.sh — Restore a Junie Live Hermes profile from a disaster recovery archive
 #
 # Uses Hermes-native profile import, then restores the embedded runtime wheel
-# artifact from within the profile tree under junie-live/runtime_artifact/.
+# artifact from within the profile tree under junie-live/runtime_artifact/ and
+# restores the live Senior Dev ~/.junie/AGENTS.md contract from __junie_home/.
 
 usage() {
   cat <<'EOF'
@@ -115,6 +116,40 @@ if [[ -f "$PROFILE_DIR/config.yaml" ]]; then
   log "  config.yaml present"
 else
   err "restored profile missing config.yaml: $PROFILE_DIR/config.yaml"
+  exit 1
+fi
+
+# ── Restore Senior Dev ~/.junie/AGENTS.md contract ──
+JUNIE_HOME="${JUNIE_HOME:-$HOME/.junie}"
+RESTORED_SENIOR_CONTRACT="$PROFILE_DIR/__junie_home/AGENTS.md"
+LIVE_SENIOR_CONTRACT="$JUNIE_HOME/AGENTS.md"
+SENIOR_CONTRACT_MARKER="Senior Dev Operating Contract v2026-06-18"
+if [[ -f "$RESTORED_SENIOR_CONTRACT" ]]; then
+  log "restoring Senior Dev AGENTS.md contract..."
+  mkdir -p "$JUNIE_HOME"
+  if [[ -f "$LIVE_SENIOR_CONTRACT" ]] && cmp -s "$LIVE_SENIOR_CONTRACT" "$RESTORED_SENIOR_CONTRACT"; then
+    rm -f "$RESTORED_SENIOR_CONTRACT"
+    rmdir "$PROFILE_DIR/__junie_home" 2>/dev/null || true
+    log "  live AGENTS.md already matches restored contract"
+  elif [[ -f "$LIVE_SENIOR_CONTRACT" && "$FORCE" -eq 1 ]]; then
+    ts="$(date +%Y%m%d-%H%M%S)"
+    mv "$LIVE_SENIOR_CONTRACT" "$JUNIE_HOME/AGENTS.rehire-before-$ts.md"
+    log "  existing AGENTS.md moved aside: $JUNIE_HOME/AGENTS.rehire-before-$ts.md"
+  elif [[ -f "$LIVE_SENIOR_CONTRACT" ]]; then
+    err "Senior Dev AGENTS.md already exists: $LIVE_SENIOR_CONTRACT"
+    err "use --force to overwrite (existing file will be moved aside)"
+    exit 1
+  fi
+  if [[ -f "$RESTORED_SENIOR_CONTRACT" ]]; then
+    mv "$RESTORED_SENIOR_CONTRACT" "$LIVE_SENIOR_CONTRACT"
+    rmdir "$PROFILE_DIR/__junie_home" 2>/dev/null || true
+  fi
+  grep -q "$SENIOR_CONTRACT_MARKER" "$LIVE_SENIOR_CONTRACT" || { err "restored AGENTS.md missing current Senior Dev contract marker"; exit 1; }
+  grep -q 'FINAL_VERDICT_SCHEMA' "$LIVE_SENIOR_CONTRACT" || { err "restored AGENTS.md missing Senior Dev final verdict schema"; exit 1; }
+  log "  restored $LIVE_SENIOR_CONTRACT"
+else
+  err "archive missing Senior Dev AGENTS.md contract at $RESTORED_SENIOR_CONTRACT"
+  err "  Re-dump with a version that preserves ~/.junie/AGENTS.md."
   exit 1
 fi
 
