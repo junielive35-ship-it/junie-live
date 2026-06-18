@@ -103,7 +103,7 @@ def run_coding_task(
         "prompt_file": prompt_dest,
         "junie_bin": junie_bin,
         "auth_file": os.environ.get("JUNIE_SENIOR_AUTH_FILE", "~/junie.key"),
-        "model": os.environ.get("JUNIE_SENIOR_MODEL", "opus-4.8"),
+        "model": os.environ.get("JUNIE_SENIOR_MODEL", "claude-opus-4.8"),
         "created_at": time.time(),
         "created_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
