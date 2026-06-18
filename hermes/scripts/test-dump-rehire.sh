@@ -1446,10 +1446,11 @@ printf '\n=== Hire-junie.sh: backup behavior tests ===\n'
 # (dump-junie.sh, junie-runtime-artifact.py, junie_runtime/) via relative
 # paths without ever touching tracked repo files.
 HIRE_TREE="$TMP/hire-backup-test-root"
-mkdir -p "$HIRE_TREE"/{scripts,distribution/scripts}
+mkdir -p "$HIRE_TREE"/{scripts/lib,distribution/scripts}
 # Copy the real hire script into the tree (always chmod +x).
 cp "$HIRE_SCRIPT" "$HIRE_TREE/scripts/hire-junie.sh"
 chmod +x "$HIRE_TREE/scripts/hire-junie.sh"
+cp "$ROOT/scripts/lib/slack-tokens.sh" "$HIRE_TREE/scripts/lib/"
 # Provide a real junie-runtime-artifact.py so post-install manifest writes work.
 cp "$ROOT/distribution/scripts/junie-runtime-artifact.py" "$HIRE_TREE/distribution/scripts/junie-runtime-artifact.py"
 # Symlink the runtime source so pip install -e works inside the test.
@@ -1492,7 +1493,7 @@ D_OUT="$TMP/hire-d-out.txt"
 D_EXIT=0
 PATH="$D_BIN_DIR:$PATH" \
 HERMES_HOME="$D_HOME" \
-"$TEST_HIRE" \
+bash -x "$TEST_HIRE" \
   --telegram-token "tok_test" \
   --admin-telegram-id "12345" \
   --seed-dir "$HIRE_SEED_DIR" \
@@ -1556,7 +1557,7 @@ E_OUT="$TMP/hire-e-out.txt"
 E_EXIT=0
 PATH="$E_BIN_DIR:$PATH" \
 HERMES_HOME="$E_HOME" \
-"$TEST_HIRE" \
+bash -x "$TEST_HIRE" \
   --telegram-token "tok_test" \
   --admin-telegram-id "12345" \
   --seed-dir "$HIRE_SEED_DIR" \
@@ -1610,7 +1611,7 @@ F_OUT="$TMP/hire-f-out.txt"
 F_EXIT=0
 PATH="$F_BIN_DIR:$PATH" \
 HERMES_HOME="$F_HOME" \
-"$TEST_HIRE" \
+bash -x "$TEST_HIRE" \
   --telegram-token "tok_test" \
   --admin-telegram-id "12345" \
   --seed-dir "$HIRE_SEED_DIR" \
@@ -1620,7 +1621,7 @@ HERMES_HOME="$F_HOME" \
 
 if [[ "$F_EXIT" -eq 0 ]]; then
   pass
-  printf '  OK: hire without profile succeeded (rc=0)\n'
+  printf '  OK: hire without profile succeeded\n'
 else
   fail "hire without profile failed (rc=$F_EXIT); output: $(head -5 "$F_OUT" | tr '\n' ';')"
 fi

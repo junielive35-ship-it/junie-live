@@ -21,6 +21,32 @@ cd ~/code/junie-live
   --admin-telegram-id YOUR_TELEGRAM_ID
 ```
 
+### Optional: Slack credentials
+
+If a `~/slack-tokens` file is present (override the path with the `SLACK_TOKENS_FILE`
+environment variable), `hire-junie.sh` forwards recognized Slack keys
+(`SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_ALLOWED_USERS`,
+`SLACK_ALLOW_ALL_USERS`, `SLACK_HOME_CHANNEL`, `SLACK_HOME_CHANNEL_NAME`,
+`SLACK_ALLOWED_CHANNELS`) into the profile `.env`.
+
+**Suppressing the "No home channel is set for Slack" notice.** Junie Live
+installs intentionally run without a Slack *service* home channel. The Hermes
+gateway otherwise delivers a one-time "No home channel is set for Slack" notice
+on every new Slack thread/session whenever `SLACK_HOME_CHANNEL` is unset. When
+Slack credentials are forwarded but no real `SLACK_HOME_CHANNEL` is provided,
+`hire-junie.sh` writes `SLACK_SUPPRESS_HOME_CHANNEL_NOTICE=true` to the profile
+`.env`, which tells the gateway to skip that notice. This is a Hermes-native,
+per-platform opt-out flag (`<PLATFORM>_SUPPRESS_HOME_CHANNEL_NOTICE`); it does
+**not** set a fake `SLACK_HOME_CHANNEL`, so real cron / cross-platform delivery
+semantics are preserved.
+
+You can later set a real Slack home channel at any time with `/hermes sethome`
+in the desired Slack channel; that still works regardless of the suppression
+flag. Removing `SLACK_SUPPRESS_HOME_CHANNEL_NOTICE` (or setting it to a falsey
+value) restores the original notice behavior. The flag lives in the profile
+`.env`, so it is preserved across `dump-junie.sh` / `rehire-junie.sh` (native
+`hermes profile export` / `import`).
+
 ## Manual Setup
 
 ### 1. Create a Hermes profile
