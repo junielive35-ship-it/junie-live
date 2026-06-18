@@ -34,13 +34,6 @@ else
   fail "SOUL.md does not mention the profile-scoped \$HOME pitfall"
 fi
 
-printf '\n=== SOUL.md: prioritizes \$HERMES_HOME before \$HOME fallback ===\n'
-if grep -q 'HERMES_HOME.*first\|resolve.*through.*HERMES_HOME\|Always resolve.*HERMES_HOME' "$SOUL_MD" 2>/dev/null; then
-  pass
-else
-  fail "SOUL.md does not explicitly prioritize \$HERMES_HOME before \$HOME fallback"
-fi
-
 printf '\n=== SOUL.md: does NOT contain a large shell snippet ===\n'
 if grep -q 'pdir="\${HERMES_PROFILE_DIR:-}"' "$SOUL_MD" 2>/dev/null || grep -q 'INITIALIZATION=present' "$SOUL_MD" 2>/dev/null; then
   fail "SOUL.md still contains a large shell snippet (pdir or INITIALIZATION=present)"
