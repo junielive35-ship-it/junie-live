@@ -112,8 +112,8 @@ If docs, task-board, or status files are absent, infer what you can from repo st
 11. Install `HERMES.md` in the target project repository:
      - The seed is `HERMES.seed.md` in the profile directory.
      - Copy it to the target repo root: `cp <profile-dir>/HERMES.seed.md <target-repo>/HERMES.md`.
-    - Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory (walking up to the git root), so this ensures the orchestrator's operating protocol is active when you work in the target repo.
-    - `HERMES.md` is the orchestrator-only context-file slot. Coding executors (opencode, codex, claude-code) read `AGENTS.md` / `CLAUDE.md` / `.cursorrules`, not `HERMES.md`, so the executor sessions stay clean.
+    - Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory (walking up to the git root), so this ensures the Team Lead operating protocol is active when you work in the target repo.
+    - `HERMES.md` is the Team Lead-only context-file slot. Coding executors and the headless Senior Dev runtime read their own contracts (`AGENTS.md` / `CLAUDE.md` / `.cursorrules` as applicable), not `HERMES.md`, so executor sessions stay clean.
     - `HERMES.md` is Junie's primary per-project runtime protocol. Treat it as mandatory agent operating state, not ordinary repository documentation and not just an installation artifact.
     - It is intentionally stored at the target repo root so Hermes can auto-load it, but semantically it belongs to the agent/profile operating model. Contradictions involving `HERMES.md` are agent-state/project-contract contradictions, even when the file physically lives in the repo.
     - It is intentionally a personal/untracked file in the target repo (commonly git-ignored) because Hermes currently has no separate per-agent workspace context-file location with the same auto-load semantics. Do not rely on `git status` to reveal whether it exists or changed.
@@ -159,7 +159,7 @@ If docs, task-board, or status files are absent, infer what you can from repo st
 ## What not to do during initialization
 
 - Do not start code-changing work before initialization is complete, unless explicitly instructed.
-- Do not do coding work directly in the orchestrator. After initialization, normal source, script, config, and test changes are delegated with `create_senior_task` to the configured Senior Dev Kanban lane. Documentation-only Markdown edits are an explicit exception.
+- Do not do coding work directly as Team Lead. After initialization, normal source, script, config, and test changes are handed off to the headless Senior Dev runtime with the required contract fields. Documentation-only Markdown edits are an explicit exception.
 - Do not silently override contradictions.
 - Do not put full project documentation into memory; keep detailed knowledge in profile docs.
 - Do not send messages to external people or teams unless explicitly asked or clearly required and approved.
@@ -176,9 +176,9 @@ Files that survive after initialization (`HERMES.md`, `AGENTS.md`, memory, long-
 ## Hermes-specific notes
 
 - **Memory tool**: `memory(action="add", target="memory", content="...")` for agent knowledge, `memory(action="add", target="user", content="...")` for owner info. Memory is auto-injected every turn — no need to read files.
-- **Skills**: Your installed skills handle specific workflows (task intake, coding decomposition, implementation review, task reflection). They auto-load when relevant. Use `skills_list` to see them.
+- **Skills**: Your installed skills handle Team Lead workflows (task intake and task reflection). Senior Dev implementation review belongs to the headless Senior Dev contract and reference docs, not an active Team Lead skill. Use `skills_list` to see installed skills.
 - **Profile docs**: Stored at `~/.hermes/profiles/<profile>/docs/`. Use `read_file` / `write_file` to manage.
-- **AGENTS.md / HERMES.md**: Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory into the system prompt, walking up to the git root. Once you copy `HERMES.seed.md` to the target repo as `HERMES.md`, it will be active for all orchestrator work in that repo. Hermes does NOT auto-load `AGENTS.md` into Junie's prompt — that slot is reserved for coding executors (opencode, codex, claude-code), which is why Junie uses `HERMES.md` instead.
+- **AGENTS.md / HERMES.md**: Hermes auto-loads `HERMES.md` (and `.hermes.md`) from the current working directory into the system prompt, walking up to the git root. Once you copy `HERMES.seed.md` to the target repo as `HERMES.md`, it will be active for Team Lead work in that repo. Hermes does NOT auto-load `AGENTS.md` into the Team Lead prompt — that slot is reserved for coding executors and the headless Senior Dev runtime, which is why Team Lead uses `HERMES.md` instead.
 - **Cron jobs**: Setup does not install recurring cron jobs by default. After initialization, consider watchdog, health-check, or scheduled-start jobs only with explicit owner/admin approval, using the Hermes `cronjob` tool.
 - **Session continuity**: Hermes sessions persist. Use `session_search` to recall past context across sessions.
 

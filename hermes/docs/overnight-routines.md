@@ -4,7 +4,7 @@ This contract defines the stable behavior Junie Live provides for bounded autono
 
 ## Out-of-box goal
 
-An administrator should be able to say "work overnight on backlog items" immediately after initialization. Junie must not require the administrator to manually inspect Kanban state, mutex state for legacy/manual paths, stuck workers, or remember which commands to run.
+An administrator should be able to say "work overnight on backlog items" immediately after initialization. Junie must not require the administrator to manually inspect Senior Dev handoff state, mutex state for legacy/manual paths, stuck workers, or remember which commands to run.
 
 ## Cron roles
 
@@ -13,7 +13,7 @@ An administrator should be able to say "work overnight on backlog items" immedia
 When explicitly approved and enabled, runs every 15 minutes via Hermes cron.
 Setup does not install it by default. It independently monitors:
 
-- Senior Dev Kanban tasks stuck in `ready`/`running`/`blocked` without clear recent progress or comments
+- Senior Dev handoffs stuck without clear recent progress, comments, or final verdicts
 - Any approved non-Kanban protected path stuck without recent progress (none is currently active by default)
 - Stuck backlog items (in_progress without active owner)
 - Missing expected progress from overnight work
@@ -31,14 +31,14 @@ Starts a bounded autonomous work window. Can be triggered by:
 
 The controller:
 1. Selects the highest-priority eligible backlog item
-2. Checks active Senior Dev Kanban tasks for the target repo/origin
-3. Delegates implementation via `create_senior_task` to the `senior-dev` Kanban lane (`delegate_task` is for non-code subtasks only), or attaches/requeues a related active task
-4. Reviews and verifies the `blocked(review-required)` result or handles `needs-input` / `failed` truthfully
-5. Commits verified work / blocks failed work
-6. Selects the next safe item only after the active Kanban handoff is resolved or explicitly deferred
+2. Checks active Senior Dev handoffs for the target repo/origin when the configured runtime exposes them
+3. Sends implementation to the headless Senior Dev runtime (`delegate_task` is for non-code subtasks only), or attaches a clarified follow-up to related active work
+4. Passes through `done`, `needs-input`, or `failed` truthfully
+5. Commits verified work / blocks failed work only when the Senior Dev verdict and project workflow support it
+6. Selects the next safe item only after the active Senior Dev handoff is resolved or explicitly deferred
 7. Repeats until time bound, max iterations, or blocker
 
-There is no active default code-mutex path in the current Hermes implementation; any future non-Kanban protected mutating path must be explicitly approved and documented.
+There is no active default code-mutex path in the current Hermes implementation; any future non-Senior-Dev protected mutating path must be explicitly approved and documented.
 
 ### 3. Morning report
 
@@ -64,32 +64,32 @@ Junie resolves the duration/end time, validates context, and starts work. The ad
 ## Implementation
 
 Instead of shell crontab entries or ad-hoc background processes, Junie uses the
-Senior Dev Kanban lane for code-changing work: inspect `senior_active_tasks`,
-create or update one `create_senior_task`, and rely on the `senior-dev` worker's
-`senior_run_coding_task` artifacts plus terminal Kanban block reason for handoff.
+headless Senior Dev handoff runtime for code-changing work: inspect active Senior
+Dev follow-ups if the configured runtime exposes them, send one structured
+handoff, and rely on Senior Dev's final verdict plus verification evidence.
 Progress visibility is observability, not acceptance. It does not replace backlog
-outcomes, final reports, orchestrator review, verification evidence, or git
+outcomes, final reports, Senior Dev final verdicts, verification evidence, or git
 status checks.
 
 Cron is not the primary control plane. Owner/admin-requested work windows are the
 default. Hermes cron may be used only after explicit owner/admin decision for:
-- **Watchdog** (optional, every 15 min): independently monitors active Senior Dev Kanban tasks, stuck items, and routine health. Reports to the owner.
+- **Watchdog** (optional, every 15 min): independently monitors active Senior Dev handoffs, stuck items, and routine health. Reports to the owner.
 - **Scheduled overnight start** (optional, deferred): a cron job that starts the approved routine at a specific time.
 
 Hook-style:
 
 ```python
 cronjob(action="create", name="junie-watchdog", schedule="*/15 * * * *",
-        prompt="Read state, check Senior Dev Kanban tasks and stuck items, report issues.",
+        prompt="Read state, check Senior Dev handoffs and stuck items, report issues.",
         deliver="telegram")
 ```
 
 ## Verification failure handling
 
-Verification failures are handled by the orchestrator's judgment, not by a hard-coded retry count. Each rejected `review-required` result may be followed by a comment plus unblock/requeue of the same Senior task with the verification failure context, or the orchestrator may restructure, wait, kill, or block based on evidence, risk, and the requested user outcome.
+Verification failures are handled by Senior Dev's fix loop and final verdict, not by a Team Lead hard-coded retry count. If Senior Dev returns `needs-input` or `failed`, Team Lead may answer the missing-input question, create a clarified follow-up handoff, restructure, wait, kill, or block based on evidence, risk, and the requested user outcome.
 
 If the task remains blocked:
-1. Leave the Kanban task blocked with evidence and gaps (`review-required`, `needs-input`, or `failed`)
+1. Leave the Senior Dev follow-up/task state with evidence and gaps (`needs-input` or `failed`)
 2. Preserve diff/status/logs and artifact paths in comments or the final report
 3. Continue to the next backlog item only if doing so is safe within the approved work window
 
@@ -100,7 +100,7 @@ Default policy: continue after up to 3 safe local task failures. A local failure
 - Worker timeout
 - Verification failure after fix retry budget exhausted
 
-For each failure: block or keep blocked with evidence, preserve artifacts, clean workspace if safe, and continue only when that will not bypass review or create duplicate active code work. Release any approved non-Kanban lock only if one was actually acquired. Stop on cleanup failure or exceeding the failure budget.
+For each failure: block or keep blocked with evidence, preserve artifacts, clean workspace if safe, and continue only when that will not bypass Senior Dev or create duplicate active code work. Release any approved non-Senior-Dev lock only if one was actually acquired. Stop on cleanup failure or exceeding the failure budget.
 
 ## Commit and repository hygiene
 
@@ -112,6 +112,6 @@ For each failure: block or keep blocked with evidence, preserve artifacts, clean
 
 - Capability usage analytics (deferred to v2)
 - Requiring project-specific content in seed files
-- Bypassing approvals, safety policies, or the Senior Dev Kanban lane
+- Bypassing approvals, safety policies, or the Senior Dev handoff runtime
 - Running multiple code-changing workers in parallel for the same repo
 - Defining exact cron times (schedules are project-dependent)

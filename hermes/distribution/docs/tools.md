@@ -50,16 +50,16 @@ If multiple variants exist (e.g. `make test` vs `pytest path/`), record both and
 - CI checks to watch (names of required workflows / status checks): TODO
 - Commit-message conventions, if the project enforces any: TODO
 
-## Senior Dev Kanban lane
+## Senior Dev handoff runtime
 
-- **Chat Agent tools:** `senior_active_tasks` (inspect active Senior tasks before routing) and `create_senior_task` (create/subscribe one Senior Dev Kanban task). Both live in the `senior-task` plugin under the `senior` toolset.
-- **Senior worker tool:** `senior_run_coding_task` (Hermes plugin `senior-runner`, toolset `senior_runner`; enabled only for the `senior-dev` profile).
-- **Senior worker protocol:** `kanban_show` → build structured handoff (`repo`, `user_outcome`, `acceptance_criteria`, `distilled_context`, `constraints`, `non_goals`, `expected_report_schema`) → `senior_run_coding_task` → read `result.md`/`status.json` + `exit_code` → `kanban_comment` → decide and apply exactly one terminal Kanban action (the runner emits no verdict).
-- **Terminal outcomes (worker decides):** `kanban_block("review-required: ...")` is the default for successful code-changing work; `kanban_block("needs-input: ...")` only when external user/owner information is required; `kanban_block("failed: ...")` for execution/verification/requested-outcome failure (including `exit_code != 0`); `kanban_complete("done: ...")` only for genuinely terminal no-review work.
-- **Senior executor:** installed `junie` CLI in headless mode, authenticated with `~/junie.key` and configured for Opus 4.8 by default.
-- **Senior run ledger:** under the Senior Dev profile's per-project state directory by default; tests may override with `SENIOR_RUNNER_BASE`.
-- **Run artifacts:** `prompt.md`, `spec.json`, `status.json`, `events.jsonl`, `result.md`, `junie.stdout.log`, `junie.stderr.log`, `runner.log`.
-- **Follow-up routing:** if a related task is `blocked`, add a comment with the user's follow-up and unblock/requeue only when the follow-up answers the `review-required` or `needs-input` ask.
+- **Team Lead role:** collect repository path, user-visible outcome, acceptance criteria, distilled context, constraints, non-goals, and expected report schema before sending code-changing work to Senior Dev.
+- **Senior Dev role:** headless Junie CLI owns implementation, review, verification, fix loop, and final verdict end-to-end after handoff.
+- **Final verdict schema:** `done`, `needs-input`, or `failed`, with exact verification commands/results or a clear reason verification could not run.
+- **Team Lead tools:** use `create_senior_task` to create/subscribe to a Senior Dev handoff and `senior_active_tasks` to inspect active or pending Senior Dev work. Kanban follow-up tools such as `kanban_comment` and `kanban_block` are for task coordination and blocker reporting, not for Team Lead code review.
+- **Senior Dev runner:** `senior_run_coding_task` is available to the Senior Dev companion profile for one synchronous headless Junie CLI run per coding task.
+- **Senior executor:** installed `junie` CLI in headless mode, authenticated through the configured Junie CLI auth path for this machine/profile.
+- **Senior run ledger/artifacts:** record the configured artifact location during initialization if the local runtime exposes one; include prompts/specs/status/logs/result files when available.
+- **Follow-up routing:** if Senior Dev returns `needs-input`, answer the exact missing-input question or create a clarified follow-up handoff. Do not treat follow-up routing as Team Lead code review.
 - **Companion profile install:** handled by the Junie installation/rehire scripts when the distribution includes a Senior Dev companion profile.
 
 ## Deployment / release

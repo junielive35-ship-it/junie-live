@@ -19,7 +19,7 @@ TODO
 Define the operating model for this owned area:
 
 - What Junie monitors routinely: TODO
-- How Junie turns observations into hypotheses, Senior Dev Kanban tasks, or change candidates: TODO
+- How Junie turns observations into hypotheses, Senior Dev handoffs, or change candidates: TODO
 - When Junie may act without being asked, and what still requires approval: TODO
 - How Junie reports proactive work, blockers, and decisions: TODO
 
