@@ -1,7 +1,7 @@
 """Synchronous runner for the Senior Dev coding lane.
 
 Owns run-dir creation, spec.json/status.json/events.jsonl writing, and a
-*blocking* invocation of scripts/run-coding-task.sh. Unlike the Marinator
+*blocking* invocation of the plugin-local Python worker. Unlike the Marinator
 runner, this does not background the worker or wake any session: the call
 returns only after OpenCode has exited and the artifacts are written.
 
@@ -11,11 +11,11 @@ the returned artifact paths and performs the single terminal Kanban action.
 
 import os
 import shutil
-import subprocess
 import time
 from typing import Optional
 
 from . import state
+from . import worker
 
 
 def _resolve_opencode_bin() -> Optional[str]:
@@ -43,15 +43,6 @@ def _resolve_opencode_bin() -> Optional[str]:
             return fallback
 
     return None
-
-
-def _get_worker_script() -> str:
-    """Return the absolute path to run-coding-task.sh."""
-    return os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "scripts",
-        "run-coding-task.sh",
-    )
 
 
 # Result discipline appended to every Senior prompt: OpenCode must end its
@@ -143,49 +134,19 @@ def run_coding_task(
 
     result_path = os.path.join(run_dir, "result.md")
 
-    worker_script = _get_worker_script()
-    if not os.path.isfile(worker_script):
-        state.update_status(status_path, {"worker_state": "failed"})
-        state.append_event(events_path, "worker_start_failed", {
-            "error": f"worker script not found: {worker_script}",
-        })
-        return {
-            "ok": False,
-            "error": f"Worker script not found: {worker_script}",
-            "job_id": job_id,
-            "run_dir": run_dir,
-            "status_path": status_path,
-            "result_path": result_path,
-            "exit_code": None,
-        }
-
-    # ── Synchronous, blocking invocation ──
-    worker_env = os.environ.copy()
-    worker_env["SENIOR_RUN_DIR"] = run_dir
-    worker_env["SENIOR_JOB_ID"] = job_id
-    worker_env["SENIOR_SPEC_PATH"] = spec_path
-
-    runner_log = os.path.join(run_dir, "runner.log")
+    # Synchronous, blocking invocation. This call returns only after OpenCode exits.
     state.append_event(events_path, "worker_started", {
-        "worker_script": worker_script,
-        "dispatch_method": "subprocess_sync",
+        "worker_module": "senior-runner.worker",
+        "dispatch_method": "in_process_sync",
     })
 
     try:
-        with open(runner_log, "a") as log_f:
-            proc = subprocess.run(
-                ["bash", worker_script],
-                cwd=repo if os.path.isdir(repo) else None,
-                env=worker_env,
-                stdout=log_f,
-                stderr=subprocess.STDOUT,
-            )
-        exit_code = proc.returncode
+        exit_code = worker.run_from_spec(run_dir, job_id, spec_path)
     except Exception as e:
         state.update_status(status_path, {"worker_state": "failed"})
         state.append_event(events_path, "worker_start_failed", {
             "error": str(e),
-            "dispatch_method": "subprocess_sync",
+            "dispatch_method": "in_process_sync",
         })
         return {
             "ok": False,
