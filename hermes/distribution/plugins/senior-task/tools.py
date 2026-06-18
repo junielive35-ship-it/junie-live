@@ -24,12 +24,40 @@ CREATE_SENIOR_TASK_SCHEMA = {
                 "type": "string",
                 "description": "Short title for the Kanban task.",
             },
-            "request": {
+            "user_outcome": {
                 "type": "string",
                 "description": (
-                    "Full request/body for the task — the prompt the "
-                    "Senior Dev will execute."
+                    "User-visible outcome the Senior Dev should achieve."
                 ),
+            },
+            "acceptance_criteria": {
+                "type": "string",
+                "description": "Concrete checks that define done for the outcome.",
+            },
+            "distilled_context": {
+                "type": "string",
+                "description": "Relevant findings, history, comments, and constraints already distilled by the Chat Agent.",
+                "default": "",
+            },
+            "constraints": {
+                "type": "string",
+                "description": "Hard constraints the Senior Dev must obey.",
+                "default": "",
+            },
+            "non_goals": {
+                "type": "string",
+                "description": "Explicit out-of-scope work for this handoff.",
+                "default": "",
+            },
+            "expected_report_schema": {
+                "type": "string",
+                "description": (
+                    "Optional additional report fields the Senior Dev should include "
+                    "in the raw final response. No fixed result protocol is required; "
+                    "the senior-dev worker reads the run artifacts and decides the "
+                    "Kanban action itself."
+                ),
+                "default": "",
             },
             "repo": {
                 "type": "string",
@@ -49,7 +77,7 @@ CREATE_SENIOR_TASK_SCHEMA = {
                 "default": 0,
             },
         },
-        "required": ["title", "request", "repo"],
+        "required": ["title", "user_outcome", "acceptance_criteria", "repo"],
         "additionalProperties": False,
     },
 }
@@ -115,19 +143,40 @@ def _resolve_notifier_profile(plugin_ctx: Any = None) -> Optional[str]:
     return None
 
 
-def _build_task_body(request: str, repo: str, origin: dict) -> str:
+def _build_task_body(handoff: dict, repo: str, origin: dict) -> str:
     """Build Kanban task body with metadata embedded as trailing JSON section."""
     metadata = {
         "junie_task_type": "senior_dev_code_task",
         "source": origin if origin.get("platform") else None,
         "repo": repo,
         "owned_area": "",
-        "opencode_session_id": None,
+        "junie_session_id": None,
         "pr_urls": [],
         "duplicate_keys": [],
     }
     meta_line = "_junie_metadata: " + json.dumps(metadata, separators=(",", ":"))
-    parts = [request, "", "---", meta_line]
+    parts = [
+        "# Senior Dev handoff",
+        "",
+        "## Repository",
+        repo,
+        "",
+        "## User-visible outcome",
+        handoff["user_outcome"],
+        "",
+        "## Acceptance criteria",
+        handoff["acceptance_criteria"],
+    ]
+    for title, key in [
+        ("Distilled context", "distilled_context"),
+        ("Constraints", "constraints"),
+        ("Non-goals", "non_goals"),
+        ("Expected report schema", "expected_report_schema"),
+    ]:
+        value = handoff.get(key, "")
+        if value:
+            parts.extend(["", f"## {title}", value])
+    parts.extend(["", "---", meta_line])
     return "\n".join(parts)
 
 
@@ -147,15 +196,24 @@ def handle_create_senior_task(params: dict, plugin_ctx: Any = None, **kwargs) ->
 
 def _do_create(params: dict, plugin_ctx: Any = None) -> str:
     title = params.get("title", "").strip()
-    request = params.get("request", "").strip()
+    handoff = {
+        "user_outcome": params.get("user_outcome", "").strip(),
+        "acceptance_criteria": params.get("acceptance_criteria", "").strip(),
+        "distilled_context": (params.get("distilled_context") or "").strip(),
+        "constraints": (params.get("constraints") or "").strip(),
+        "non_goals": (params.get("non_goals") or "").strip(),
+        "expected_report_schema": (params.get("expected_report_schema") or "").strip(),
+    }
     repo = params.get("repo", "").strip()
     idempotency_key = params.get("idempotency_key", "").strip() or None
     priority = params.get("priority", 0)
 
     if not title:
         return json.dumps({"error": "title is required"})
-    if not request:
-        return json.dumps({"error": "request is required"})
+    if not handoff["user_outcome"]:
+        return json.dumps({"error": "user_outcome is required"})
+    if not handoff["acceptance_criteria"]:
+        return json.dumps({"error": "acceptance_criteria is required"})
     if not repo:
         return json.dumps({"error": "repo is required"})
     if not os.path.isabs(repo):
@@ -167,7 +225,7 @@ def _do_create(params: dict, plugin_ctx: Any = None) -> str:
     has_origin = bool(origin.get("platform") and origin.get("chat_id"))
     notifier_profile = _resolve_notifier_profile(plugin_ctx)
 
-    body = _build_task_body(request, repo, origin)
+    body = _build_task_body(handoff, repo, origin)
 
     try:
         from hermes_cli import kanban_db as kb

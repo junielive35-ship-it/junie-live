@@ -39,16 +39,16 @@ Use before accepting delegated code work or opening/updating a PR. Coding work f
 
 ## Senior Dev Kanban review-handoff convention
 
-When reviewing Senior Dev work, do **not** treat Kanban `blocked` as failure by default. In this workflow, `blocked` is also the durable **awaiting Junie review / owner input** state. The worker leaves the task active/blocked and includes the real substatus in the block reason and comments/artifacts:
+When reviewing Senior Dev work, do **not** treat Kanban `blocked` as failure by default. In this workflow, `blocked` is also the durable **awaiting Junie review / owner input** state. The runner emits no verdict; the senior-dev worker reads the run artifacts/exit code and chooses the substatus, recording it in the block reason and comments/artifacts:
 
-- `review-required:` — OpenCode returned `VERDICT: pr-ready`; Junie must review evidence/diff/tests before acceptance or follow-up.
-- `needs-input:` — the worker needs user/owner information.
-- `failed:` — infrastructure or executor failure.
+- `review-required:` — default for successful code-changing work; Junie must review evidence/diff/tests before acceptance or follow-up.
+- `needs-input:` — the worker needs external user/owner information.
+- `failed:` — execution/verification/requested-outcome failure (including a nonzero executor exit code).
 
 Required sequence:
 
 1. Read the latest task comments and run artifacts before interpreting status.
-2. If task status is `blocked` with `review-required` / `pr-ready` evidence, review it as a completed worker handoff, not as an error.
+2. If task status is `blocked` with `review-required` evidence, review it as a completed worker handoff, not as an error.
 3. Keep the task visible until Junie accepts, comments with follow-up/fix context and unblocks/requeues, or explicitly closes/hands off the work.
 4. Only call it a process problem when the comments/artifacts are missing, contradictory, or do not explain why the task is blocked.
 

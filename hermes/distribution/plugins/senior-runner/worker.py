@@ -1,4 +1,4 @@
-"""OpenCode execution and artifact writing for the Senior runner."""
+"""Junie CLI execution and artifact writing for the Senior runner."""
 
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ except ImportError:  # pragma: no cover - used by the compatibility shell wrappe
     import state  # type: ignore
 
 
-_SESSION_RE = re.compile(r"^ses_[A-Za-z0-9]+$")
-_VERDICT_RE = re.compile(r"^\s*(VERDICT|SUMMARY|USER_MESSAGE|PR_URL)\s*:\s*(.*)$")
-_VALID_VERDICTS = {"pr-ready", "needs-input", "failed"}
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_DEFAULT_JUNIE_MODEL = "opus"
+_DEFAULT_JUNIE_AUTH_FILE = "~/junie.key"
 
 
 def now_iso() -> str:
@@ -36,61 +36,38 @@ def read_spec(spec_path: str) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise ValueError(f"spec.json is not valid JSON: {spec_path}") from exc
 
-    missing = [key for key in ("repo", "prompt_file", "opencode_bin") if not spec.get(key)]
+    missing = [key for key in ("repo", "prompt_file", "junie_bin") if not spec.get(key)]
     if missing:
         raise ValueError(f"spec.json missing required field(s): {', '.join(missing)}")
     return spec
 
 
-def extract_session_id(stdout_log: str) -> str:
-    last_id = ""
-    for ev in _iter_ndjson(stdout_log):
-        sid = ev.get("sessionID", "")
-        if _SESSION_RE.match(str(sid)):
-            last_id = str(sid)
-    return last_id
-
-
 def extract_assistant_text(stdout_log: str) -> str:
+    result_text = ""
+    task_result_text = ""
     parts = []
     for ev in _iter_ndjson(stdout_log):
-        if ev.get("type") != "text":
-            continue
-        part = ev.get("part", {})
-        if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
-            parts.append(str(part["text"]))
-    return "\n".join(parts)
-
-
-def normalize_verdict(text: str, exit_code: int) -> dict[str, str]:
-    fields = {"VERDICT": "", "SUMMARY": "", "USER_MESSAGE": "", "PR_URL": ""}
-    found = False
-    for line in text.splitlines():
-        match = _VERDICT_RE.match(line)
-        if match:
-            found = True
-            fields[match.group(1)] = match.group(2).strip()
-
-    verdict = fields["VERDICT"].lower()
-    if verdict not in _VALID_VERDICTS:
-        verdict = "failed" if exit_code else ("pr-ready" if fields["PR_URL"] else "needs-input")
-        found = False
-
-    summary = fields["SUMMARY"] or (
-        "(no summary provided)" if found else
-        ("OpenCode run completed" if exit_code == 0 else f"OpenCode run failed with exit code {exit_code}")
-    )
-    user_message = fields["USER_MESSAGE"] or summary
-    return {"VERDICT": verdict, "SUMMARY": summary, "USER_MESSAGE": user_message, "PR_URL": fields["PR_URL"]}
-
-
-def format_verdict_block(verdict: dict[str, str]) -> str:
-    return "\n".join([
-        f"VERDICT: {verdict['VERDICT']}",
-        f"SUMMARY: {verdict['SUMMARY']}",
-        f"USER_MESSAGE: {verdict['USER_MESSAGE']}",
-        f"PR_URL: {verdict['PR_URL']}",
-    ])
+        ev_type = ev.get("type")
+        if ev_type == "result":
+            result = ev.get("result")
+            if isinstance(result, str) and result.strip():
+                result_text = result
+        elif ev_type == "step":
+            if ev.get("name") == "TASK RESULT:":
+                details = ev.get("details")
+                if isinstance(details, str) and details.strip():
+                    task_result_text = details
+        elif ev_type == "text":
+            part = ev.get("part", {})
+            if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
+                parts.append(str(part["text"]))
+    if result_text:
+        return result_text
+    if task_result_text:
+        return task_result_text
+    if parts:
+        return "\n".join(parts)
+    return _strip_ansi(_tail(stdout_log, 500)).strip()
 
 
 def run_from_spec(run_dir: str, job_id: str, spec_path: str) -> int:
@@ -101,7 +78,9 @@ def run_from_spec(run_dir: str, job_id: str, spec_path: str) -> int:
 def run_coding_task_from_spec(run_dir: str, job_id: str, spec: dict[str, Any]) -> int:
     repo = str(spec["repo"])
     prompt_file = str(spec["prompt_file"])
-    opencode_bin = str(spec["opencode_bin"])
+    junie_bin = str(spec["junie_bin"])
+    model = str(spec.get("model") or os.environ.get("JUNIE_SENIOR_MODEL") or _DEFAULT_JUNIE_MODEL)
+    auth_file = str(spec.get("auth_file") or os.environ.get("JUNIE_SENIOR_AUTH_FILE") or _DEFAULT_JUNIE_AUTH_FILE)
     paths = _artifact_paths(run_dir)
     os.makedirs(run_dir, exist_ok=True)
     for path in (paths["stdout"], paths["stderr"], paths["runner"], paths["events"]):
@@ -111,32 +90,33 @@ def run_coding_task_from_spec(run_dir: str, job_id: str, spec: dict[str, Any]) -
         return _fail_preflight(paths, job_id, 66, "repo_not_found", {"repo": repo})
     if not os.path.isfile(prompt_file):
         return _fail_preflight(paths, job_id, 66, "prompt_file_not_found", {"prompt_file": prompt_file})
-    if not _is_executable(opencode_bin):
-        return _fail_preflight(paths, job_id, 69, "opencode_not_found", {})
+    if not _is_executable(junie_bin):
+        return _fail_preflight(paths, job_id, 69, "junie_not_found", {"junie_bin": junie_bin})
 
     with open(prompt_file, "r", encoding="utf-8") as fh:
         prompt = fh.read()
-    model = os.environ.get("OPENCODE_MODEL", "openrouter/openai/gpt-5.5")
-    args = [opencode_bin, "run", "--format", "json", "--dangerously-skip-permissions", "--model", model, "--", prompt]
+    try:
+        auth_value = _read_auth_value(auth_file)
+    except OSError as exc:
+        return _fail_preflight(paths, job_id, 70, "junie_auth_file_unreadable", {"auth_file": auth_file, "error": str(exc)})
+    if not auth_value:
+        return _fail_preflight(paths, job_id, 70, "junie_auth_file_empty", {"auth_file": auth_file})
+    args = [junie_bin, f"--auth={auth_value}", "--model", model, "--output-format=json-stream", "--skip-update-check", prompt]
 
-    _log_runner(paths["runner"], f"Starting opencode (sync): model={model} {opencode_bin}")
-    state.update_status(paths["status"], {"worker_state": "running", "opencode.bin": opencode_bin, "opencode.model": model})
-    state.append_event(paths["events"], "opencode_starting", {"job_id": job_id, "opencode_bin": opencode_bin, "model": model, "repo": repo})
+    _log_runner(paths["runner"], f"Starting junie (sync): model={model} auth_file={auth_file} {junie_bin}")
+    state.update_status(paths["status"], {"worker_state": "running", "junie.bin": junie_bin, "junie.model": model, "junie.auth_file": auth_file})
+    state.append_event(paths["events"], "junie_starting", {"job_id": job_id, "junie_bin": junie_bin, "model": model, "auth_file": auth_file, "repo": repo})
     with open(paths["stdout"], "w", encoding="utf-8") as out_f, open(paths["stderr"], "w", encoding="utf-8") as err_f:
         exit_code = int(subprocess.run(args, cwd=repo, stdout=out_f, stderr=err_f).returncode)
 
-    state.append_event(paths["events"], "opencode_exited", {"job_id": job_id, "exit_code": exit_code})
-    _log_runner(paths["runner"], f"OpenCode exited: exit_code={exit_code}")
-    session_id = extract_session_id(paths["stdout"])
-    if session_id:
-        state.update_status(paths["status"], {"opencode.session_id": session_id})
-        _log_runner(paths["runner"], f"OpenCode session id: {session_id}")
+    state.append_event(paths["events"], "junie_exited", {"job_id": job_id, "exit_code": exit_code})
+    _log_runner(paths["runner"], f"Junie CLI exited: exit_code={exit_code}")
     assistant_text = extract_assistant_text(paths["stdout"])
-    verdict = normalize_verdict(assistant_text, exit_code)
-    state.update_status(paths["status"], {"worker_state": "completed", "opencode.exit_code": exit_code, "verdict": verdict["VERDICT"]})
-    _write_result(paths["result"], job_id, exit_code, session_id, assistant_text, paths["stdout"], paths["stderr"], verdict)
-    print(f"SENIOR_DONE job_id={job_id} state=completed exit_code={exit_code} run_dir={run_dir} result_path={paths['result']}")
-    _log_runner(paths["runner"], f"Senior worker finished verdict={verdict['VERDICT']}")
+    worker_state = "completed" if exit_code == 0 else "failed"
+    state.update_status(paths["status"], {"worker_state": worker_state, "junie.exit_code": exit_code})
+    _write_result(paths["result"], job_id, exit_code, assistant_text, paths["stdout"], paths["stderr"])
+    print(f"SENIOR_DONE job_id={job_id} state={worker_state} exit_code={exit_code} run_dir={run_dir} result_path={paths['result']}")
+    _log_runner(paths["runner"], f"Senior worker finished worker_state={worker_state} exit_code={exit_code}")
     return exit_code
 
 
@@ -159,8 +139,8 @@ def _iter_ndjson(path: str):
 
 def _artifact_paths(run_dir: str) -> dict[str, str]:
     return {name: os.path.join(run_dir, filename) for name, filename in {
-        "stdout": "opencode.stdout.log",
-        "stderr": "opencode.stderr.log",
+        "stdout": "junie.stdout.log",
+        "stderr": "junie.stderr.log",
         "runner": "runner.log",
         "status": "status.json",
         "events": "events.jsonl",
@@ -170,6 +150,12 @@ def _artifact_paths(run_dir: str) -> dict[str, str]:
 
 def _is_executable(path: str) -> bool:
     return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
+
+
+def _read_auth_value(auth_file: str) -> str:
+    path = Path(auth_file).expanduser()
+    with open(path, "r", encoding="utf-8") as fh:
+        return fh.read().strip()
 
 
 def _fail_preflight(paths: dict[str, str], job_id: str, exit_code: int, reason: str, details: dict[str, str]) -> int:
@@ -184,6 +170,10 @@ def _log_runner(runner_log: str, message: str) -> None:
         fh.write(f"{now_iso()} {message}\n")
 
 
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
+
 def _tail(path: str, lines: int) -> str:
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -192,14 +182,13 @@ def _tail(path: str, lines: int) -> str:
         return ""
 
 
-def _write_result(result_path: str, job_id: str, exit_code: int, session_id: str, assistant_text: str, stdout_log: str, stderr_log: str, verdict: dict[str, str]) -> None:
-    lines = ["# Senior Dev worker result", "", f"- job_id: {job_id}", f"- finished_at: {now_iso()}", f"- exit_code: {exit_code}"]
-    if session_id:
-        lines.append(f"- opencode_session_id: {session_id}")
+def _write_result(result_path: str, job_id: str, exit_code: int, assistant_text: str, stdout_log: str, stderr_log: str) -> None:
+    runner_state = "completed" if exit_code == 0 else "failed"
+    lines = ["# Senior Dev worker result", "", f"- job_id: {job_id}", f"- finished_at: {now_iso()}", f"- exit_code: {exit_code}", f"- runner_state: {runner_state}"]
     lines.append("")
     if assistant_text:
         lines.extend(["## Assistant response", "", assistant_text, ""])
-    lines.extend(["## stdout tail", "```", _tail(stdout_log, 80).rstrip("\n"), "```", "", "## stderr tail", "```", _tail(stderr_log, 120).rstrip("\n"), "```", "", "## VERDICT", "```", format_verdict_block(verdict), "```"])
+    lines.extend(["## stdout tail", "```", _tail(stdout_log, 80).rstrip("\n"), "```", "", "## stderr tail", "```", _tail(stderr_log, 120).rstrip("\n"), "```"])
     with open(result_path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
 

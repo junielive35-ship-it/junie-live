@@ -17,7 +17,7 @@ Documentation-only Markdown edits are an explicit exception and may be handled d
 2. Restate objective, constraints, and non-goals.
 3. Identify affected components and likely files.
 4. Split work into sequential scoped tasks when useful.
-5. For a new code-changing task, prepare a `create_senior_task` request with relevant context, target repo, constraints, and verification expectations. For a related active task, attach a comment; if a blocked `review-required` / `needs-input` ask has been answered, unblock/requeue it instead of creating a duplicate. For non-code tasks, use `delegate_task`.
+5. For a new code-changing task, prepare a `create_senior_task` request with `repo`, `user_outcome`, `acceptance_criteria`, `distilled_context`, `constraints`, `non_goals`, and `expected_report_schema`. For a related active task, attach a comment; if a blocked `needs-input` ask has been answered, unblock/requeue it instead of creating a duplicate. For non-code tasks, use `delegate_task`.
 6. Define verification: tests, typecheck, lint, build, manual inspection.
 7. Plan review gates before any PR/update.
 
@@ -48,9 +48,12 @@ All new code-changing work is delegated through the Senior Dev Kanban lane after
 create_senior_task(
     title="<short user-visible task title>",
     repo="/abs/path/to/repo",
-    request="""
-<objective, constraints, likely files, verification expectations>
-""",
+    user_outcome="<user-visible outcome>",
+    acceptance_criteria="<tests/checks/observable behavior that define done>",
+    distilled_context="<relevant findings, likely files, task history, comments>",
+    constraints="<hard constraints>",
+    non_goals="<explicit out-of-scope work>",
+    expected_report_schema="<extra report fields, if any>",
 )
 ```
 
